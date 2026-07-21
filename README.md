@@ -1,33 +1,98 @@
 # AI Environment as Code
 
 This repository contains the first incremental slices of a minimal .NET tool for
-creating a source-of-truth data repository and comparing its Codex instruction file
-with a local runtime target.
+creating a source-of-truth data repository, comparing its Codex instruction file
+with a local runtime target, and recording runtime changes in Git.
+
+## Increment 3: backup
+
+```text
+aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+```
+
+`backup` has one explicit data-flow direction:
+
+```text
+<codex-home>/AGENTS.md
+  -> <repo>/environment/providers/codex/AGENTS.md
+  -> Git commit in <repo>
+```
+
+The repository must be the exact root of a non-bare Git working tree on a symbolic
+branch. Before changing the canonical source, the command rejects staged, unstaged,
+or untracked changes anywhere else in the repository. A pending change to the
+canonical source itself is allowed: the runtime file replaces it, or an already
+equal staged copy is committed. This lets a rerun resume after a prior commit
+failure.
+
+When the runtime bytes differ, the canonical source is replaced through a flushed
+temporary file in the same directory and read back for verification. The command
+then stages only the fixed canonical path and creates a commit with this subject:
+
+```text
+Backup Codex AGENTS.md
+```
+
+Git filters that would change the bytes while staging are rejected before commit.
+Configured Git hooks are isolated from the backup commit so they cannot alter the
+verified bytes or fixed subject; both are checked again after the commit.
+On success, the command writes `committed <full-sha>`. When the runtime, working
+file, index, and current commit already agree, it writes `unchanged`. Both outcomes
+return exit code 0; validation and Git failures return exit code 1.
+
+There is no separate backup directory or backup manifest. Git commit history is the
+source of truth. This increment does not push, write the runtime target, or implement
+the inverse `restore` direction.
 
 ## Increment 2: init
 
 ```text
-aec init [directory]
+aec init [directory] [--codex-home ABSOLUTE_PATH]
 ```
 
 `init` creates a new data repository in a missing directory or an existing empty
 directory. When the operand is omitted, the current working directory is used. A
 relative operand is resolved from the current working directory.
 
+`--codex-home` selects the runtime root. When omitted, `init` uses a non-empty
+`CODEX_HOME` and then `~/.codex`, matching `status` and `backup`. The Codex home must
+already exist, but its `AGENTS.md` may be absent.
+
 Any existing entry—including a hidden file or `.git`—makes the target non-empty and
 causes the command to fail before making changes. This makes `init` intentionally
 one-shot: running it a second time against the repository it created is an error.
 Direct symbolic-link targets and paths containing symbolic-link components are also
-rejected.
+rejected. Runtime validation and instruction merging complete before the repository
+is created.
 
-On success, Git is initialized with `main` as the initial branch and this empty
-canonical source file is created:
+The AEC-managed instruction block is delimited and versioned explicitly:
+
+```markdown
+<!-- AEC:BEGIN version=1 -->
+## AI Environment as Code
+
+Treat the AEC data repository's Git commit history as the source of truth.
+Preserve instructions outside this managed block.
+Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.
+<!-- AEC:END -->
+```
+
+When no block exists, `init` inserts it at the logical top of the runtime file,
+after an optional UTF-8 byte-order mark, followed by one blank separator line and
+the existing instructions. An older version is replaced in place. A current
+version is retained byte-for-byte. Duplicate, malformed, or newer-version markers,
+invalid UTF-8, NUL bytes, and merged content over 1 MiB are rejected.
+
+On success, Git is initialized with `main` as the initial branch. The merged bytes
+are written to both the runtime target and this canonical source:
 
 ```text
 environment/providers/codex/AGENTS.md
 ```
 
-The command does not copy runtime instructions, stage files, or create a commit.
+All bytes outside a replaced block are retained. The canonical and runtime files
+therefore begin in sync. The command does not stage files or create a commit; run
+`backup` separately to create the initial Git commit.
 
 ## Increment 1: status
 
@@ -76,18 +141,23 @@ uses xUnit and has no coverage dependency.
 ```bash
 dotnet build src/Aec/Aec.csproj
 dotnet test tests/Aec.Tests/Aec.Tests.csproj
-dotnet run --project src/Aec/Aec.csproj -- init /path/to/new-data-repository
+dotnet run --project src/Aec/Aec.csproj -- \
+  init /path/to/new-data-repository \
+  --codex-home /absolute/path/to/codex-home
 dotnet run --project src/Aec/Aec.csproj -- \
   status \
+  --repo /absolute/path/to/data-repository \
+  --codex-home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- \
+  backup \
   --repo /absolute/path/to/data-repository \
   --codex-home /absolute/path/to/codex-home
 ```
 
 ## Current boundaries
 
-The tool does not implement `diff`, `backup`, `apply`, `verify`, `restore`, rendering,
-manifests, multiple providers, source capture, Git staging or commits, or live
-configuration writes.
+The tool does not implement `diff`, general-purpose `apply`, `verify`, `restore`,
+rendering, manifests, multiple providers, or pushing.
 
-Future source writes and Git commits will operate on the data repository explicitly
-supplied through `--repo`; they will never infer or modify the engine repository.
+Source writes and Git commits operate on the data repository explicitly supplied
+through `--repo`; they never infer or modify the engine repository.

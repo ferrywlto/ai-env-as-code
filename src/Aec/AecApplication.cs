@@ -2,8 +2,8 @@ namespace Aec;
 
 public static class AecApplication
 {
-    private const int MaximumTextBytes = 1024 * 1024;
-    private const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
+    internal const int MaximumTextBytes = 1024 * 1024;
+    internal const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
 
     public static int Run(string[] args, TextWriter output, TextWriter error)
     {
@@ -26,8 +26,9 @@ public static class AecApplication
 
             return args[0] switch
             {
-                "status" => RunStatus(ParseStatusArguments(args), output),
-                "init" => InitCommand.Run(ParseInitDirectory(args), output),
+                "status" => RunStatus(ParseRepositoryArguments(args, "status"), output),
+                "backup" => RunBackup(ParseRepositoryArguments(args, "backup"), output),
+                "init" => RunInit(ParseInitArguments(args), output),
                 _ => throw new ArgumentException($"Unknown command: {args[0]}")
             };
         }
@@ -38,7 +39,7 @@ public static class AecApplication
         }
     }
 
-    private static int RunStatus(StatusOptions options, TextWriter output)
+    private static int RunStatus(RepositoryOptions options, TextWriter output)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
         var codexHome = ResolveCodexHome(options.CodexHome);
@@ -68,7 +69,25 @@ public static class AecApplication
         return 2;
     }
 
-    private static StatusOptions ParseStatusArguments(string[] args)
+    private static int RunBackup(RepositoryOptions options, TextWriter output)
+    {
+        var repository = RequireAbsolutePath(options.Repository, "--repo");
+        var codexHome = ResolveCodexHome(options.CodexHome);
+
+        EnsureRealDirectory(repository, "Repository");
+        EnsureSourceDirectories(repository);
+        EnsureRealDirectory(codexHome, "Codex home");
+
+        return BackupCommand.Run(repository, codexHome, output);
+    }
+
+    private static int RunInit(InitOptions options, TextWriter output)
+    {
+        var codexHome = ResolveCodexHome(options.CodexHome);
+        return InitCommand.Run(options.Directory, codexHome, output);
+    }
+
+    private static RepositoryOptions ParseRepositoryArguments(string[] args, string command)
     {
         string? repository = null;
         string? codexHome = null;
@@ -109,35 +128,63 @@ public static class AecApplication
 
         if (repository is null)
         {
-            throw new ArgumentException("status requires --repo with the source-of-truth data repository.");
+            throw new ArgumentException(
+                $"{command} requires --repo with the source-of-truth data repository.");
         }
 
-        return new StatusOptions(repository, codexHome);
+        return new RepositoryOptions(repository, codexHome);
     }
 
-    private static string ParseInitDirectory(string[] args)
+    private static InitOptions ParseInitArguments(string[] args)
     {
-        if (args.Length > 2)
-        {
-            throw new ArgumentException("init accepts at most one directory.");
-        }
-
         var currentDirectory = Environment.CurrentDirectory;
-        if (args.Length == 1)
+        string? directory = null;
+        string? codexHome = null;
+
+        for (var index = 1; index < args.Length; index++)
         {
-            return currentDirectory;
+            var argument = args[index];
+            if (argument == "--codex-home")
+            {
+                if (codexHome is not null)
+                {
+                    throw new ArgumentException("--codex-home may be specified only once.");
+                }
+
+                if (index + 1 >= args.Length ||
+                    args[index + 1].StartsWith("--", StringComparison.Ordinal))
+                {
+                    throw new ArgumentException("--codex-home requires a value.");
+                }
+
+                codexHome = args[++index];
+                continue;
+            }
+
+            if (argument.StartsWith("--", StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"Unknown argument: {argument}");
+            }
+
+            if (directory is not null)
+            {
+                throw new ArgumentException("init accepts at most one directory.");
+            }
+
+            directory = argument;
         }
 
-        var directory = args[1];
-        if (string.IsNullOrWhiteSpace(directory))
+        if (directory is not null && string.IsNullOrWhiteSpace(directory))
         {
             throw new ArgumentException("init requires a non-empty directory when one is supplied.");
         }
 
-        return Path.GetFullPath(directory, currentDirectory);
+        return new InitOptions(
+            directory is null ? currentDirectory : Path.GetFullPath(directory, currentDirectory),
+            codexHome);
     }
 
-    private static string ResolveCodexHome(string? explicitPath)
+    internal static string ResolveCodexHome(string? explicitPath)
     {
         if (explicitPath is not null)
         {
@@ -159,7 +206,7 @@ public static class AecApplication
         return Path.Combine(userProfile, ".codex");
     }
 
-    private static string RequireAbsolutePath(string path, string label)
+    internal static string RequireAbsolutePath(string path, string label)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -174,7 +221,7 @@ public static class AecApplication
         return Path.GetFullPath(path);
     }
 
-    private static void EnsureSourceDirectories(string repository)
+    internal static void EnsureSourceDirectories(string repository)
     {
         var environment = Path.Combine(repository, "environment");
         var providers = Path.Combine(environment, "providers");
@@ -185,7 +232,7 @@ public static class AecApplication
         EnsureRealDirectory(codex, "Source directory");
     }
 
-    private static void EnsureRealDirectory(string path, string label)
+    internal static void EnsureRealDirectory(string path, string label)
     {
         var directory = new DirectoryInfo(path);
         directory.Refresh();
@@ -206,13 +253,13 @@ public static class AecApplication
         }
     }
 
-    private static byte[] ReadRequiredTextFile(string path, string label)
+    internal static byte[] ReadRequiredTextFile(string path, string label)
     {
         return ReadTextFile(path, label)
             ?? throw new FileNotFoundException($"{label} does not exist: {path}");
     }
 
-    private static byte[]? ReadOptionalTextFile(string path, string label)
+    internal static byte[]? ReadOptionalTextFile(string path, string label)
     {
         return ReadTextFile(path, label);
     }
@@ -284,9 +331,12 @@ public static class AecApplication
     private static void WriteUsage(TextWriter output)
     {
         output.WriteLine("Usage:");
-        output.WriteLine("  aec init [directory]");
+        output.WriteLine("  aec init [directory] [--codex-home ABSOLUTE_PATH]");
         output.WriteLine("  aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
+        output.WriteLine("  aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
     }
 
-    private sealed record StatusOptions(string Repository, string? CodexHome);
+    private sealed record RepositoryOptions(string Repository, string? CodexHome);
+
+    private sealed record InitOptions(string Directory, string? CodexHome);
 }

@@ -1,41 +1,89 @@
-using System.Diagnostics;
-
 namespace Aec;
 
 internal static class InitCommand
 {
-    private static readonly string[] GitLocationVariables =
-    [
-        "GIT_DIR",
-        "GIT_WORK_TREE",
-        "GIT_COMMON_DIR",
-        "GIT_OBJECT_DIRECTORY",
-        "GIT_INDEX_FILE",
-        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-        "GIT_TEMPLATE_DIR"
-    ];
-
-    public static int Run(string directoryPath, TextWriter output)
+    public static int Run(string directoryPath, string codexHome, TextWriter output)
     {
         ValidateTarget(directoryPath);
+        AecApplication.EnsureRealDirectory(codexHome, "Codex home");
+
+        var runtimePath = Path.Combine(codexHome, "AGENTS.md");
+        var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target") ?? [];
+        var merged = AecInstructionBlock.Merge(runtime);
+
         EnsureGitIsAvailable();
 
         Directory.CreateDirectory(directoryPath);
-        RunGit(
+        GitProcess.RunRequired(
             directoryPath,
-            ["init", "--quiet", "--template=", "--initial-branch=main"],
-            "Git init failed");
+            "Git init failed",
+            "init",
+            "--quiet",
+            "--template=",
+            "--initial-branch=main");
         EnsureGitDirectory(directoryPath);
 
         var sourceDirectory = Path.Combine(directoryPath, "environment", "providers", "codex");
         Directory.CreateDirectory(sourceDirectory);
         var sourcePath = Path.Combine(sourceDirectory, "AGENTS.md");
-        using (new FileStream(sourcePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        WriteNewFile(sourcePath, merged);
+
+        if (!runtime.AsSpan().SequenceEqual(merged))
         {
+            ReplaceFileIfUnchanged(runtimePath, runtime, merged);
         }
+
+        VerifyContent(sourcePath, merged, "Canonical source");
+        VerifyContent(runtimePath, merged, "Runtime target");
 
         output.WriteLine("initialized");
         return 0;
+    }
+
+    private static void WriteNewFile(string path, byte[] content)
+    {
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        stream.Write(content);
+        stream.Flush(flushToDisk: true);
+    }
+
+    internal static void ReplaceFileIfUnchanged(
+        string path,
+        byte[] expectedCurrent,
+        byte[] content)
+    {
+        var directory = Path.GetDirectoryName(path)
+            ?? throw new InvalidOperationException($"Runtime target has no parent directory: {path}");
+        var temporaryPath = Path.Combine(directory, $".AGENTS.md.aec-init-{Guid.NewGuid():N}");
+
+        try
+        {
+            WriteNewFile(temporaryPath, content);
+            var current = AecApplication.ReadOptionalTextFile(path, "Runtime target") ?? [];
+            if (!current.AsSpan().SequenceEqual(expectedCurrent))
+            {
+                throw new IOException(
+                    "Runtime target changed during initialization; no runtime data was overwritten.");
+            }
+
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
+    }
+
+    private static void VerifyContent(string path, byte[] expected, string label)
+    {
+        var actual = AecApplication.ReadRequiredTextFile(path, label);
+        if (!actual.AsSpan().SequenceEqual(expected))
+        {
+            throw new IOException($"{label} verification failed after initialization.");
+        }
     }
 
     private static void ValidateTarget(string path)
@@ -130,7 +178,7 @@ internal static class InitCommand
     {
         try
         {
-            RunGit(null, ["--version"], "Git is not available");
+            GitProcess.RunRequired(null, "Git is not available", "--version");
         }
         catch (System.ComponentModel.Win32Exception exception)
         {
@@ -151,44 +199,4 @@ internal static class InitCommand
         }
     }
 
-    private static void RunGit(string? workingDirectory, string[] arguments, string failureMessage)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory ?? string.Empty,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-
-        foreach (var variable in GitLocationVariables)
-        {
-            startInfo.Environment.Remove(variable);
-        }
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Git could not be started.");
-        var standardOutput = process.StandardOutput.ReadToEndAsync();
-        var standardError = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        var output = standardOutput.GetAwaiter().GetResult();
-        var error = standardError.GetAwaiter().GetResult();
-
-        if (process.ExitCode == 0)
-        {
-            return;
-        }
-
-        var details = string.IsNullOrWhiteSpace(error) ? output : error;
-        details = details.ReplaceLineEndings(" ").Trim();
-        var suffix = details.Length == 0 ? string.Empty : $": {details}";
-        throw new InvalidOperationException($"{failureMessage} with exit code {process.ExitCode}{suffix}");
-    }
 }
