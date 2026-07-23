@@ -19,7 +19,7 @@ internal static class AecInstructionBlock
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
 
-    private static readonly string[] CurrentBlockLines =
+    private static readonly string[] CodexBlockLines =
     [
         "<!-- AEC:BEGIN version=1 -->",
         "## AI Environment as Code",
@@ -30,7 +30,31 @@ internal static class AecInstructionBlock
         EndMarkerText
     ];
 
-    public static byte[] Merge(byte[] content)
+    private static readonly string[] ChatGptBlockLines =
+    [
+        "<!-- AEC:BEGIN version=2 -->",
+        "## AI Environment as Code",
+        string.Empty,
+        "Treat the AEC data repository's Git commit history as the source of truth.",
+        "Preserve instructions outside this managed block.",
+        "Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.",
+        string.Empty,
+        "Manual ChatGPT instruction backups live under `environment/providers/chatgpt/`.",
+        "If you detect uncommitted changes there, say that a manual backup is pending and ask before running AEC validation, exact-path staging, commit, and push.",
+        "Never automatically capture from or deploy to ChatGPT, and never claim account-side runtime verification.",
+        EndMarkerText
+    ];
+
+    public static byte[] Merge(byte[] content) =>
+        Merge(content, CodexBlockLines, "1"u8);
+
+    public static byte[] MergeForChatGptProvider(byte[] content) =>
+        Merge(content, ChatGptBlockLines, "2"u8);
+
+    private static byte[] Merge(
+        byte[] content,
+        string[] currentBlockLines,
+        ReadOnlySpan<byte> currentVersion)
     {
         ArgumentNullException.ThrowIfNull(content);
         ValidateText(content);
@@ -41,13 +65,13 @@ internal static class AecInstructionBlock
 
         if (begin.Count == 0 && end.Count == 0)
         {
-            return Prepend(content, bodyOffset);
+            return Prepend(content, bodyOffset, currentBlockLines);
         }
 
         if (begin.Count != 1 || end.Count != 1)
         {
             throw new InvalidDataException(
-                "Runtime instructions contain malformed or duplicate AEC block markers.");
+                "Instructions contain malformed or duplicate AEC block markers.");
         }
 
         var beginLine = ReadMarkerLine(content, begin.FirstIndex, bodyOffset, "AEC begin marker");
@@ -55,15 +79,15 @@ internal static class AecInstructionBlock
 
         if (!endLine.Content.SequenceEqual(EndMarker))
         {
-            throw new InvalidDataException("Runtime instructions contain a malformed AEC end marker.");
+            throw new InvalidDataException("Instructions contain a malformed AEC end marker.");
         }
 
         if (end.FirstIndex <= begin.FirstIndex || end.FirstIndex < beginLine.ContentEnd)
         {
-            throw new InvalidDataException("Runtime instructions contain reversed AEC block markers.");
+            throw new InvalidDataException("Instructions contain reversed AEC block markers.");
         }
 
-        var version = ReadVersion(beginLine.Content);
+        var version = ReadVersion(beginLine.Content, currentVersion);
         if (version == VersionKind.Current)
         {
             return content.ToArray();
@@ -72,11 +96,11 @@ internal static class AecInstructionBlock
         if (version == VersionKind.Future)
         {
             throw new InvalidDataException(
-                "Runtime instructions contain a newer unsupported AEC block version.");
+                "Instructions contain a newer unsupported AEC block version.");
         }
 
         var newLine = beginLine.NewLine ?? DetectNewLine(content.AsSpan(bodyOffset));
-        var block = RenderCurrentBlock(newLine);
+        var block = RenderCurrentBlock(newLine, currentBlockLines);
         var suffixOffset = end.FirstIndex + EndMarker.Length;
         var appendFinalNewLine = suffixOffset == content.Length;
         var resultLength = checked(
@@ -102,11 +126,14 @@ internal static class AecInstructionBlock
         return result;
     }
 
-    private static byte[] Prepend(byte[] content, int bodyOffset)
+    private static byte[] Prepend(
+        byte[] content,
+        int bodyOffset,
+        string[] currentBlockLines)
     {
         var newLine = DetectNewLine(content.AsSpan(bodyOffset));
         var newLineBytes = Encoding.ASCII.GetBytes(newLine);
-        var block = RenderCurrentBlock(newLine);
+        var block = RenderCurrentBlock(newLine, currentBlockLines);
         var bodyLength = content.Length - bodyOffset;
         var separatorLength = bodyLength == 0 ? newLineBytes.Length : newLineBytes.Length * 2;
         var resultLength = checked(bodyOffset + block.Length + separatorLength + bodyLength);
@@ -155,11 +182,13 @@ internal static class AecInstructionBlock
         return new MarkerLine(content.AsSpan(start, contentEnd - start), contentEnd, newLine);
     }
 
-    private static VersionKind ReadVersion(ReadOnlySpan<byte> beginLine)
+    private static VersionKind ReadVersion(
+        ReadOnlySpan<byte> beginLine,
+        ReadOnlySpan<byte> currentVersion)
     {
         if (!beginLine.StartsWith(BeginPrefix) || !beginLine.EndsWith(MarkerSuffix))
         {
-            throw new InvalidDataException("Runtime instructions contain a malformed AEC begin marker.");
+            throw new InvalidDataException("Instructions contain a malformed AEC begin marker.");
         }
 
         var version = beginLine[BeginPrefix.Length..^MarkerSuffix.Length];
@@ -167,22 +196,31 @@ internal static class AecInstructionBlock
             (version.Length > 1 && version[0] == (byte)'0') ||
             !ContainsOnlyAsciiDigits(version))
         {
-            throw new InvalidDataException("Runtime instructions contain an invalid AEC block version.");
+            throw new InvalidDataException("Instructions contain an invalid AEC block version.");
         }
 
-        if (version.SequenceEqual("0"u8))
+        // Decimal length is compared first so very large future versions never need parsing.
+        if (version.Length != currentVersion.Length)
         {
-            return VersionKind.Older;
+            return version.Length < currentVersion.Length
+                ? VersionKind.Older
+                : VersionKind.Future;
         }
 
-        return version.SequenceEqual("1"u8) ? VersionKind.Current : VersionKind.Future;
+        var comparison = version.SequenceCompareTo(currentVersion);
+        return comparison switch
+        {
+            < 0 => VersionKind.Older,
+            0 => VersionKind.Current,
+            _ => VersionKind.Future
+        };
     }
 
     private static void ValidateText(byte[] content)
     {
         if (content.AsSpan().IndexOf((byte)0) >= 0)
         {
-            throw new InvalidDataException("Runtime instructions contain a NUL byte.");
+            throw new InvalidDataException("Instructions contain a NUL byte.");
         }
 
         try
@@ -191,13 +229,13 @@ internal static class AecInstructionBlock
         }
         catch (DecoderFallbackException exception)
         {
-            throw new InvalidDataException("Runtime instructions are not valid UTF-8.", exception);
+            throw new InvalidDataException("Instructions are not valid UTF-8.", exception);
         }
     }
 
-    private static byte[] RenderCurrentBlock(string newLine)
+    private static byte[] RenderCurrentBlock(string newLine, string[] currentBlockLines)
     {
-        return Encoding.UTF8.GetBytes(string.Join(newLine, CurrentBlockLines));
+        return Encoding.UTF8.GetBytes(string.Join(newLine, currentBlockLines));
     }
 
     private static bool ContainsOnlyAsciiDigits(ReadOnlySpan<byte> value)

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace Aec.Tests;
 
@@ -18,6 +19,29 @@ public sealed class InitTests
         var result = Run(layout.Target, layout.CodexHome);
 
         AssertInitialized(layout, result);
+    }
+
+    [Fact]
+    public void OrdinaryInitializationDoesNotOptIntoTheChatGptProvider()
+    {
+        using var layout = new InitLayout();
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains(
+            "<!-- AEC:BEGIN version=1 -->",
+            File.ReadAllText(layout.Source),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Manual ChatGPT instruction backups",
+            File.ReadAllText(layout.Source),
+            StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(
+            layout.Target,
+            "environment",
+            "providers",
+            "chatgpt")));
     }
 
     [Theory]
@@ -140,17 +164,13 @@ public sealed class InitTests
         Assert.True(expected.AsSpan().EndsWith(original));
     }
 
-    [Fact]
-    public void ReplacesAnOlderManagedBlockInPlace()
+    [Theory]
+    [InlineData(0)]
+    public void ReplacesAnOlderManagedBlockInPlace(int version)
     {
         using var layout = new InitLayout();
-        var original = """
-            prefix
-            <!-- AEC:BEGIN version=0 -->
-            obsolete
-            <!-- AEC:END -->
-            suffix
-            """u8.ToArray();
+        var original = Encoding.UTF8.GetBytes(
+            $"prefix\n<!-- AEC:BEGIN version={version} -->\nobsolete\n<!-- AEC:END -->\nsuffix");
         File.WriteAllBytes(layout.Runtime, original);
         var expected = AecInstructionBlock.Merge(original);
 
@@ -204,7 +224,7 @@ public sealed class InitTests
     {
         using var layout = new InitLayout();
         var runtime = """
-            <!-- AEC:BEGIN version=2 -->
+            <!-- AEC:BEGIN version=3 -->
             future
             <!-- AEC:END -->
             """u8.ToArray();

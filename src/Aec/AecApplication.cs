@@ -90,6 +90,12 @@ public static class AecApplication
 
     private static int RunInit(InitOptions options, TextWriter output)
     {
+        // Provider initialization is repository-only and must never resolve or inspect runtime state.
+        if (options.Provider == "chatgpt")
+        {
+            return ChatGptInitCommand.Run(options.Directory, output);
+        }
+
         var codexHome = ResolveCodexHome(options.CodexHome);
         return InitCommand.Run(options.Directory, codexHome, output);
     }
@@ -161,10 +167,27 @@ public static class AecApplication
         var currentDirectory = Environment.CurrentDirectory;
         string? directory = null;
         string? codexHome = null;
+        string? provider = null;
 
         for (var index = 1; index < args.Length; index++)
         {
             var argument = args[index];
+            if (argument.StartsWith("--provider=", StringComparison.Ordinal))
+            {
+                if (provider is not null)
+                {
+                    throw new ArgumentException("--provider may be specified only once.");
+                }
+
+                provider = argument["--provider=".Length..];
+                if (provider != "chatgpt")
+                {
+                    throw new ArgumentException($"Unsupported provider: {provider}");
+                }
+
+                continue;
+            }
+
             if (argument == "--codex-home")
             {
                 if (codexHome is not null)
@@ -200,9 +223,15 @@ public static class AecApplication
             throw new ArgumentException("init requires a non-empty directory when one is supplied.");
         }
 
+        if (provider is not null && codexHome is not null)
+        {
+            throw new ArgumentException("--codex-home is not valid with --provider=chatgpt.");
+        }
+
         return new InitOptions(
             directory is null ? currentDirectory : Path.GetFullPath(directory, currentDirectory),
-            codexHome);
+            codexHome,
+            provider);
     }
 
     internal static string ResolveCodexHome(string? explicitPath)
@@ -401,6 +430,7 @@ public static class AecApplication
         output.WriteLine("Usage:");
         output.WriteLine("  aec --version");
         output.WriteLine("  aec init [directory] [--codex-home ABSOLUTE_PATH]");
+        output.WriteLine("  aec init [directory] --provider=chatgpt");
         output.WriteLine("  aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
         output.WriteLine("  aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
         output.WriteLine("  aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
@@ -415,5 +445,5 @@ public static class AecApplication
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
 
-    private sealed record InitOptions(string Directory, string? CodexHome);
+    private sealed record InitOptions(string Directory, string? CodexHome, string? Provider);
 }

@@ -12,10 +12,11 @@ internal static class AtomicFile
     public static void ReplaceIfUnchanged(
         string path,
         byte[]? expectedCurrent,
-        byte[] content)
+        byte[] content,
+        string label = "Runtime target")
     {
         var directory = Path.GetDirectoryName(path)
-            ?? throw new InvalidOperationException($"Runtime target has no parent directory: {path}");
+            ?? throw new InvalidOperationException($"{label} has no parent directory: {path}");
         var temporaryPath = Path.Combine(directory, $".AGENTS.md.aec-{Guid.NewGuid():N}");
 
         try
@@ -23,12 +24,12 @@ internal static class AtomicFile
             // Keeping the temporary file beside the target makes the final move stay on one filesystem.
             WriteNew(temporaryPath, content);
 
-            // Re-read after preparation so a newer runtime edit is not replaced by our stale snapshot.
-            var current = AecApplication.ReadOptionalTextFile(path, "Runtime target");
+            // Re-read after preparation so a newer target edit is not replaced by our stale snapshot.
+            var current = AecApplication.ReadOptionalTextFile(path, label);
             if (!MatchesSnapshot(current, expectedCurrent))
             {
                 throw new IOException(
-                    "Runtime target changed during the operation; no runtime data was overwritten.");
+                    $"{label} changed during the operation; no data was overwritten.");
             }
 
             // A missing snapshot uses a non-overwriting move, so a last-moment creation fails safely.
@@ -42,10 +43,10 @@ internal static class AtomicFile
             }
         }
 
-        var written = AecApplication.ReadRequiredTextFile(path, "Runtime target");
+        var written = AecApplication.ReadRequiredTextFile(path, label);
         if (!written.AsSpan().SequenceEqual(content))
         {
-            throw new IOException("Runtime target verification failed after writing.");
+            throw new IOException($"{label} verification failed after writing.");
         }
     }
 

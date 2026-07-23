@@ -1,8 +1,9 @@
 # AI Environment as Code
 
-Version 0.5 contains the first incremental slices of a minimal .NET tool for
+Version 0.6 contains the first incremental slices of a minimal .NET tool for
 creating a source-of-truth data repository, comparing its Codex instruction file
-with a local runtime target, and moving approved changes in either explicit direction.
+with a local runtime target, moving approved changes in either explicit direction,
+and scaffolding manual ChatGPT instruction backups.
 
 ## Version history
 
@@ -13,8 +14,9 @@ with a local runtime target, and moving approved changes in either explicit dire
 | 0.3 | `backup` command |
 | 0.4 | `init` AEC instruction injection and update |
 | 0.5 | `apply` command |
+| 0.6 | ChatGPT provider initialization |
 
-The project and CLI report the current release as `0.5.0`.
+The project and CLI report the current release as `0.6.0`.
 
 ## apply
 
@@ -135,6 +137,53 @@ All bytes outside a replaced block are retained. The canonical and runtime files
 therefore begin in sync. The command does not stage files or create a commit; run
 `backup` separately to create the initial Git commit.
 
+### ChatGPT provider initialization
+
+```text
+aec init [directory] --provider=chatgpt
+```
+
+Provider initialization extends an existing AEC data repository, so the directory
+may be non-empty. It must be the exact root of a real, non-bare Git work tree and
+must already contain `environment/providers/codex/AGENTS.md`. A committed `HEAD`
+and a clean work tree are not required.
+
+The command creates only missing empty files:
+
+```text
+environment/providers/chatgpt/custom-instructions.md
+environment/providers/chatgpt/project-baseline.md
+environment/providers/chatgpt/gpt-baseline.md
+```
+
+Existing manual backups are retained byte-for-byte. The command also upgrades the
+managed block in the canonical Codex `AGENTS.md` from the provider-neutral version
+1 to this provider-aware version 2:
+
+```markdown
+<!-- AEC:BEGIN version=2 -->
+## AI Environment as Code
+
+Treat the AEC data repository's Git commit history as the source of truth.
+Preserve instructions outside this managed block.
+Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.
+
+Manual ChatGPT instruction backups live under `environment/providers/chatgpt/`.
+If you detect uncommitted changes there, say that a manual backup is pending and ask before running AEC validation, exact-path staging, commit, and push.
+Never automatically capture from or deploy to ChatGPT, and never claim account-side runtime verification.
+<!-- AEC:END -->
+```
+
+Instructions outside that block are preserved. Provider mode never reads or writes
+`CODEX_HOME`, even when the environment variable is set, and combining it with
+`--codex-home` is an error. Ordinary `init` remains provider-neutral and does not
+create ChatGPT paths or add ChatGPT guidance.
+
+The first change writes `initialized`; an idempotent rerun writes `unchanged`.
+Both return exit code 0. `unchanged` describes only the initialized file state—it
+does not mean the files are committed. Provider initialization performs no
+staging, commit, push, or ChatGPT account operation.
+
 ## status
 
 The `status` command is read-only:
@@ -187,6 +236,9 @@ dotnet run --project src/Aec/Aec.csproj -- \
   init /path/to/new-data-repository \
   --codex-home /absolute/path/to/codex-home
 dotnet run --project src/Aec/Aec.csproj -- \
+  init /absolute/path/to/data-repository \
+  --provider=chatgpt
+dotnet run --project src/Aec/Aec.csproj -- \
   status \
   --repo /absolute/path/to/data-repository \
   --codex-home /absolute/path/to/codex-home
@@ -203,7 +255,8 @@ dotnet run --project src/Aec/Aec.csproj -- \
 ## Current boundaries
 
 The tool does not implement `diff`, `verify`, `restore`, rendering, manifests,
-multiple providers, or pushing.
+automatic ChatGPT capture or deployment, or pushing.
 
-Source writes and Git commits operate on the data repository explicitly supplied
-through `--repo`; they never infer or modify the engine repository.
+Source writes and Git commits operate on the explicitly selected data repository
+(`[directory]` for `init`, `--repo` for repository commands); they never infer or
+modify the engine repository.
