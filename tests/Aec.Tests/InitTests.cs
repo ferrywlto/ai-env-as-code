@@ -266,13 +266,29 @@ public sealed class InitTests
         File.WriteAllBytes(layout.Runtime, concurrent);
 
         var exception = Assert.Throws<IOException>(() =>
-            InitCommand.ReplaceFileIfUnchanged(layout.Runtime, original, replacement));
+            AtomicFile.ReplaceIfUnchanged(layout.Runtime, original, replacement));
 
-        Assert.Contains("changed during initialization", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("changed during the operation", exception.Message, StringComparison.Ordinal);
         Assert.Equal(concurrent, File.ReadAllBytes(layout.Runtime));
         Assert.DoesNotContain(
             Directory.GetFiles(layout.CodexHome),
-            path => Path.GetFileName(path).StartsWith(".AGENTS.md.aec-init-", StringComparison.Ordinal));
+            path => Path.GetFileName(path).StartsWith(".AGENTS.md.aec-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void MissingRuntimeSnapshotDoesNotOverwriteAConcurrentEmptyFile()
+    {
+        using var layout = new InitLayout();
+        File.WriteAllBytes(layout.Runtime, []);
+
+        var exception = Assert.Throws<IOException>(() =>
+            AtomicFile.ReplaceIfUnchanged(
+                layout.Runtime,
+                expectedCurrent: null,
+                content: "replacement\n"u8.ToArray()));
+
+        Assert.Contains("changed during the operation", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(File.ReadAllBytes(layout.Runtime));
     }
 
     private static CommandResult Run(string target, string codexHome)

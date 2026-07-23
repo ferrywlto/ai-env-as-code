@@ -1,10 +1,51 @@
 # AI Environment as Code
 
-This repository contains the first incremental slices of a minimal .NET tool for
+Version 0.5 contains the first incremental slices of a minimal .NET tool for
 creating a source-of-truth data repository, comparing its Codex instruction file
-with a local runtime target, and recording runtime changes in Git.
+with a local runtime target, and moving approved changes in either explicit direction.
 
-## Increment 3: backup
+## Version history
+
+| Version | Increment |
+|---|---|
+| 0.1 | Project initialization |
+| 0.2 | `init` command |
+| 0.3 | `backup` command |
+| 0.4 | `init` AEC instruction injection and update |
+| 0.5 | `apply` command |
+
+The project and CLI report the current release as `0.5.0`.
+
+## apply
+
+```text
+aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+```
+
+`apply` has the opposite data-flow direction from `backup`:
+
+```text
+committed <repo>/environment/providers/codex/AGENTS.md
+  -> <codex-home>/AGENTS.md
+```
+
+The repository must be the exact root of a non-bare Git working tree with a
+committed `HEAD`. Detached HEAD is accepted because `apply` does not create a commit.
+The canonical path must be a committed regular Git file with no staged or unstaged
+changes, and its raw working bytes must exactly match the committed blob. This
+rejects line-ending, clean/smudge, and other Git filters that could make visibly
+different bytes appear clean. Unrelated repository changes are ignored and untouched.
+
+When runtime bytes differ or the runtime file is absent, `apply` writes a flushed
+temporary file beside the target, confirms the observed runtime has not changed,
+moves the file into place, and verifies the resulting bytes. A runtime target inside
+the data repository is rejected. The command writes `applied` after a successful
+write or `unchanged` when no write is needed; both return exit code 0.
+
+Invocation itself authorizes replacing observed runtime drift. There is no second
+confirmation flag, separate backup, receipt, Git mutation, commit, or push.
+
+## backup
 
 ```text
 aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
@@ -44,7 +85,7 @@ There is no separate backup directory or backup manifest. Git commit history is 
 source of truth. This increment does not push, write the runtime target, or implement
 the inverse `restore` direction.
 
-## Increment 2: init
+## init
 
 ```text
 aec init [directory] [--codex-home ABSOLUTE_PATH]
@@ -94,7 +135,7 @@ All bytes outside a replaced block are retained. The canonical and runtime files
 therefore begin in sync. The command does not stage files or create a commit; run
 `backup` separately to create the initial Git commit.
 
-## Increment 1: status
+## status
 
 The `status` command is read-only:
 
@@ -141,6 +182,7 @@ uses xUnit and has no coverage dependency.
 ```bash
 dotnet build src/Aec/Aec.csproj
 dotnet test tests/Aec.Tests/Aec.Tests.csproj
+dotnet run --project src/Aec/Aec.csproj -- --version
 dotnet run --project src/Aec/Aec.csproj -- \
   init /path/to/new-data-repository \
   --codex-home /absolute/path/to/codex-home
@@ -152,12 +194,16 @@ dotnet run --project src/Aec/Aec.csproj -- \
   backup \
   --repo /absolute/path/to/data-repository \
   --codex-home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- \
+  apply \
+  --repo /absolute/path/to/data-repository \
+  --codex-home /absolute/path/to/codex-home
 ```
 
 ## Current boundaries
 
-The tool does not implement `diff`, general-purpose `apply`, `verify`, `restore`,
-rendering, manifests, multiple providers, or pushing.
+The tool does not implement `diff`, `verify`, `restore`, rendering, manifests,
+multiple providers, or pushing.
 
 Source writes and Git commits operate on the data repository explicitly supplied
 through `--repo`; they never infer or modify the engine repository.

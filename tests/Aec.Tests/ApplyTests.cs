@@ -1,0 +1,500 @@
+using System.Diagnostics;
+
+namespace Aec.Tests;
+
+[Collection(ProcessStateCollection.Name)]
+public sealed class ApplyTests
+{
+    private const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
+
+    [Fact]
+    public void AppliesExactCommittedBytesWithoutChangingGit()
+    {
+        var desired = new byte[] { 0xEF, 0xBB, 0xBF }.Concat("# desired\r\n"u8.ToArray()).ToArray();
+        using var layout = new ApplyLayout(desired, "runtime\n"u8.ToArray());
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"applied{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        Assert.Equal(desired, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
+        AssertNoTemporaryFiles(layout);
+    }
+
+    [Fact]
+    public void MissingRuntimeIsCreated()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), runtime: null);
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"applied{Environment.NewLine}", result.Output);
+        Assert.Equal("desired\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+        AssertNoTemporaryFiles(layout);
+    }
+
+    [Fact]
+    public void EqualRuntimeIsUnchangedWithoutRewritingIt()
+    {
+        var desired = "same\n"u8.ToArray();
+        using var layout = new ApplyLayout(desired, desired);
+        var timestamp = new DateTime(2020, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(layout.Runtime, timestamp);
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.Runtime));
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void UnrelatedRepositoryChangesArePreserved()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        var tracked = Path.Combine(layout.Repository, "tracked.txt");
+        File.WriteAllText(tracked, "committed\n");
+        Assert.Equal(0, Git(layout, "add", "--", "tracked.txt").ExitCode);
+        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Add test file").ExitCode);
+        File.WriteAllText(tracked, "unstaged\n");
+        File.WriteAllText(Path.Combine(layout.Repository, "staged.txt"), "staged\n");
+        Assert.Equal(0, Git(layout, "add", "--", "staged.txt").ExitCode);
+        File.WriteAllText(Path.Combine(layout.Repository, "untracked.txt"), "untracked\n");
+        var statusBefore = Git(layout, "status", "--porcelain=v1").Output;
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("desired\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(statusBefore, Git(layout, "status", "--porcelain=v1").Output);
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DirtyCanonicalSourceIsRejectedBeforeRuntimeWrite(bool stageChange)
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        File.WriteAllText(layout.Source, "pending\n");
+        if (stageChange)
+        {
+            Assert.Equal(0, Git(layout, "add", "--", SourceRelativePath).ExitCode);
+        }
+
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains(
+            stageChange ? "staged changes" : "unstaged changes",
+            result.Error,
+            StringComparison.Ordinal);
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+    }
+
+    [Fact]
+    public void StagedSourceIsRejectedWhenWorkingBytesWereReverted()
+    {
+        var desired = "desired\n"u8.ToArray();
+        using var layout = new ApplyLayout(desired, "runtime\n"u8.ToArray());
+        File.WriteAllText(layout.Source, "staged\n");
+        Assert.Equal(0, Git(layout, "add", "--", SourceRelativePath).ExitCode);
+        File.WriteAllBytes(layout.Source, desired);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("staged changes", result.Error, StringComparison.Ordinal);
+        Assert.Equal("runtime\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void RepositoryWithoutACommitIsRejected()
+    {
+        using var layout = new ApplyLayout(
+            "desired\n"u8.ToArray(),
+            "runtime\n"u8.ToArray(),
+            commitSource: false);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("committed Git HEAD", result.Error, StringComparison.Ordinal);
+        Assert.Equal("runtime\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void SourceAbsentFromHeadIsRejected()
+    {
+        using var layout = new ApplyLayout(
+            "desired\n"u8.ToArray(),
+            "runtime\n"u8.ToArray(),
+            commitSource: false);
+        File.WriteAllText(Path.Combine(layout.Repository, "tracked.txt"), "tracked\n");
+        Assert.Equal(0, Git(layout, "add", "--", "tracked.txt").ExitCode);
+        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Unrelated commit").ExitCode);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("not a single committed Git file", result.Error, StringComparison.Ordinal);
+        Assert.Equal("runtime\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void GitFiltersThatHideDifferentRawBytesAreRejected()
+    {
+        using var layout = new ApplyLayout("first\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        File.WriteAllText(
+            Path.Combine(layout.Repository, ".gitattributes"),
+            $"{SourceRelativePath} text eol=lf\n");
+        File.WriteAllBytes(layout.Source, "second\r\n"u8.ToArray());
+        Assert.Equal(0, Git(layout, "add", "--", ".gitattributes", SourceRelativePath).ExitCode);
+        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Normalize source").ExitCode);
+        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain", "--", SourceRelativePath).Output);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("do not exactly match", result.Error, StringComparison.Ordinal);
+        Assert.Equal("runtime\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void RuntimeDirectoryIsRejected()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), runtime: null);
+        Directory.CreateDirectory(layout.Runtime);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Runtime target must be a regular file", result.Error, StringComparison.Ordinal);
+        Assert.True(Directory.Exists(layout.Runtime));
+    }
+
+    [Fact]
+    public void OversizedRuntimeIsRejected()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), runtime: null);
+        File.WriteAllBytes(layout.Runtime, new byte[AecApplication.MaximumTextBytes + 1]);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("exceeds 1 MiB", result.Error, StringComparison.Ordinal);
+        Assert.Equal(AecApplication.MaximumTextBytes + 1, new FileInfo(layout.Runtime).Length);
+    }
+
+    [Fact]
+    public void SymbolicLinkRuntimeIsRejectedWithoutChangingItsReferent()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), runtime: null);
+        var referent = Path.Combine(layout.Root, "referent.md");
+        File.WriteAllText(referent, "external\n");
+        File.CreateSymbolicLink(layout.Runtime, referent);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("must not be a symbolic link", result.Error, StringComparison.Ordinal);
+        Assert.Equal("external\n", File.ReadAllText(referent));
+    }
+
+    [Fact]
+    public void NestedDirectoryIsRejectedAsRepositoryRoot()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        var nested = Path.Combine(layout.Repository, "nested");
+        var nestedSource = Path.Combine(nested, SourceRelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(nestedSource)!);
+        File.WriteAllText(nestedSource, "nested\n");
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(
+            ["apply", "--repo", nested, "--codex-home", layout.CodexHome],
+            output,
+            error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("repository root", error.ToString(), StringComparison.Ordinal);
+        Assert.Equal("runtime\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void RuntimeInsideRepositoryIsRejected()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(
+            ["apply", "--repo", layout.Repository, "--codex-home", layout.Repository],
+            output,
+            error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("outside the data repository", error.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(layout.Repository, "AGENTS.md")));
+    }
+
+    [Fact]
+    public void FilesystemRootContainsDescendantsForApplySafety()
+    {
+        var root = Path.GetPathRoot(Path.GetFullPath(Path.GetTempPath()))!;
+        var descendant = Path.Combine(root, "aec-test-descendant", "AGENTS.md");
+
+        Assert.True(ApplyCommand.IsPathInsideDirectory(root, descendant));
+    }
+
+    [Fact]
+    public void RuntimeInsideRepositoryThroughLinkedAncestorIsRejected()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        var alias = Path.Combine(layout.Root, "root alias");
+        Directory.CreateSymbolicLink(alias, layout.Root);
+
+        try
+        {
+            var output = new StringWriter();
+            var error = new StringWriter();
+
+            var exitCode = AecApplication.Run(
+                ["apply", "--repo", layout.Repository, "--codex-home", Path.Combine(alias, "data repository")],
+                output,
+                error);
+
+            Assert.Equal(1, exitCode);
+            Assert.Contains("must not contain a symbolic link", error.ToString(), StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(layout.Repository, "AGENTS.md")));
+        }
+        finally
+        {
+            Directory.Delete(alias);
+        }
+    }
+
+    [Fact]
+    public void DetachedHeadCanBeApplied()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        Assert.Equal(0, Git(layout, "checkout", "--detach", "--quiet").ExitCode);
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("desired\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void UsesCodexHomeFromEnvironmentWhenFlagIsAbsent()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
+            var output = new StringWriter();
+            var error = new StringWriter();
+
+            var exitCode = AecApplication.Run(
+                ["apply", "--repo", layout.Repository],
+                output,
+                error);
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal($"applied{Environment.NewLine}", output.ToString());
+            Assert.Equal("desired\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", previous);
+        }
+    }
+
+    [Fact]
+    public void VersionIsReportedFromAssemblyMetadata()
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(["--version"], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"0.5.0{Environment.NewLine}", output.ToString());
+        Assert.Empty(error.ToString());
+    }
+
+    private static CommandResult Run(ApplyLayout layout)
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var exitCode = AecApplication.Run(
+            ["apply", "--repo", layout.Repository, "--codex-home", layout.CodexHome],
+            output,
+            error);
+        return new CommandResult(exitCode, output.ToString(), error.ToString());
+    }
+
+    private static void AssertNoTemporaryFiles(ApplyLayout layout)
+    {
+        Assert.DoesNotContain(
+            Directory.GetFiles(layout.CodexHome),
+            path => Path.GetFileName(path).StartsWith(".AGENTS.md.aec-", StringComparison.Ordinal));
+    }
+
+    private static GitResult Git(ApplyLayout layout, params string[] arguments)
+    {
+        return RunGit(layout.Repository, arguments);
+    }
+
+    private static GitResult RunGit(string workingDirectory, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        foreach (var variable in new[]
+                 {
+                     "GIT_DIR",
+                     "GIT_WORK_TREE",
+                     "GIT_COMMON_DIR",
+                     "GIT_OBJECT_DIRECTORY",
+                     "GIT_INDEX_FILE",
+                     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+                     "GIT_TEMPLATE_DIR",
+                     "GIT_CONFIG_PARAMETERS",
+                     "GIT_CONFIG_COUNT"
+                 })
+        {
+            startInfo.Environment.Remove(variable);
+        }
+
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo)!;
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        return new GitResult(
+            process.ExitCode,
+            output.GetAwaiter().GetResult(),
+            error.GetAwaiter().GetResult());
+    }
+
+    private sealed record CommandResult(int ExitCode, string Output, string Error);
+
+    private sealed record GitResult(int ExitCode, string Output, string Error);
+
+    private sealed class ApplyLayout : IDisposable
+    {
+        public ApplyLayout(byte[] desired, byte[]? runtime, bool commitSource = true)
+        {
+            Root = Path.Combine(RealTemporaryDirectory(), "aec-apply-tests", Guid.NewGuid().ToString("N"));
+            Repository = Path.Combine(Root, "data repository");
+            CodexHome = Path.Combine(Root, "codex home");
+            Source = Path.Combine(Repository, SourceRelativePath);
+            Runtime = Path.Combine(CodexHome, "AGENTS.md");
+
+            Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
+            Directory.CreateDirectory(CodexHome);
+            RequireGit(Repository, "init", "--quiet", "--template=", "--initial-branch=main");
+            ConfigureGit("user.name", "AEC Tests");
+            ConfigureGit("user.email", "aec-tests@example.invalid");
+            ConfigureGit("commit.gpgSign", "false");
+            ConfigureGit("core.autocrlf", "false");
+            var attributes = Path.Combine(Root, "empty attributes");
+            File.WriteAllText(attributes, string.Empty);
+            ConfigureGit("core.attributesFile", attributes);
+            var hooks = Path.Combine(Root, "empty hooks");
+            Directory.CreateDirectory(hooks);
+            ConfigureGit("core.hooksPath", hooks);
+
+            File.WriteAllBytes(Source, desired);
+            if (commitSource)
+            {
+                RequireGit(Repository, "add", "--", SourceRelativePath);
+                RequireGit(Repository, "commit", "--quiet", "--message", "Test canonical source");
+            }
+
+            if (runtime is not null)
+            {
+                File.WriteAllBytes(Runtime, runtime);
+            }
+        }
+
+        public string Root { get; }
+
+        public string Repository { get; }
+
+        public string CodexHome { get; }
+
+        public string Source { get; }
+
+        public string Runtime { get; }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, true);
+            }
+        }
+
+        private void ConfigureGit(string key, string value)
+        {
+            RequireGit(Repository, "config", "--local", key, value);
+        }
+
+        private static void RequireGit(string workingDirectory, params string[] arguments)
+        {
+            var result = RunGit(workingDirectory, arguments);
+            if (result.ExitCode != 0)
+            {
+                throw new InvalidOperationException(result.Error);
+            }
+        }
+
+        private static string RealTemporaryDirectory()
+        {
+            return OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath();
+        }
+    }
+}

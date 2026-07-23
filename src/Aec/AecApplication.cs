@@ -24,10 +24,17 @@ public static class AecApplication
                 return 0;
             }
 
+            if (args.Length == 1 && args[0] == "--version")
+            {
+                WriteVersion(output);
+                return 0;
+            }
+
             return args[0] switch
             {
                 "status" => RunStatus(ParseRepositoryArguments(args, "status"), output),
                 "backup" => RunBackup(ParseRepositoryArguments(args, "backup"), output),
+                "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output),
                 "init" => RunInit(ParseInitArguments(args), output),
                 _ => throw new ArgumentException($"Unknown command: {args[0]}")
             };
@@ -85,6 +92,20 @@ public static class AecApplication
     {
         var codexHome = ResolveCodexHome(options.CodexHome);
         return InitCommand.Run(options.Directory, codexHome, output);
+    }
+
+    private static int RunApply(RepositoryOptions options, TextWriter output)
+    {
+        var repository = RequireAbsolutePath(options.Repository, "--repo");
+        var codexHome = ResolveCodexHome(options.CodexHome);
+
+        EnsureNoLinksInExistingPath(repository, "Repository path");
+        EnsureNoLinksInExistingPath(codexHome, "Codex home path");
+        EnsureRealDirectory(repository, "Repository");
+        EnsureSourceDirectories(repository);
+        EnsureRealDirectory(codexHome, "Codex home");
+
+        return ApplyCommand.Run(repository, codexHome, output);
     }
 
     private static RepositoryOptions ParseRepositoryArguments(string[] args, string command)
@@ -253,6 +274,53 @@ public static class AecApplication
         }
     }
 
+    internal static void EnsureNoLinksInExistingPath(string path, string label)
+    {
+        var root = Path.GetPathRoot(path)
+            ?? throw new InvalidOperationException($"{label} has no filesystem root: {path}");
+        var current = root;
+        var relative = Path.GetRelativePath(root, path);
+
+        // Leaf metadata does not expose a linked ancestor, so inspect every existing component.
+        foreach (var part in relative.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, part);
+            var directory = new DirectoryInfo(current);
+            directory.Refresh();
+
+            if (directory.LinkTarget is not null)
+            {
+                throw new InvalidOperationException($"{label} must not contain a symbolic link: {current}");
+            }
+
+            if (directory.Exists)
+            {
+                if ((directory.Attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new InvalidOperationException($"{label} must not contain a reparse point: {current}");
+                }
+
+                continue;
+            }
+
+            var file = new FileInfo(current);
+            file.Refresh();
+            if (file.LinkTarget is not null)
+            {
+                throw new InvalidOperationException($"{label} must not contain a symbolic link: {current}");
+            }
+
+            if (file.Exists)
+            {
+                throw new InvalidOperationException($"{label} component is not a directory: {current}");
+            }
+
+            break;
+        }
+    }
+
     internal static byte[] ReadRequiredTextFile(string path, string label)
     {
         return ReadTextFile(path, label)
@@ -331,9 +399,18 @@ public static class AecApplication
     private static void WriteUsage(TextWriter output)
     {
         output.WriteLine("Usage:");
+        output.WriteLine("  aec --version");
         output.WriteLine("  aec init [directory] [--codex-home ABSOLUTE_PATH]");
         output.WriteLine("  aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
         output.WriteLine("  aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
+        output.WriteLine("  aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
+    }
+
+    private static void WriteVersion(TextWriter output)
+    {
+        var version = typeof(AecApplication).Assembly.GetName().Version
+            ?? throw new InvalidOperationException("Application version could not be resolved.");
+        output.WriteLine(version.ToString(fieldCount: 3));
     }
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
