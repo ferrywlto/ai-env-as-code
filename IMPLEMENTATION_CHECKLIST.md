@@ -10,8 +10,8 @@
 - [x] Implement repository-aware block version migration.
 - [x] Update the `$aec` skill, CLI version, and documentation.
 - [x] Pass skill, Debug, and Release validation.
-- [ ] Commit and push the exact v0.8 engine paths.
-- [ ] Create the initial `aec-data` commit, apply, and verify.
+- [x] Commit and push the exact v0.8 engine paths.
+- [x] Create the initial `aec-data` commit, apply, and verify.
 
 ## v0.7 — Install the AEC skill during initialization
 
@@ -29,4 +29,4 @@
 
 ## Immediate next work
 
-Commit and push the validated v0.8 engine before the approved data migration.
+Select the next approved increment; executable publishing remains on hold.
