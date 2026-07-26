@@ -15,8 +15,8 @@ internal static class ChatGptInitCommand
 
         var canonicalPath = Path.Combine(repository, AecApplication.SourceRelativePath);
         var canonical = AecApplication.ReadRequiredTextFile(canonicalPath, "Canonical source");
-        var merged = AecInstructionBlock.MergeForChatGptProvider(canonical);
         var providerDirectory = Path.Combine(repository, "environment", "providers", "chatgpt");
+        var merged = AecInstructionBlock.MergeForChatGptProvider(canonical, repository);
         var scaffoldPaths = ScaffoldFileNames
             .Select(fileName => Path.Combine(providerDirectory, fileName))
             .ToArray();

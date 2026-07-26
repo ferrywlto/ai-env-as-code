@@ -15,7 +15,7 @@ public static class AecApplication
         {
             if (args.Length == 0)
             {
-                throw new ArgumentException("A command is required. Use --help for usage.");
+                throw new ArgumentException("A command is required. Use `aec help` for usage.");
             }
 
             if (args.Length == 1 && args[0] is "help" or "--help" or "-h")
@@ -90,14 +90,16 @@ public static class AecApplication
 
     private static int RunInit(InitOptions options, TextWriter output)
     {
+        var repository = RequireAbsolutePath(options.Repository, "--repo");
+
         // Provider initialization is repository-only and must never resolve or inspect runtime state.
         if (options.Provider == "chatgpt")
         {
-            return ChatGptInitCommand.Run(options.Directory, output);
+            return ChatGptInitCommand.Run(repository, output);
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
-        return InitCommand.Run(options.Directory, codexHome, output);
+        return InitCommand.Run(repository, codexHome, output);
     }
 
     private static int RunApply(RepositoryOptions options, TextWriter output)
@@ -164,14 +166,30 @@ public static class AecApplication
 
     private static InitOptions ParseInitArguments(string[] args)
     {
-        var currentDirectory = Environment.CurrentDirectory;
-        string? directory = null;
+        string? repository = null;
         string? codexHome = null;
         string? provider = null;
 
         for (var index = 1; index < args.Length; index++)
         {
             var argument = args[index];
+            if (argument == "--repo")
+            {
+                if (repository is not null)
+                {
+                    throw new ArgumentException("--repo may be specified only once.");
+                }
+
+                if (index + 1 >= args.Length ||
+                    args[index + 1].StartsWith("--", StringComparison.Ordinal))
+                {
+                    throw new ArgumentException("--repo requires a value.");
+                }
+
+                repository = args[++index];
+                continue;
+            }
+
             if (argument.StartsWith("--provider=", StringComparison.Ordinal))
             {
                 if (provider is not null)
@@ -210,17 +228,13 @@ public static class AecApplication
                 throw new ArgumentException($"Unknown argument: {argument}");
             }
 
-            if (directory is not null)
-            {
-                throw new ArgumentException("init accepts at most one directory.");
-            }
-
-            directory = argument;
+            throw new ArgumentException($"Unknown argument: {argument}");
         }
 
-        if (directory is not null && string.IsNullOrWhiteSpace(directory))
+        if (repository is null)
         {
-            throw new ArgumentException("init requires a non-empty directory when one is supplied.");
+            throw new ArgumentException(
+                "init requires --repo with the source-of-truth data repository.");
         }
 
         if (provider is not null && codexHome is not null)
@@ -229,7 +243,7 @@ public static class AecApplication
         }
 
         return new InitOptions(
-            directory is null ? currentDirectory : Path.GetFullPath(directory, currentDirectory),
+            repository,
             codexHome,
             provider);
     }
@@ -428,9 +442,10 @@ public static class AecApplication
     private static void WriteUsage(TextWriter output)
     {
         output.WriteLine("Usage:");
+        output.WriteLine("  aec help");
         output.WriteLine("  aec --version");
-        output.WriteLine("  aec init [directory] [--codex-home ABSOLUTE_PATH]");
-        output.WriteLine("  aec init [directory] --provider=chatgpt");
+        output.WriteLine("  aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
+        output.WriteLine("  aec init --repo ABSOLUTE_PATH --provider=chatgpt");
         output.WriteLine("  aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
         output.WriteLine("  aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
         output.WriteLine("  aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
@@ -445,5 +460,5 @@ public static class AecApplication
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
 
-    private sealed record InitOptions(string Directory, string? CodexHome, string? Provider);
+    private sealed record InitOptions(string Repository, string? CodexHome, string? Provider);
 }

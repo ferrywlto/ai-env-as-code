@@ -19,6 +19,10 @@ public sealed class InitTests
         var result = Run(layout.Target, layout.CodexHome);
 
         AssertInitialized(layout, result);
+        Assert.Contains(
+            $"The AEC data repository selected by `--repo` is `{layout.Target}`.",
+            File.ReadAllText(layout.Source),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -34,6 +38,8 @@ public sealed class InitTests
         Assert.Contains("name: aec", skill, StringComparison.Ordinal);
         Assert.Contains("runtime → repository", skill, StringComparison.Ordinal);
         Assert.Contains("committed repository → runtime", skill, StringComparison.Ordinal);
+        Assert.Contains("aec init --repo ABSOLUTE_PATH", skill, StringComparison.Ordinal);
+        Assert.DoesNotContain("aec init ABSOLUTE_DIRECTORY", skill, StringComparison.Ordinal);
         var openAi = File.ReadAllText(Path.Combine(skillRoot, "agents", "openai.yaml"));
         Assert.Contains("display_name: \"AI Environment as Code\"", openAi, StringComparison.Ordinal);
     }
@@ -231,7 +237,7 @@ public sealed class InitTests
 
         Assert.Equal(0, result.ExitCode);
         Assert.Contains(
-            "<!-- AEC:BEGIN version=1 -->",
+            "<!-- AEC:BEGIN version=3 -->",
             File.ReadAllText(layout.Source),
             StringComparison.Ordinal);
         Assert.DoesNotContain(
@@ -355,26 +361,28 @@ public sealed class InitTests
         using var layout = new InitLayout();
         var original = "# Personal instructions\r\n\r\n  Preserve spacing.  \r\n"u8.ToArray();
         File.WriteAllBytes(layout.Runtime, original);
-        var expected = AecInstructionBlock.Merge(original);
+        var expected = AecInstructionBlock.Merge(original, layout.Target);
 
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(expected, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(expected, File.ReadAllBytes(layout.Source));
-        Assert.Equal(0, expected.AsSpan().IndexOf("<!-- AEC:BEGIN version=1 -->"u8));
+        Assert.Equal(0, expected.AsSpan().IndexOf("<!-- AEC:BEGIN version=3 -->"u8));
         Assert.True(expected.AsSpan().EndsWith(original));
     }
 
     [Theory]
     [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
     public void ReplacesAnOlderManagedBlockInPlace(int version)
     {
         using var layout = new InitLayout();
         var original = Encoding.UTF8.GetBytes(
             $"prefix\n<!-- AEC:BEGIN version={version} -->\nobsolete\n<!-- AEC:END -->\nsuffix");
         File.WriteAllBytes(layout.Runtime, original);
-        var expected = AecInstructionBlock.Merge(original);
+        var expected = AecInstructionBlock.Merge(original, layout.Target);
 
         var result = Run(layout.Target, layout.CodexHome);
 
@@ -387,25 +395,25 @@ public sealed class InitTests
     }
 
     [Fact]
-    public void CurrentManagedBlockIsCopiedWithoutRewritingRuntime()
+    public void CurrentManagedBlockWithStaleContentIsReconciled()
     {
         using var layout = new InitLayout();
         var current = """
-            <!-- AEC:BEGIN version=1 -->
+            <!-- AEC:BEGIN version=3 -->
             current custom body
             <!-- AEC:END -->
             Other instructions.
             """u8.ToArray();
         File.WriteAllBytes(layout.Runtime, current);
-        var timestamp = new DateTime(2020, 1, 2, 3, 4, 6, DateTimeKind.Utc);
-        File.SetLastWriteTimeUtc(layout.Runtime, timestamp);
+        var expected = AecInstructionBlock.Merge(current, layout.Target);
 
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal(current, File.ReadAllBytes(layout.Runtime));
-        Assert.Equal(current, File.ReadAllBytes(layout.Source));
-        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.Runtime));
+        Assert.Equal(expected, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(expected, File.ReadAllBytes(layout.Source));
+        Assert.DoesNotContain("current custom body", File.ReadAllText(layout.Runtime));
+        Assert.EndsWith("Other instructions.", File.ReadAllText(layout.Runtime), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -417,7 +425,9 @@ public sealed class InitTests
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal(AecInstructionBlock.Merge([]), File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(
+            AecInstructionBlock.Merge([], layout.Target),
+            File.ReadAllBytes(layout.Runtime));
         Assert.Equal(File.ReadAllBytes(layout.Runtime), File.ReadAllBytes(layout.Source));
     }
 
@@ -426,7 +436,7 @@ public sealed class InitTests
     {
         using var layout = new InitLayout();
         var runtime = """
-            <!-- AEC:BEGIN version=3 -->
+            <!-- AEC:BEGIN version=4 -->
             future
             <!-- AEC:END -->
             """u8.ToArray();
@@ -487,7 +497,7 @@ public sealed class InitTests
         using var layout = new InitLayout();
         var original = "original\n"u8.ToArray();
         var concurrent = "concurrent edit\n"u8.ToArray();
-        var replacement = AecInstructionBlock.Merge(original);
+        var replacement = AecInstructionBlock.Merge(original, layout.Target);
         File.WriteAllBytes(layout.Runtime, concurrent);
 
         var exception = Assert.Throws<IOException>(() =>
@@ -521,7 +531,7 @@ public sealed class InitTests
         var output = new StringWriter();
         var error = new StringWriter();
         var exitCode = AecApplication.Run(
-            ["init", target, "--codex-home", codexHome],
+            ["init", "--repo", target, "--codex-home", codexHome],
             output,
             error);
         return new CommandResult(exitCode, output.ToString(), error.ToString());
@@ -536,7 +546,7 @@ public sealed class InitTests
         var source = Path.Combine(layout.Target, "environment", "providers", "codex", "AGENTS.md");
         Assert.True(File.Exists(source));
         Assert.Equal(File.ReadAllBytes(layout.Runtime), File.ReadAllBytes(source));
-        Assert.Contains("<!-- AEC:BEGIN version=1 -->", File.ReadAllText(source), StringComparison.Ordinal);
+        Assert.Contains("<!-- AEC:BEGIN version=3 -->", File.ReadAllText(source), StringComparison.Ordinal);
         Assert.Contains("Existing instruction.", File.ReadAllText(source), StringComparison.Ordinal);
         Assert.True(Directory.Exists(Path.Combine(layout.Target, ".git")));
 
@@ -652,7 +662,7 @@ public sealed class InitTests
 public sealed class InitProcessStateTests
 {
     [Fact]
-    public void InitializesTheCurrentDirectoryWhenTheOperandIsOmitted()
+    public void InitRequiresRepoFlagInsteadOfDefaultingToTheCurrentDirectory()
     {
         using var directory = new ProcessStateDirectory();
         var previous = Environment.CurrentDirectory;
@@ -668,10 +678,10 @@ public sealed class InitProcessStateTests
                 output,
                 error);
 
-            Assert.Equal(0, exitCode);
-            Assert.Equal($"initialized{Environment.NewLine}", output.ToString());
-            Assert.Empty(error.ToString());
-            Assert.True(File.Exists(System.IO.Path.Combine(
+            Assert.Equal(1, exitCode);
+            Assert.Empty(output.ToString());
+            Assert.Contains("init requires --repo", error.ToString(), StringComparison.Ordinal);
+            Assert.False(File.Exists(System.IO.Path.Combine(
                 directory.Path,
                 "environment",
                 "providers",
@@ -685,31 +695,79 @@ public sealed class InitProcessStateTests
     }
 
     [Fact]
-    public void ResolvesRelativeDirectoriesFromTheCurrentDirectory()
+    public void InitializesTheAbsoluteRepoFlag()
     {
         using var directory = new ProcessStateDirectory();
-        var previous = Environment.CurrentDirectory;
+        var target = System.IO.Path.Combine(directory.Path, "child");
+        var output = new StringWriter();
+        var error = new StringWriter();
 
-        try
-        {
-            Environment.CurrentDirectory = directory.Path;
-            var output = new StringWriter();
-            var error = new StringWriter();
+        var exitCode = AecApplication.Run(
+            ["init", "--repo", target, "--codex-home", directory.CodexHome],
+            output,
+            error);
 
-            var exitCode = AecApplication.Run(
-                ["init", "child", "--codex-home", directory.CodexHome],
-                output,
-                error);
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", output.ToString());
+        Assert.Empty(error.ToString());
+        Assert.True(Directory.Exists(System.IO.Path.Combine(target, ".git")));
+    }
 
-            Assert.Equal(0, exitCode);
-            Assert.Equal($"initialized{Environment.NewLine}", output.ToString());
-            Assert.Empty(error.ToString());
-            Assert.True(Directory.Exists(System.IO.Path.Combine(directory.Path, "child", ".git")));
-        }
-        finally
-        {
-            Environment.CurrentDirectory = previous;
-        }
+    [Fact]
+    public void RejectsRelativeRepoFlag()
+    {
+        using var directory = new ProcessStateDirectory();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(
+            ["init", "--repo", "relative", "--codex-home", directory.CodexHome],
+            output,
+            error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Empty(output.ToString());
+        Assert.Contains("--repo must be an absolute path", error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(System.IO.Path.Combine(directory.Path, "relative")));
+    }
+
+    [Theory]
+    [InlineData(null, "--repo requires a value")]
+    [InlineData("", "--repo requires a non-empty path")]
+    public void RejectsMissingOrEmptyRepoValue(string? value, string expectedError)
+    {
+        using var directory = new ProcessStateDirectory();
+        var arguments = value is null
+            ? new[] { "init", "--repo" }
+            : new[] { "init", "--repo", value };
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(arguments, output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Empty(output.ToString());
+        Assert.Contains(expectedError, error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsDuplicateRepoFlag()
+    {
+        using var directory = new ProcessStateDirectory();
+        var first = System.IO.Path.Combine(directory.Path, "first");
+        var second = System.IO.Path.Combine(directory.Path, "second");
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(
+            ["init", "--repo", first, "--repo", second],
+            output,
+            error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("--repo may be specified only once", error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(first));
+        Assert.False(Directory.Exists(second));
     }
 
     [Fact]
@@ -746,7 +804,7 @@ public sealed class InitProcessStateTests
             var error = new StringWriter();
 
             var exitCode = AecApplication.Run(
-                ["init", "--codex-home", directory.CodexHome, target],
+                ["init", "--codex-home", directory.CodexHome, "--repo", target],
                 output,
                 error);
 
@@ -783,7 +841,10 @@ public sealed class InitProcessStateTests
             var output = new StringWriter();
             var error = new StringWriter();
 
-            var exitCode = AecApplication.Run(["init", target], output, error);
+            var exitCode = AecApplication.Run(
+                ["init", "--repo", target],
+                output,
+                error);
 
             Assert.Equal(0, exitCode);
             Assert.Equal(File.ReadAllBytes(System.IO.Path.Combine(directory.CodexHome, "AGENTS.md")),
@@ -811,6 +872,7 @@ public sealed class InitProcessStateTests
         var exitCode = AecApplication.Run(
             [
                 "init",
+                "--repo",
                 target,
                 "--codex-home",
                 directory.CodexHome,
@@ -826,14 +888,14 @@ public sealed class InitProcessStateTests
     }
 
     [Fact]
-    public void RejectsUnknownOptionsAndMultipleDirectoryOperands()
+    public void RejectsUnknownOptionsAndPositionalOperands()
     {
         using var directory = new ProcessStateDirectory();
 
         foreach (var arguments in new[]
                  {
                      new[] { "init", "--unknown" },
-                     new[] { "init", "first", "second", "--codex-home", directory.CodexHome }
+                     new[] { "init", "positional", "--codex-home", directory.CodexHome }
                  })
         {
             var output = new StringWriter();

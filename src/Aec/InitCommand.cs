@@ -10,7 +10,7 @@ internal static class InitCommand
 
         var runtimePath = Path.Combine(codexHome, "AGENTS.md");
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
-        var merged = AecInstructionBlock.Merge(runtime ?? []);
+        var merged = AecInstructionBlock.Merge(runtime ?? [], directoryPath);
 
         EnsureGitIsAvailable();
         AecSkillInstaller.Install(codexHome);

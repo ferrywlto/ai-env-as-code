@@ -1,6 +1,6 @@
 # AI Environment as Code
 
-Version 0.7 contains the first incremental slices of a minimal .NET tool for
+Version 0.8 contains the first incremental slices of a minimal .NET tool for
 creating a source-of-truth data repository, comparing its Codex instruction file
 with a local runtime target, moving approved changes in either explicit direction,
 scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
@@ -16,8 +16,9 @@ scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
 | 0.5 | `apply` command |
 | 0.6 | ChatGPT provider initialization |
 | 0.7 | Install the `$aec` Codex skill during ordinary `init` |
+| 0.8 | Require explicit repository-aware initialization |
 
-The project and CLI report the current release as `0.7.0`.
+The project and CLI report the current release as `0.8.0`.
 
 ## apply
 
@@ -91,12 +92,12 @@ the inverse `restore` direction.
 ## init
 
 ```text
-aec init [directory] [--codex-home ABSOLUTE_PATH]
+aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 ```
 
 `init` creates a new data repository in a missing directory or an existing empty
-directory. When the operand is omitted, the current working directory is used. A
-relative operand is resolved from the current working directory.
+directory. `--repo` is required and must be the absolute path of that source-of-truth
+repository. The current working directory and engine repository are never inferred.
 
 `--codex-home` selects the runtime root. When omitted, `init` uses a non-empty
 `CODEX_HOME` and then `~/.codex`, matching `status` and `backup`. The Codex home must
@@ -115,7 +116,7 @@ different existing managed file is treated as a conflict and is never overwritte
 the command fails before creating the repository or changing runtime instructions.
 This permits multiple data repositories to share one exact skill installation.
 
-The skill invokes an installed `aec` executable directly. Version 0.7 does not
+The skill invokes an installed `aec` executable directly. Version 0.8 does not
 publish or install that executable and does not search for, build, or run an engine
 checkout as a fallback. Executable distribution and skill upgrades remain separate
 future decisions.
@@ -130,10 +131,11 @@ is created.
 The AEC-managed instruction block is delimited and versioned explicitly:
 
 ```markdown
-<!-- AEC:BEGIN version=1 -->
+<!-- AEC:BEGIN version=3 -->
 ## AI Environment as Code
 
-Treat the AEC data repository's Git commit history as the source of truth.
+The AEC data repository selected by `--repo` is `/absolute/path/to/data-repository`.
+Treat that repository's Git commit history as the source of truth.
 Preserve instructions outside this managed block.
 Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.
 <!-- AEC:END -->
@@ -141,9 +143,11 @@ Use `aec status` to inspect drift and `aec backup` to record approved runtime ch
 
 When no block exists, `init` inserts it at the logical top of the runtime file,
 after an optional UTF-8 byte-order mark, followed by one blank separator line and
-the existing instructions. An older version is replaced in place. A current
-version is retained byte-for-byte. Duplicate, malformed, or newer-version markers,
-invalid UTF-8, NUL bytes, and merged content over 1 MiB are rejected.
+the existing instructions. An older version is replaced in place. A current block
+is retained byte-for-byte when it already contains the expected managed content and
+`--repo` path; otherwise that block is reconciled in place. Duplicate, malformed,
+or newer-version markers, invalid UTF-8, NUL bytes, and merged content over 1 MiB
+are rejected.
 
 On success, Git is initialized with `main` as the initial branch. The merged bytes
 are written to both the runtime target and this canonical source:
@@ -159,7 +163,7 @@ therefore begin in sync. The command does not stage files or create a commit; ru
 ### ChatGPT provider initialization
 
 ```text
-aec init [directory] --provider=chatgpt
+aec init --repo ABSOLUTE_PATH --provider=chatgpt
 ```
 
 Provider initialization extends an existing AEC data repository, so the directory
@@ -175,19 +179,20 @@ environment/providers/chatgpt/project-baseline.md
 environment/providers/chatgpt/gpt-baseline.md
 ```
 
-Existing manual backups are retained byte-for-byte. The command also upgrades the
-managed block in the canonical Codex `AGENTS.md` from the provider-neutral version
-1 to this provider-aware version 2:
+Existing manual backups are retained byte-for-byte. The command also upgrades an
+earlier managed block—including the released provider-aware version 2 or the
+provider-neutral version 3—to this provider-aware version 4:
 
 ```markdown
-<!-- AEC:BEGIN version=2 -->
+<!-- AEC:BEGIN version=4 -->
 ## AI Environment as Code
 
-Treat the AEC data repository's Git commit history as the source of truth.
+The AEC data repository selected by `--repo` is `/absolute/path/to/data-repository`.
+Treat that repository's Git commit history as the source of truth.
 Preserve instructions outside this managed block.
 Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.
 
-Manual ChatGPT instruction backups live under `environment/providers/chatgpt/`.
+Manual ChatGPT instruction backups live under `/absolute/path/to/data-repository/environment/providers/chatgpt/`.
 If you detect uncommitted changes there, say that a manual backup is pending and ask before running AEC validation, exact-path staging, commit, and push.
 Never automatically capture from or deploy to ChatGPT, and never claim account-side runtime verification.
 <!-- AEC:END -->
@@ -252,11 +257,14 @@ uses xUnit and has no coverage dependency.
 dotnet build src/Aec/Aec.csproj
 dotnet test tests/Aec.Tests/Aec.Tests.csproj
 dotnet run --project src/Aec/Aec.csproj -- --version
+dotnet run --project src/Aec/Aec.csproj -- help
 dotnet run --project src/Aec/Aec.csproj -- \
-  init /path/to/new-data-repository \
+  init \
+  --repo /absolute/path/to/new-data-repository \
   --codex-home /absolute/path/to/codex-home
 dotnet run --project src/Aec/Aec.csproj -- \
-  init /absolute/path/to/data-repository \
+  init \
+  --repo /absolute/path/to/data-repository \
   --provider=chatgpt
 dotnet run --project src/Aec/Aec.csproj -- \
   status \
@@ -278,6 +286,5 @@ The tool does not implement `diff`, `verify`, `restore`, rendering, manifests,
 automatic ChatGPT capture or deployment, executable distribution, skill upgrades,
 or pushing.
 
-Source writes and Git commits operate on the explicitly selected data repository
-(`[directory]` for `init`, `--repo` for repository commands); they never infer or
-modify the engine repository.
+Source writes and Git commits operate only on the data repository explicitly
+selected with `--repo`; they never infer or modify the engine repository.

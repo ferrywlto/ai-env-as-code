@@ -6,10 +6,9 @@ description: Operate AI Environment as Code data repositories through explicit i
 # AEC
 
 Use the explicitly selected AEC data repository. If no repository or initialization
-target was selected, ask for it. Pass an absolute positional directory to `init` and
-the exact absolute path through `--repo` to `status`, `backup`, and `apply`. Never
-infer the data repository from the current directory, executable location, skill
-directory, or engine repository.
+target was selected, ask for it. Pass its exact absolute path through `--repo` to
+`init`, `status`, `backup`, and `apply`. Never infer the data repository from the
+current directory, executable location, skill directory, or engine repository.
 
 Invoke `aec` directly. If it is unavailable, report that the CLI is not installed
 or not on `PATH` and stop. Do not locate, build, or run an engine checkout as a
@@ -17,9 +16,11 @@ fallback.
 
 Use only these operations:
 
-- `aec init ABSOLUTE_DIRECTORY [--codex-home ABSOLUTE_PATH]` initializes a missing
-  or empty data repository and its Codex runtime. It does not create a Git commit.
-- `aec init ABSOLUTE_REPOSITORY --provider=chatgpt` initializes only the manual
+- `aec help` lists the supported command forms without changing state.
+- `aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` initializes a
+  missing or empty data repository and its Codex runtime. It does not create a Git
+  commit.
+- `aec init --repo ABSOLUTE_PATH --provider=chatgpt` initializes only the manual
   ChatGPT files in an existing data repository. Do not pass `--codex-home`.
 - `aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` compares the
   canonical and runtime bytes without changing either. Treat `different` and

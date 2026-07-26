@@ -19,37 +19,74 @@ internal static class AecInstructionBlock
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
 
-    private static readonly string[] CodexBlockLines =
+    public static byte[] Merge(byte[] content, string repository) =>
+        Merge(content, CodexBlockLines(NormalizeRepository(repository)), "3"u8);
+
+    public static byte[] MergeForChatGptProvider(byte[] content, string repository)
+    {
+        var normalizedRepository = NormalizeRepository(repository);
+        return Merge(content, ChatGptBlockLines(normalizedRepository), "4"u8);
+    }
+
+    private static string[] CodexBlockLines(string repository) =>
     [
-        "<!-- AEC:BEGIN version=1 -->",
+        "<!-- AEC:BEGIN version=3 -->",
         "## AI Environment as Code",
         string.Empty,
-        "Treat the AEC data repository's Git commit history as the source of truth.",
+        $"The AEC data repository selected by `--repo` is `{repository}`.",
+        "Treat that repository's Git commit history as the source of truth.",
         "Preserve instructions outside this managed block.",
         "Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.",
         EndMarkerText
     ];
 
-    private static readonly string[] ChatGptBlockLines =
-    [
-        "<!-- AEC:BEGIN version=2 -->",
-        "## AI Environment as Code",
-        string.Empty,
-        "Treat the AEC data repository's Git commit history as the source of truth.",
-        "Preserve instructions outside this managed block.",
-        "Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.",
-        string.Empty,
-        "Manual ChatGPT instruction backups live under `environment/providers/chatgpt/`.",
-        "If you detect uncommitted changes there, say that a manual backup is pending and ask before running AEC validation, exact-path staging, commit, and push.",
-        "Never automatically capture from or deploy to ChatGPT, and never claim account-side runtime verification.",
-        EndMarkerText
-    ];
+    private static string[] ChatGptBlockLines(string repository)
+    {
+        var providerDirectory = Path.Combine(
+            repository,
+            "environment",
+            "providers",
+            "chatgpt");
+        if (!Path.EndsInDirectorySeparator(providerDirectory))
+        {
+            providerDirectory += Path.DirectorySeparatorChar;
+        }
 
-    public static byte[] Merge(byte[] content) =>
-        Merge(content, CodexBlockLines, "1"u8);
+        return
+        [
+            "<!-- AEC:BEGIN version=4 -->",
+            "## AI Environment as Code",
+            string.Empty,
+            $"The AEC data repository selected by `--repo` is `{repository}`.",
+            "Treat that repository's Git commit history as the source of truth.",
+            "Preserve instructions outside this managed block.",
+            "Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.",
+            string.Empty,
+            $"Manual ChatGPT instruction backups live under `{providerDirectory}`.",
+            "If you detect uncommitted changes there, say that a manual backup is pending and ask before running AEC validation, exact-path staging, commit, and push.",
+            "Never automatically capture from or deploy to ChatGPT, and never claim account-side runtime verification.",
+            EndMarkerText
+        ];
+    }
 
-    public static byte[] MergeForChatGptProvider(byte[] content) =>
-        Merge(content, ChatGptBlockLines, "2"u8);
+    private static string NormalizeRepository(string repository)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repository);
+        // The path is embedded in a Markdown code span inside a line-oriented managed block.
+        if (repository.Contains('`') || repository.Contains('\r') || repository.Contains('\n'))
+        {
+            throw new ArgumentException(
+                "Repository path contains characters that cannot be embedded in managed instructions.",
+                nameof(repository));
+        }
+
+        if (!Path.IsPathFullyQualified(repository))
+        {
+            throw new ArgumentException("Repository must be an absolute path.", nameof(repository));
+        }
+
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(repository));
+    }
 
     private static byte[] Merge(
         byte[] content,
@@ -88,11 +125,6 @@ internal static class AecInstructionBlock
         }
 
         var version = ReadVersion(beginLine.Content, currentVersion);
-        if (version == VersionKind.Current)
-        {
-            return content.ToArray();
-        }
-
         if (version == VersionKind.Future)
         {
             throw new InvalidDataException(
@@ -102,6 +134,12 @@ internal static class AecInstructionBlock
         var newLine = beginLine.NewLine ?? DetectNewLine(content.AsSpan(bodyOffset));
         var block = RenderCurrentBlock(newLine, currentBlockLines);
         var suffixOffset = end.FirstIndex + EndMarker.Length;
+        if (version == VersionKind.Current &&
+            content.AsSpan(begin.FirstIndex, suffixOffset - begin.FirstIndex).SequenceEqual(block))
+        {
+            return content.ToArray();
+        }
+
         var appendFinalNewLine = suffixOffset == content.Length;
         var resultLength = checked(
             begin.FirstIndex +

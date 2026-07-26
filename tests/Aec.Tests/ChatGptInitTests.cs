@@ -20,11 +20,12 @@ public sealed class ChatGptInitTests
         Assert.Empty(File.ReadAllBytes(layout.ProjectBaseline));
         Assert.Empty(File.ReadAllBytes(layout.GptBaseline));
         Assert.Contains(
-            "<!-- AEC:BEGIN version=2 -->",
+            "<!-- AEC:BEGIN version=4 -->",
             File.ReadAllText(layout.CanonicalAgents),
             StringComparison.Ordinal);
         Assert.Contains(
-            "Manual ChatGPT instruction backups live under `environment/providers/chatgpt/`.",
+            $"Manual ChatGPT instruction backups live under " +
+            $"`{Path.GetDirectoryName(layout.CustomInstructions)}{Path.DirectorySeparatorChar}`.",
             File.ReadAllText(layout.CanonicalAgents),
             StringComparison.Ordinal);
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
@@ -32,11 +33,15 @@ public sealed class ChatGptInitTests
     }
 
     [Fact]
-    public void AcceptsProviderBeforeDirectory()
+    public void AcceptsProviderBeforeRepo()
     {
         using var layout = new ChatGptLayout();
 
-        var result = RunArguments("init", "--provider=chatgpt", layout.Repository);
+        var result = RunArguments(
+            "init",
+            "--provider=chatgpt",
+            "--repo",
+            layout.Repository);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
@@ -44,7 +49,7 @@ public sealed class ChatGptInitTests
     }
 
     [Fact]
-    public void DefaultsProviderRepositoryToCurrentDirectory()
+    public void ProviderRequiresRepoInsteadOfDefaultingToCurrentDirectory()
     {
         using var layout = new ChatGptLayout();
         var previousDirectory = Environment.CurrentDirectory;
@@ -55,8 +60,8 @@ public sealed class ChatGptInitTests
 
             var result = RunArguments("init", "--provider=chatgpt");
 
-            Assert.Equal(0, result.ExitCode);
-            Assert.True(File.Exists(layout.CustomInstructions));
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("init requires --repo", result.Error, StringComparison.Ordinal);
         }
         finally
         {
@@ -111,7 +116,11 @@ public sealed class ChatGptInitTests
     {
         using var layout = new ChatGptLayout();
 
-        var result = RunArguments("init", layout.Repository, providerArgument);
+        var result = RunArguments(
+            "init",
+            "--repo",
+            layout.Repository,
+            providerArgument);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains(expectedError, result.Error, StringComparison.Ordinal);
@@ -165,14 +174,16 @@ public sealed class ChatGptInitTests
     }
 
     [Fact]
-    public void UpgradesVersionOneCanonicalBlockAndPreservesSurroundingBytes()
+    public void UpgradesVersionTwoCanonicalBlockAndPreservesSurroundingBytes()
     {
         using var layout = new ChatGptLayout();
         var canonical = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(
-            "Prefix\r\n<!-- AEC:BEGIN version=1 -->\r\nOld body\r\n<!-- AEC:END -->\r\nSuffix\r\n"u8.ToArray())
+            "Prefix\r\n<!-- AEC:BEGIN version=2 -->\r\nOld body\r\n<!-- AEC:END -->\r\nSuffix\r\n"u8.ToArray())
             .ToArray();
         File.WriteAllBytes(layout.CanonicalAgents, canonical);
-        var expected = AecInstructionBlock.MergeForChatGptProvider(canonical);
+        var expected = AecInstructionBlock.MergeForChatGptProvider(
+            canonical,
+            layout.Repository);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
 
         var result = Run(layout.Repository);
@@ -206,7 +217,7 @@ public sealed class ChatGptInitTests
     {
         using var layout = new ChatGptLayout();
         var future = """
-            <!-- AEC:BEGIN version=3 -->
+            <!-- AEC:BEGIN version=5 -->
             Future body
             <!-- AEC:END -->
             """u8.ToArray();
@@ -403,13 +414,28 @@ public sealed class ChatGptInitTests
     [Fact]
     public void HelpListsTheExactProviderForm()
     {
-        var result = RunArguments("--help");
+        var result = RunArguments("help");
 
         Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Error);
         Assert.Contains(
-            "aec init [directory] --provider=chatgpt",
+            "aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]",
             result.Output,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "aec init --repo ABSOLUTE_PATH --provider=chatgpt",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NoCommandSuggestsTheDocumentedHelpCommand()
+    {
+        var result = RunArguments();
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Use `aec help` for usage.", result.Error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -456,6 +482,7 @@ public sealed class ChatGptInitTests
         var arguments = new[]
         {
             "init",
+            "--repo",
             repository,
             "--provider=chatgpt"
         }.Concat(extraArguments).ToArray();
@@ -514,7 +541,7 @@ public sealed class ChatGptInitTests
             var output = new StringWriter();
             var error = new StringWriter();
             var exitCode = AecApplication.Run(
-                ["init", Repository, "--codex-home", CodexHome],
+                ["init", "--repo", Repository, "--codex-home", CodexHome],
                 output,
                 error);
             if (exitCode != 0)

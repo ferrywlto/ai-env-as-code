@@ -485,7 +485,7 @@ public sealed class BackupTests
             var output = new StringWriter();
             var error = new StringWriter();
             var initExitCode = AecApplication.Run(
-                ["init", Repository, "--codex-home", CodexHome],
+                ["init", "--repo", Repository, "--codex-home", CodexHome],
                 output,
                 error);
             if (initExitCode != 0)

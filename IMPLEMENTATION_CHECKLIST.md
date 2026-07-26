@@ -1,5 +1,18 @@
 # Implementation Checklist
 
+## v0.8 — Explicit repository-aware initialization
+
+- [x] Require `--repo` for `init`; remove positional/default-directory semantics.
+- [x] Define `aec help` and the missing-`--repo` diagnostic.
+- [x] Define absolute repository and ChatGPT paths for managed instructions.
+- [x] Authorize direct `dotnet run` migration and a local-only data commit.
+- [x] Add focused failing CLI and managed-block tests.
+- [x] Implement repository-aware block version migration.
+- [x] Update the `$aec` skill, CLI version, and documentation.
+- [x] Pass skill, Debug, and Release validation.
+- [ ] Commit and push the exact v0.8 engine paths.
+- [ ] Create the initial `aec-data` commit, apply, and verify.
+
 ## v0.7 — Install the AEC skill during initialization
 
 - [x] Confirm ordinary `aec init` is the initial skill-installation point.
@@ -16,4 +29,4 @@
 
 ## Immediate next work
 
-Select the next approved increment; executable publishing remains on hold.
+Commit and push the validated v0.8 engine before the approved data migration.
