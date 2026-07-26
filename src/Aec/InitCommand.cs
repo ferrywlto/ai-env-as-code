@@ -5,6 +5,7 @@ internal static class InitCommand
     public static int Run(string directoryPath, string codexHome, TextWriter output)
     {
         ValidateTarget(directoryPath);
+        AecApplication.EnsureNoLinksInExistingPath(codexHome, "Codex home path");
         AecApplication.EnsureRealDirectory(codexHome, "Codex home");
 
         var runtimePath = Path.Combine(codexHome, "AGENTS.md");
@@ -12,6 +13,7 @@ internal static class InitCommand
         var merged = AecInstructionBlock.Merge(runtime ?? []);
 
         EnsureGitIsAvailable();
+        AecSkillInstaller.Install(codexHome);
 
         Directory.CreateDirectory(directoryPath);
         GitProcess.RunRequired(

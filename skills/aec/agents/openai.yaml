@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Environment as Code"
+  short_description: "Operate AEC repositories with explicit data flow"
+  default_prompt: "Use $aec to inspect whether my selected AEC data repository differs from Codex runtime."

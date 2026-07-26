@@ -22,6 +22,207 @@ public sealed class InitTests
     }
 
     [Fact]
+    public void OrdinaryInitializationInstallsTheAecSkill()
+    {
+        using var layout = new InitLayout();
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        var skillRoot = Path.Combine(layout.CodexHome, "skills", "aec");
+        var skill = File.ReadAllText(Path.Combine(skillRoot, "SKILL.md"));
+        Assert.Contains("name: aec", skill, StringComparison.Ordinal);
+        Assert.Contains("runtime → repository", skill, StringComparison.Ordinal);
+        Assert.Contains("committed repository → runtime", skill, StringComparison.Ordinal);
+        var openAi = File.ReadAllText(Path.Combine(skillRoot, "agents", "openai.yaml"));
+        Assert.Contains("display_name: \"AI Environment as Code\"", openAi, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExistingExactSkillIsNotRewrittenForAnotherRepository()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var skillRoot = Path.Combine(layout.CodexHome, "skills", "aec");
+        var skillPath = Path.Combine(skillRoot, "SKILL.md");
+        var openAiPath = Path.Combine(skillRoot, "agents", "openai.yaml");
+        var timestamp = new DateTime(2020, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(skillPath, timestamp);
+        File.SetLastWriteTimeUtc(openAiPath, timestamp);
+        var skillBefore = File.ReadAllBytes(skillPath);
+        var openAiBefore = File.ReadAllBytes(openAiPath);
+
+        var result = Run(Path.Combine(layout.Root, "second repository"), layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(skillBefore, File.ReadAllBytes(skillPath));
+        Assert.Equal(openAiBefore, File.ReadAllBytes(openAiPath));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(skillPath));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(openAiPath));
+    }
+
+    [Fact]
+    public void PartialExactSkillInstallationIsCompletedWithoutRewritingExistingFile()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var skillRoot = Path.Combine(layout.CodexHome, "skills", "aec");
+        var skillPath = Path.Combine(skillRoot, "SKILL.md");
+        var openAiPath = Path.Combine(skillRoot, "agents", "openai.yaml");
+        var expectedOpenAi = File.ReadAllBytes(openAiPath);
+        File.Delete(openAiPath);
+        var timestamp = new DateTime(2020, 3, 4, 5, 6, 8, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(skillPath, timestamp);
+
+        var result = Run(Path.Combine(layout.Root, "second repository"), layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(expectedOpenAi, File.ReadAllBytes(openAiPath));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(skillPath));
+    }
+
+    [Theory]
+    [InlineData("SKILL.md")]
+    [InlineData("agents/openai.yaml")]
+    public void ConflictingSkillFileFailsBeforeRepositoryOrRuntimeMutation(string relativePath)
+    {
+        using var layout = new InitLayout();
+        var skillRoot = Path.Combine(layout.CodexHome, "skills", "aec");
+        var conflictingPath = Path.Combine(
+            skillRoot,
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(conflictingPath)!);
+        File.WriteAllText(conflictingPath, "preserve conflicting skill\n");
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("conflicts with the bundled version", result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(layout.Target));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal("preserve conflicting skill\n", File.ReadAllText(conflictingPath));
+        var otherPath = relativePath == "SKILL.md"
+            ? Path.Combine(skillRoot, "agents", "openai.yaml")
+            : Path.Combine(skillRoot, "SKILL.md");
+        Assert.False(File.Exists(otherPath));
+    }
+
+    [Fact]
+    public void SkillInstallationPreservesUnmanagedEntries()
+    {
+        using var layout = new InitLayout();
+        var skillsRoot = Path.Combine(layout.CodexHome, "skills");
+        var unrelatedSkill = Path.Combine(skillsRoot, "other", "SKILL.md");
+        var unmanagedAecFile = Path.Combine(skillsRoot, "aec", "notes.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(unrelatedSkill)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(unmanagedAecFile)!);
+        File.WriteAllText(unrelatedSkill, "other skill\n");
+        File.WriteAllText(unmanagedAecFile, "user note\n");
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("other skill\n", File.ReadAllText(unrelatedSkill));
+        Assert.Equal("user note\n", File.ReadAllText(unmanagedAecFile));
+        Assert.True(File.Exists(Path.Combine(skillsRoot, "aec", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(skillsRoot, "aec", "agents", "openai.yaml")));
+    }
+
+    [Fact]
+    public void LinkedSkillDirectoryFailsWithoutWritingItsReferent()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var layout = new InitLayout();
+        var skillsRoot = Path.Combine(layout.CodexHome, "skills");
+        var referent = Path.Combine(layout.Root, "skill referent");
+        Directory.CreateDirectory(skillsRoot);
+        Directory.CreateDirectory(referent);
+        Directory.CreateSymbolicLink(Path.Combine(skillsRoot, "aec"), referent);
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("symbolic link", result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(layout.Target));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Empty(Directory.GetFileSystemEntries(referent));
+    }
+
+    [Fact]
+    public void LinkedCodexHomeAncestorFailsWithoutInstallingTheSkill()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var layout = new InitLayout();
+        var referent = Path.Combine(layout.Root, "codex referent");
+        var realCodexHome = Path.Combine(referent, "home");
+        var link = Path.Combine(layout.Root, "codex link");
+        var linkedCodexHome = Path.Combine(link, "home");
+        Directory.CreateDirectory(realCodexHome);
+        var runtime = Path.Combine(realCodexHome, "AGENTS.md");
+        File.WriteAllText(runtime, "preserve runtime\n");
+        Directory.CreateSymbolicLink(link, referent);
+
+        var result = Run(layout.Target, linkedCodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("symbolic link", result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(layout.Target));
+        Assert.False(Directory.Exists(Path.Combine(realCodexHome, "skills")));
+        Assert.Equal("preserve runtime\n", File.ReadAllText(runtime));
+    }
+
+    [Theory]
+    [InlineData("skills")]
+    [InlineData("skills/aec")]
+    [InlineData("skills/aec/agents")]
+    public void FileAtRequiredSkillDirectoryFailsBeforeMutation(string relativePath)
+    {
+        using var layout = new InitLayout();
+        var occupiedPath = Path.Combine(
+            layout.CodexHome,
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(occupiedPath)!);
+        File.WriteAllText(occupiedPath, "preserve occupying file\n");
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("not a directory", result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(layout.Target));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal("preserve occupying file\n", File.ReadAllText(occupiedPath));
+    }
+
+    [Fact]
+    public void DirectoryAtManagedSkillFileFailsBeforeMutation()
+    {
+        using var layout = new InitLayout();
+        var skillPath = Path.Combine(layout.CodexHome, "skills", "aec", "SKILL.md");
+        Directory.CreateDirectory(skillPath);
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("must be a regular file", result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(layout.Target));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.True(Directory.Exists(skillPath));
+    }
+
+    [Fact]
     public void OrdinaryInitializationDoesNotOptIntoTheChatGptProvider()
     {
         using var layout = new InitLayout();
@@ -63,6 +264,7 @@ public sealed class InitTests
         Assert.Equal("preserve me", File.ReadAllText(existingPath));
         Assert.Single(Directory.GetFileSystemEntries(layout.Target));
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
     }
 
     [Fact]
@@ -236,6 +438,7 @@ public sealed class InitTests
         Assert.Empty(result.Output);
         Assert.Contains("newer unsupported", result.Error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(layout.Target));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
         Assert.Equal(runtime, File.ReadAllBytes(layout.Runtime));
     }
 
@@ -251,6 +454,7 @@ public sealed class InitTests
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("Merged instructions exceed 1 MiB", result.Error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(layout.Target));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
         Assert.Equal(runtime, File.ReadAllBytes(layout.Runtime));
     }
 
@@ -273,6 +477,7 @@ public sealed class InitTests
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("Runtime target must not be a symbolic link", result.Error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(layout.Target));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
         Assert.Equal("preserve me\n", File.ReadAllText(referent));
     }
 

@@ -7,6 +7,8 @@ public sealed class ChatGptInitTests
     public void InitializesChatGptProviderWithoutTouchingRuntime()
     {
         using var layout = new ChatGptLayout();
+        var skillsDirectory = Path.Combine(layout.CodexHome, "skills");
+        Directory.Delete(skillsDirectory, recursive: true);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
 
         var result = Run(layout.Repository);
@@ -26,6 +28,7 @@ public sealed class ChatGptInitTests
             File.ReadAllText(layout.CanonicalAgents),
             StringComparison.Ordinal);
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.False(Directory.Exists(skillsDirectory));
     }
 
     [Fact]

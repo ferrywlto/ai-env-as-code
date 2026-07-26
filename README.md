@@ -1,9 +1,9 @@
 # AI Environment as Code
 
-Version 0.6 contains the first incremental slices of a minimal .NET tool for
+Version 0.7 contains the first incremental slices of a minimal .NET tool for
 creating a source-of-truth data repository, comparing its Codex instruction file
 with a local runtime target, moving approved changes in either explicit direction,
-and scaffolding manual ChatGPT instruction backups.
+scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
 
 ## Version history
 
@@ -15,8 +15,9 @@ and scaffolding manual ChatGPT instruction backups.
 | 0.4 | `init` AEC instruction injection and update |
 | 0.5 | `apply` command |
 | 0.6 | ChatGPT provider initialization |
+| 0.7 | Install the `$aec` Codex skill during ordinary `init` |
 
-The project and CLI report the current release as `0.6.0`.
+The project and CLI report the current release as `0.7.0`.
 
 ## apply
 
@@ -101,6 +102,24 @@ relative operand is resolved from the current working directory.
 `CODEX_HOME` and then `~/.codex`, matching `status` and `backup`. The Codex home must
 already exist, but its `AGENTS.md` may be absent.
 
+Ordinary `init` also installs these bundled skill metadata files:
+
+```text
+<codex-home>/skills/aec/SKILL.md
+<codex-home>/skills/aec/agents/openai.yaml
+```
+
+Only those two files are managed. Missing files are created, identical files are
+retained without rewriting, and unrelated skills or extra files are preserved. A
+different existing managed file is treated as a conflict and is never overwritten;
+the command fails before creating the repository or changing runtime instructions.
+This permits multiple data repositories to share one exact skill installation.
+
+The skill invokes an installed `aec` executable directly. Version 0.7 does not
+publish or install that executable and does not search for, build, or run an engine
+checkout as a fallback. Executable distribution and skill upgrades remain separate
+future decisions.
+
 Any existing entry—including a hidden file or `.git`—makes the target non-empty and
 causes the command to fail before making changes. This makes `init` intentionally
 one-shot: running it a second time against the repository it created is an error.
@@ -177,7 +196,8 @@ Never automatically capture from or deploy to ChatGPT, and never claim account-s
 Instructions outside that block are preserved. Provider mode never reads or writes
 `CODEX_HOME`, even when the environment variable is set, and combining it with
 `--codex-home` is an error. Ordinary `init` remains provider-neutral and does not
-create ChatGPT paths or add ChatGPT guidance.
+create ChatGPT paths or add ChatGPT guidance. Provider mode also does not install,
+repair, or inspect the Codex skill.
 
 The first change writes `initialized`; an idempotent rerun writes `unchanged`.
 Both return exit code 0. `unchanged` describes only the initialized file state—it
@@ -255,7 +275,8 @@ dotnet run --project src/Aec/Aec.csproj -- \
 ## Current boundaries
 
 The tool does not implement `diff`, `verify`, `restore`, rendering, manifests,
-automatic ChatGPT capture or deployment, or pushing.
+automatic ChatGPT capture or deployment, executable distribution, skill upgrades,
+or pushing.
 
 Source writes and Git commits operate on the explicitly selected data repository
 (`[directory]` for `init`, `--repo` for repository commands); they never infer or
