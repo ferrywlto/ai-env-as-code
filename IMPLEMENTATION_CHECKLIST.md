@@ -12,7 +12,7 @@
 - [x] Reject every other non-empty initialization target.
 - [x] Update the `$aec` skill, CLI version, and documentation.
 - [x] Pass skill, Debug, and Release validation.
-- [ ] Commit and push the exact v0.9 engine paths.
+- [x] Commit and push the exact v0.9 engine paths.
 
 ## v0.8 — Explicit repository-aware initialization
 
