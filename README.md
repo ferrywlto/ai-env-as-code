@@ -305,3 +305,11 @@ or pushing.
 
 Source writes and Git commits operate only on the data repository explicitly
 selected with `--repo`; they never infer or modify the engine repository.
+
+## License
+
+This project is available under the [MIT License](LICENSE).
+
+If you find it useful, please consider citing the original work by
+[@ferrywlto](https://github.com/ferrywlto) or
+[buying me a coffee](https://www.paypal.com/paypalme/ferrywlto). ☕️
