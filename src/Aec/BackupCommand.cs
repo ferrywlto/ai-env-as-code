@@ -2,7 +2,7 @@ namespace Aec;
 
 internal static class BackupCommand
 {
-    private const string CommitMessage = "Backup Codex AGENTS.md";
+    internal const string CommitMessage = "Backup Codex AGENTS.md";
     private const string OutsideSourcePathspec =
         ":(top,exclude,literal)environment/providers/codex/AGENTS.md";
 
@@ -38,26 +38,61 @@ internal static class BackupCommand
             return 0;
         }
 
-        CommitWithoutHooks(repository);
+        CommitWithoutHooks(repository, CommitMessage, allowEmpty: false);
 
-        var head = GitProcess.RunRequired(
-            repository,
-            "Git could not resolve the new commit",
-            "rev-parse",
-            "--verify",
-            "HEAD").Output.Trim();
-
-        if (head.Length == 0)
-        {
-            throw new InvalidOperationException("Git returned an empty commit identifier.");
-        }
-
-        VerifyCommit(repository, expectedBlob);
+        var head = ResolveHead(repository);
+        VerifyCommit(repository, expectedBlob, CommitMessage);
         output.WriteLine($"committed {head}");
         return 0;
     }
 
-    private static void ValidateRepository(string repository)
+    internal static string CommitCanonicalSource(
+        string repository,
+        string commitMessage,
+        string expectedParent,
+        byte[] expectedSource,
+        bool allowEmpty)
+    {
+        ArgumentNullException.ThrowIfNull(expectedSource);
+        ValidateRepository(repository);
+        EnsureNoChangesOutsideSource(repository);
+        EnsureBranchMatches(repository, "refs/heads/main");
+        EnsureHeadMatches(repository, expectedParent);
+
+        EnsureSourceMatchesExpected(repository, expectedSource);
+        StageCanonicalSource(repository);
+        var expectedBlob = EnsureStagedBytesMatchSource(repository);
+        EnsureBlobMatchesExpected(repository, expectedBlob, expectedSource);
+        if (!allowEmpty && !HasStagedSourceChange(repository))
+        {
+            throw new InvalidOperationException("Canonical source has no change to commit.");
+        }
+
+        // Recheck the parent after staging so a concurrent checkout cannot redirect the commit.
+        EnsureBranchMatches(repository, "refs/heads/main");
+        EnsureHeadMatches(repository, expectedParent);
+        CommitWithoutHooks(repository, commitMessage, allowEmpty);
+
+        var head = ResolveHead(repository);
+        var actualParent = GitProcess.RunRequired(
+            repository,
+            "Git could not verify the initialization commit parent",
+            "rev-parse",
+            "--verify",
+            "HEAD^").Output.Trim();
+        if (!string.Equals(actualParent, expectedParent, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Initialization commit parent changed during the operation.");
+        }
+
+        VerifyCommit(repository, expectedBlob, commitMessage);
+        EnsureBranchMatches(repository, "refs/heads/main");
+        EnsureNoChangesOutsideSource(repository);
+        return head;
+    }
+
+    internal static void ValidateRepository(string repository)
     {
         var insideWorkTree = GitProcess.RunRequired(
             repository,
@@ -151,7 +186,7 @@ internal static class BackupCommand
         }
     }
 
-    private static void EnsureNoChangesOutsideSource(string repository)
+    internal static void EnsureNoChangesOutsideSource(string repository)
     {
         var status = GitProcess.RunRequired(
             repository,
@@ -230,24 +265,80 @@ internal static class BackupCommand
         return sourceHash;
     }
 
-    private static void CommitWithoutHooks(string repository)
+    private static void StageCanonicalSource(string repository)
+    {
+        GitProcess.RunRequired(
+            repository,
+            "Git could not stage the canonical source",
+            "add",
+            "--force",
+            "--",
+            AecApplication.SourceRelativePath);
+    }
+
+    private static void EnsureSourceMatchesExpected(string repository, byte[] expected)
+    {
+        var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
+        var source = AecApplication.ReadRequiredTextFile(sourcePath, "Canonical source");
+        if (!source.AsSpan().SequenceEqual(expected))
+        {
+            throw new InvalidOperationException(
+                "Canonical source changed before the initialization commit.");
+        }
+    }
+
+    private static void EnsureBlobMatchesExpected(
+        string repository,
+        string blob,
+        byte[] expected)
+    {
+        var staged = GitProcess.RunRequiredBytes(
+            repository,
+            "Git could not read the staged canonical source",
+            "cat-file",
+            "blob",
+            blob);
+        if (!staged.AsSpan().SequenceEqual(expected))
+        {
+            throw new InvalidOperationException(
+                "Staged canonical source does not match the expected initialization content.");
+        }
+    }
+
+    private static void CommitWithoutHooks(
+        string repository,
+        string commitMessage,
+        bool allowEmpty)
     {
         var hooksDirectory = Directory.CreateTempSubdirectory("aec-hooks-");
 
         try
         {
-            GitProcess.RunRequired(
-                repository,
-                "Git could not commit the canonical source",
+            var arguments = new List<string>
+            {
                 "-c",
                 $"core.hooksPath={hooksDirectory.FullName}",
                 "commit",
-                "--quiet",
+                "--quiet"
+            };
+            if (allowEmpty)
+            {
+                arguments.Add("--allow-empty");
+            }
+
+            arguments.AddRange(
+            [
                 "--only",
                 "--message",
-                CommitMessage,
+                commitMessage,
                 "--",
-                AecApplication.SourceRelativePath);
+                AecApplication.SourceRelativePath
+            ]);
+
+            GitProcess.RunRequired(
+                repository,
+                "Git could not commit the canonical source",
+                [.. arguments]);
         }
         finally
         {
@@ -262,7 +353,10 @@ internal static class BackupCommand
         }
     }
 
-    private static void VerifyCommit(string repository, string expectedBlob)
+    private static void VerifyCommit(
+        string repository,
+        string expectedBlob,
+        string expectedSubject)
     {
         var committedBlob = GitProcess.RunRequired(
             repository,
@@ -272,18 +366,19 @@ internal static class BackupCommand
         if (!string.Equals(expectedBlob, committedBlob, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "Committed canonical source bytes do not match the runtime data.");
+                "Committed canonical source bytes do not match the expected source.");
         }
 
         var subject = GitProcess.RunRequired(
             repository,
-            "Git could not inspect the backup commit message",
+            "Git could not inspect the canonical source commit message",
             "log",
             "-1",
             "--format=%s").Output.TrimEnd('\r', '\n');
-        if (!string.Equals(subject, CommitMessage, StringComparison.Ordinal))
+        if (!string.Equals(subject, expectedSubject, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Backup commit subject does not match the required message.");
+            throw new InvalidOperationException(
+                "Canonical source commit subject does not match the required message.");
         }
 
         var sourceStatus = GitProcess.RunRequired(
@@ -298,7 +393,7 @@ internal static class BackupCommand
         if (sourceStatus.Output.Length != 0)
         {
             throw new InvalidOperationException(
-                "Canonical source is not clean after the backup commit.");
+                "Canonical source is not clean after its commit.");
         }
     }
 
@@ -332,5 +427,43 @@ internal static class BackupCommand
             _ => throw new InvalidOperationException(
                 $"Git could not inspect the staged canonical source (exit code {result.ExitCode}).")
         };
+    }
+
+    private static string ResolveHead(string repository)
+    {
+        var head = GitProcess.RunRequired(
+            repository,
+            "Git could not resolve the new commit",
+            "rev-parse",
+            "--verify",
+            "HEAD").Output.Trim();
+        return head.Length == 0
+            ? throw new InvalidOperationException("Git returned an empty commit identifier.")
+            : head;
+    }
+
+    private static void EnsureHeadMatches(string repository, string expected)
+    {
+        var actual = ResolveHead(repository);
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Repository HEAD changed during canonical source commit.");
+        }
+    }
+
+    private static void EnsureBranchMatches(string repository, string expected)
+    {
+        var actual = GitProcess.RunRequired(
+            repository,
+            "Git could not verify the canonical source commit branch",
+            "symbolic-ref",
+            "--quiet",
+            "HEAD").Output.Trim();
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Initialization commit requires branch main.");
+        }
     }
 }

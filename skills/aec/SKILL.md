@@ -17,9 +17,12 @@ fallback.
 Use only these operations:
 
 - `aec help` lists the supported command forms without changing state.
-- `aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` initializes a
-  missing or empty data repository and its Codex runtime. It does not create a Git
-  commit.
+- `aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` requires an
+  existing runtime `AGENTS.md`. It creates a missing or empty data repository, or
+  resumes only a recognizable baseline-only partial initialization. It commits the
+  exact runtime as `Backup Codex AGENTS.md`, commits the reconciled AEC source as
+  `Initialize AEC instructions`, then applies that committed source. It does not
+  push.
 - `aec init --repo ABSOLUTE_PATH --provider=chatgpt` initializes only the manual
   ChatGPT files in an existing data repository. Do not pass `--codex-home`.
 - `aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` compares the
@@ -36,3 +39,6 @@ Use only these operations:
 
 If the requested direction is unclear, use `status` and ask the user to choose.
 Never invent an automatic `sync` operation or infer a mutation direction.
+
+An explicit ordinary `init` request authorizes its fixed two-commit and apply
+sequence. Do not wrap it in separate `backup` or `apply` invocations.

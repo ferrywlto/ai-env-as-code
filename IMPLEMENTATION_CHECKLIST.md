@@ -1,5 +1,19 @@
 # Implementation Checklist
 
+## v0.9 — Commit-first initialization
+
+- [x] Confirm a missing runtime is an error.
+- [x] Fix the second commit subject as `Initialize AEC instructions`.
+- [x] Add focused failing lifecycle and baseline-resume tests.
+- [x] Commit the exact runtime baseline through the backup flow.
+- [x] Reconcile and commit the AEC block only in the canonical source.
+- [x] Apply without overwriting runtime changes made after the committed baseline.
+- [x] Resume only a recognizable baseline-only partial initialization.
+- [x] Reject every other non-empty initialization target.
+- [x] Update the `$aec` skill, CLI version, and documentation.
+- [x] Pass skill, Debug, and Release validation.
+- [ ] Commit and push the exact v0.9 engine paths.
+
 ## v0.8 — Explicit repository-aware initialization
 
 - [x] Require `--repo` for `init`; remove positional/default-directory semantics.
@@ -29,4 +43,4 @@
 
 ## Immediate next work
 
-Select the next approved increment; executable publishing remains on hold.
+Validate v0.9 before the deferred AEC-section consolidation increment.

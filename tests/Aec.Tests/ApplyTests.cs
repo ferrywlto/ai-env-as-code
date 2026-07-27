@@ -60,6 +60,88 @@ public sealed class ApplyTests
     }
 
     [Fact]
+    public void InitializationApplyRejectsRuntimeChangedSinceItsBackup()
+    {
+        using var layout = new ApplyLayout(
+            "desired\n"u8.ToArray(),
+            "concurrent runtime\n"u8.ToArray());
+        var output = new StringWriter();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ApplyCommand.RunForInitialization(
+                layout.Repository,
+                layout.CodexHome,
+                output,
+                "captured runtime\n"u8.ToArray(),
+                Git(layout, "rev-parse", "HEAD").Output.Trim(),
+                "desired\n"u8.ToArray()));
+
+        Assert.Contains("changed after", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(output.ToString());
+        Assert.Equal("concurrent runtime\n", File.ReadAllText(layout.Runtime));
+    }
+
+    [Fact]
+    public void InitializationApplyAcceptsRuntimeAlreadyAtCommittedSource()
+    {
+        var desired = "desired\n"u8.ToArray();
+        using var layout = new ApplyLayout(desired, desired);
+        var output = new StringWriter();
+
+        var exitCode = ApplyCommand.RunForInitialization(
+            layout.Repository,
+            layout.CodexHome,
+            output,
+            "captured runtime\n"u8.ToArray(),
+            Git(layout, "rev-parse", "HEAD").Output.Trim(),
+            desired);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"unchanged{Environment.NewLine}", output.ToString());
+        Assert.Equal(desired, File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void InitializationApplyRejectsAnUnexpectedHead()
+    {
+        using var layout = new ApplyLayout(
+            "desired\n"u8.ToArray(),
+            "captured runtime\n"u8.ToArray());
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ApplyCommand.RunForInitialization(
+                layout.Repository,
+                layout.CodexHome,
+                TextWriter.Null,
+                "captured runtime\n"u8.ToArray(),
+                new string('0', 40),
+                "desired\n"u8.ToArray()));
+
+        Assert.Contains("HEAD changed", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("captured runtime\n", File.ReadAllText(layout.Runtime));
+    }
+
+    [Fact]
+    public void InitializationApplyRejectsUnexpectedCommittedContent()
+    {
+        using var layout = new ApplyLayout(
+            "desired\n"u8.ToArray(),
+            "captured runtime\n"u8.ToArray());
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ApplyCommand.RunForInitialization(
+                layout.Repository,
+                layout.CodexHome,
+                TextWriter.Null,
+                "captured runtime\n"u8.ToArray(),
+                Git(layout, "rev-parse", "HEAD").Output.Trim(),
+                "other desired\n"u8.ToArray()));
+
+        Assert.Contains("expected initialization content", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("captured runtime\n", File.ReadAllText(layout.Runtime));
+    }
+
+    [Fact]
     public void UnrelatedRepositoryChangesArePreserved()
     {
         using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
@@ -350,7 +432,7 @@ public sealed class ApplyTests
         var exitCode = AecApplication.Run(["--version"], output, error);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"0.8.0{Environment.NewLine}", output.ToString());
+        Assert.Equal($"0.9.0{Environment.NewLine}", output.ToString());
         Assert.Empty(error.ToString());
     }
 

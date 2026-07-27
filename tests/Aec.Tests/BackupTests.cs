@@ -482,19 +482,18 @@ public sealed class BackupTests
             Directory.CreateDirectory(Root);
             Directory.CreateDirectory(CodexHome);
             File.WriteAllText(Runtime, runtimeContent);
-            var output = new StringWriter();
-            var error = new StringWriter();
-            var initExitCode = AecApplication.Run(
-                ["init", "--repo", Repository, "--codex-home", CodexHome],
-                output,
-                error);
-            if (initExitCode != 0)
+            Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
+            var init = RunGit(
+                Repository,
+                "init",
+                "--quiet",
+                "--template=",
+                "--initial-branch=main");
+            if (init.ExitCode != 0)
             {
-                throw new InvalidOperationException(error.ToString());
+                throw new InvalidOperationException(init.Error);
             }
-
             File.WriteAllBytes(Source, []);
-            File.WriteAllText(Runtime, runtimeContent);
 
             ConfigureGit("user.name", "AEC Tests");
             ConfigureGit("user.email", "aec-tests@example.invalid");

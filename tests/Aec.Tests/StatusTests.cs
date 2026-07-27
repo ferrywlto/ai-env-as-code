@@ -3,9 +3,40 @@ using System.Text;
 namespace Aec.Tests;
 
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class ProcessStateCollection
+public sealed class ProcessStateCollection : ICollectionFixture<GitTestEnvironment>
 {
     public const string Name = "Process state";
+}
+
+public sealed class GitTestEnvironment : IDisposable
+{
+    private readonly string? previousGlobalConfig;
+    private readonly string root;
+
+    public GitTestEnvironment()
+    {
+        root = Path.Combine(Path.GetTempPath(), "aec-git-test-config", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var config = Path.Combine(root, "config");
+        File.WriteAllText(
+            config,
+            """
+            [user]
+                name = AEC Tests
+                email = aec-tests@example.invalid
+            [commit]
+                gpgSign = false
+            """);
+
+        previousGlobalConfig = Environment.GetEnvironmentVariable("GIT_CONFIG_GLOBAL");
+        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", config);
+    }
+
+    public void Dispose()
+    {
+        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", previousGlobalConfig);
+        Directory.Delete(root, recursive: true);
+    }
 }
 
 [Collection(ProcessStateCollection.Name)]

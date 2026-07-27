@@ -4,19 +4,54 @@ internal static class ApplyCommand
 {
     public static int Run(string repository, string codexHome, TextWriter output)
     {
+        return Run(repository, codexHome, output, initialization: null);
+    }
+
+    internal static int RunForInitialization(
+        string repository,
+        string codexHome,
+        TextWriter output,
+        byte[] expectedRuntime,
+        string expectedCommit,
+        byte[] expectedSource)
+    {
+        ArgumentNullException.ThrowIfNull(expectedRuntime);
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedCommit);
+        ArgumentNullException.ThrowIfNull(expectedSource);
+        return Run(
+            repository,
+            codexHome,
+            output,
+            new InitializationExpectation(expectedRuntime, expectedCommit, expectedSource));
+    }
+
+    private static int Run(
+        string repository,
+        string codexHome,
+        TextWriter output,
+        InitializationExpectation? initialization)
+    {
         EnsureRuntimeOutsideRepository(repository, codexHome);
         ValidateRepositoryRoot(repository);
 
         var commit = ResolveHeadCommit(repository);
+        if (initialization is not null &&
+            !string.Equals(commit, initialization.Commit, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Repository HEAD changed after the initialization commit.");
+        }
+
         var source = ReadCommittedSource(repository, commit);
+        if (initialization is not null &&
+            !source.AsSpan().SequenceEqual(initialization.Source))
+        {
+            throw new InvalidOperationException(
+                "Committed source does not match the expected initialization content.");
+        }
+
         var runtimePath = Path.Combine(codexHome, "AGENTS.md");
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
-
-        if (runtime is not null && runtime.AsSpan().SequenceEqual(source))
-        {
-            output.WriteLine("unchanged");
-            return 0;
-        }
 
         // Revalidate provenance after observing runtime so a concurrent checkout or source edit stops apply.
         var currentCommit = ResolveHeadCommit(repository);
@@ -31,7 +66,24 @@ internal static class ApplyCommand
             throw new InvalidOperationException("Canonical source changed during apply.");
         }
 
-        AtomicFile.ReplaceIfUnchanged(runtimePath, runtime, source);
+        if (runtime is not null && runtime.AsSpan().SequenceEqual(source))
+        {
+            output.WriteLine("unchanged");
+            return 0;
+        }
+
+        // Init may overwrite only the exact runtime bytes captured by its baseline commit.
+        if (initialization is not null &&
+            (runtime is null || !runtime.AsSpan().SequenceEqual(initialization.Runtime)))
+        {
+            throw new InvalidOperationException(
+                "Runtime target changed after the initialization backup; committed source was not applied.");
+        }
+
+        AtomicFile.ReplaceIfUnchanged(
+            runtimePath,
+            initialization?.Runtime ?? runtime,
+            source);
         output.WriteLine("applied");
         return 0;
     }
@@ -240,4 +292,9 @@ internal static class ApplyCommand
             failureMessage,
             ["--no-replace-objects", .. arguments]);
     }
+
+    private sealed record InitializationExpectation(
+        byte[] Runtime,
+        string Commit,
+        byte[] Source);
 }

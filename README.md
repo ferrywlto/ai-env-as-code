@@ -1,6 +1,6 @@
 # AI Environment as Code
 
-Version 0.8 contains the first incremental slices of a minimal .NET tool for
+Version 0.9 contains the first incremental slices of a minimal .NET tool for
 creating a source-of-truth data repository, comparing its Codex instruction file
 with a local runtime target, moving approved changes in either explicit direction,
 scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
@@ -17,8 +17,9 @@ scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
 | 0.6 | ChatGPT provider initialization |
 | 0.7 | Install the `$aec` Codex skill during ordinary `init` |
 | 0.8 | Require explicit repository-aware initialization |
+| 0.9 | Commit-first initialization through `backup` and `apply` |
 
-The project and CLI report the current release as `0.8.0`.
+The project and CLI report the current release as `0.9.0`.
 
 ## apply
 
@@ -95,13 +96,16 @@ the inverse `restore` direction.
 aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 ```
 
-`init` creates a new data repository in a missing directory or an existing empty
-directory. `--repo` is required and must be the absolute path of that source-of-truth
-repository. The current working directory and engine repository are never inferred.
+`init` creates a data repository in a missing or empty directory. It may also resume
+only a recognizable baseline-only partial initialization; every other non-empty
+target is rejected. `--repo` is required and must be the absolute path of that
+source-of-truth repository. The current working directory and engine repository are
+never inferred.
 
 `--codex-home` selects the runtime root. When omitted, `init` uses a non-empty
 `CODEX_HOME` and then `~/.codex`, matching `status` and `backup`. The Codex home must
-already exist, but its `AGENTS.md` may be absent.
+already exist, and its regular `AGENTS.md` must exist. A missing runtime fails before
+repository or skill mutation.
 
 Ordinary `init` also installs these bundled skill metadata files:
 
@@ -116,17 +120,17 @@ different existing managed file is treated as a conflict and is never overwritte
 the command fails before creating the repository or changing runtime instructions.
 This permits multiple data repositories to share one exact skill installation.
 
-The skill invokes an installed `aec` executable directly. Version 0.8 does not
+The skill invokes an installed `aec` executable directly. Version 0.9 does not
 publish or install that executable and does not search for, build, or run an engine
 checkout as a fallback. Executable distribution and skill upgrades remain separate
 future decisions.
 
-Any existing entry—including a hidden file or `.git`—makes the target non-empty and
-causes the command to fail before making changes. This makes `init` intentionally
-one-shot: running it a second time against the repository it created is an error.
-Direct symbolic-link targets and paths containing symbolic-link components are also
-rejected. Runtime validation and instruction merging complete before the repository
-is created.
+A resumable target must be a `main` repository containing one root commit named
+`Backup Codex AGENTS.md`, whose only file and exact bytes match the current runtime
+canonical path. The working canonical source may contain only that baseline or the
+exact expected managed result, with no changes outside that path. Completed
+repositories, lookalikes, unrelated changes, symbolic links, and special filesystem
+entries are rejected.
 
 The AEC-managed instruction block is delimited and versioned explicitly:
 
@@ -141,7 +145,7 @@ Use `aec status` to inspect drift and `aec backup` to record approved runtime ch
 <!-- AEC:END -->
 ```
 
-When no block exists, `init` inserts it at the logical top of the runtime file,
+When no block exists, `init` inserts it at the logical top of the canonical copy,
 after an optional UTF-8 byte-order mark, followed by one blank separator line and
 the existing instructions. An older version is replaced in place. A current block
 is retained byte-for-byte when it already contains the expected managed content and
@@ -149,16 +153,29 @@ is retained byte-for-byte when it already contains the expected managed content 
 or newer-version markers, invalid UTF-8, NUL bytes, and merged content over 1 MiB
 are rejected.
 
-On success, Git is initialized with `main` as the initial branch. The merged bytes
-are written to both the runtime target and this canonical source:
+An explicit `init` invocation authorizes this fixed lifecycle:
 
 ```text
-environment/providers/codex/AGENTS.md
+runtime AGENTS.md
+  -> environment/providers/codex/AGENTS.md
+  -> commit: Backup Codex AGENTS.md
+  -> canonical source with reconciled AEC block
+  -> commit: Initialize AEC instructions
+  -> runtime AGENTS.md through apply
 ```
 
-All bytes outside a replaced block are retained. The canonical and runtime files
-therefore begin in sync. The command does not stage files or create a commit; run
-`backup` separately to create the initial Git commit.
+The first commit preserves the runtime bytes without AEC mutation. The second commit
+is always created, including as an empty commit when the baseline already has the
+exact current block. Only then does `init` run the apply flow. It performs no write
+when runtime already equals the committed source; otherwise it stops if runtime
+changed after backup. Git hooks are isolated, line-ending conversion is disabled
+locally, exact staged bytes are verified, and the command does not push. No separate
+`backup` or `apply` invocation is needed.
+
+A failure before the second commit leaves the runtime untouched and a recognizable
+baseline may resume. A failure after the second commit leaves a complete repository;
+use explicit `status` and then choose `apply` or `backup` rather than rerunning
+`init`.
 
 ### ChatGPT provider initialization
 
