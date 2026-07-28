@@ -120,10 +120,10 @@ different existing managed file is treated as a conflict and is never overwritte
 the command fails before creating the repository or changing runtime instructions.
 This permits multiple data repositories to share one exact skill installation.
 
-The skill invokes an installed `aec` executable directly. Version 0.9 does not
-publish or install that executable and does not search for, build, or run an engine
-checkout as a fallback. Executable distribution and skill upgrades remain separate
-future decisions.
+The skill invokes an installed `aec` executable directly. Version 0.9 provides the
+developer-built macOS ARM64 Native AOT workflow documented below, but `init` does
+not search for, build, or run an engine checkout as a fallback. Skill upgrades
+remain a separate future decision.
 
 A resumable target must be a `main` repository containing one root commit named
 `Backup Codex AGENTS.md`, whose only file and exact bytes match the current runtime
@@ -297,11 +297,66 @@ dotnet run --project src/Aec/Aec.csproj -- \
   --codex-home /absolute/path/to/codex-home
 ```
 
+### Native AOT on Apple-silicon macOS
+
+The initial executable workflow supports only ARM64 macOS. Git is required at
+runtime because AEC repositories use Git history as their source of truth. Building
+requires the .NET 10 SDK and Xcode Command Line Tools:
+
+```bash
+./scripts/build-osx-arm64.sh
+```
+
+These examples assume the repository root as the working directory. Once invoked
+through a valid relative or absolute path, each script resolves the repository from
+its own location rather than the caller's working directory. The build publishes
+the self-contained executable to:
+
+```text
+artifacts/aec-osx-arm64/aec
+```
+
+After a successful build, install it for the current user:
+
+```bash
+./scripts/install-osx-arm64.sh
+```
+
+The default target is `$HOME/.local/bin/aec`. An explicit absolute directory can
+be selected instead:
+
+```bash
+./scripts/install-osx-arm64.sh --install-dir /absolute/path/to/bin
+```
+
+The installer never uses `sudo` or changes shell profiles or `PATH`. If
+`$HOME/.local/bin` is not already on `PATH`, configure the shell yourself, for
+example:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+The installed Native AOT executable does not require .NET. To upgrade it after
+updating the source checkout, rerun the build and installer scripts. Reinstalling
+identical bytes reports `unchanged` without rewriting the executable.
+
+To uninstall the default executable:
+
+```bash
+rm "$HOME/.local/bin/aec"
+```
+
+This removes only the executable. It preserves AEC data repositories, runtime
+instructions, and the installed `$aec` skill. Safe upgrades of an existing `$aec`
+skill remain deferred to the next increment. For a custom installation, remove
+`aec` from the directory passed to `--install-dir` instead.
+
 ## Current boundaries
 
 The tool does not implement `diff`, `verify`, `restore`, rendering, manifests,
-automatic ChatGPT capture or deployment, executable distribution, skill upgrades,
-or pushing.
+automatic ChatGPT capture or deployment, prebuilt binary distribution, skill
+upgrades, or pushing.
 
 Source writes and Git commits operate only on the data repository explicitly
 selected with `--repo`; they never infer or modify the engine repository.

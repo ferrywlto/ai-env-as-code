@@ -7,7 +7,14 @@
 - [x] Add the MIT license, project metadata, and goodwill attribution.
 - [x] Validate the licensing increment.
 - [x] Commit and push the exact licensing paths.
-- [ ] Add the macOS ARM64 Native AOT build and install workflow.
+- [x] Capture the developer-authored `osx-arm64` Native AOT build direction.
+- [x] Harden and validate the deterministic Native AOT build artifact.
+- [x] Add contained user-local binary installation without shell-profile edits.
+- [x] Make reinstall the explicit, idempotent binary upgrade path.
+- [x] Add binary-only uninstall guidance that preserves AEC state.
+- [x] Document prerequisites, build, install, PATH, upgrade, and uninstall.
+- [x] Validate clean install, repeated install, upgrade, and uninstall.
+- [ ] Commit and push the exact macOS ARM64 publication paths.
 - [ ] Add safe upgrades from known official `$aec` skill versions.
 - [ ] Complete v1.0 release validation, versioning, tagging, and publication.
 
@@ -54,4 +61,4 @@
 
 ## Immediate next work
 
-Plan the macOS ARM64 Native AOT build and install workflow.
+Commit and push the validated macOS ARM64 Native AOT build and install workflow.
