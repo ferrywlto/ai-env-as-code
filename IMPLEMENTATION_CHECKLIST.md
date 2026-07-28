@@ -14,7 +14,7 @@
 - [x] Add binary-only uninstall guidance that preserves AEC state.
 - [x] Document prerequisites, build, install, PATH, upgrade, and uninstall.
 - [x] Validate clean install, repeated install, upgrade, and uninstall.
-- [ ] Commit and push the exact macOS ARM64 publication paths.
+- [x] Commit and push the exact macOS ARM64 publication paths.
 - [ ] Add safe upgrades from known official `$aec` skill versions.
 - [ ] Complete v1.0 release validation, versioning, tagging, and publication.
 
@@ -61,4 +61,4 @@
 
 ## Immediate next work
 
-Commit and push the validated macOS ARM64 Native AOT build and install workflow.
+Plan safe upgrades from known official `$aec` skill versions.
