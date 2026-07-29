@@ -1,7 +1,15 @@
 #!/bin/sh
 set -eu
 
-# Resolve from the script location so the caller's working directory is irrelevant.
+# Assume I run this script from user home e.g. /Users/{Username} or ~ and the script located at ./Documents/GitHub/{ProjectRepo}/scripts/build.sh
+# The path passed to call this script will be ./Documents/GitHub/{ProjectRepo}/scripts/build.sh
+# Then $(dirname -- "$0") will return ./Documents/GitHub/{ProjectRepo}/scripts/
+# Assume this script placed in a folder in the repo (e.g. scripts), the repo is one level upper
+# $(dirname -- "$0")/.. will return ./Documents/GitHub/{ProjectRepo}/scripts/.. which is ./Documents/GitHub/{ProjectRepo}/
+# The current working directory (pwd)" will be /Users/{Username}
+# Combined together: $(dirname -- "$0")/.. && pwd will return absolute path /Users/{Username}/./Documents/GitHub/{ProjectRepo}/scripts/..
+# which equals to /Users/{Username}/Documents/GitHub/{ProjectRepo}/
+
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 if [ "$#" -ne 0 ]; then
