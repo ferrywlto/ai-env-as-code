@@ -15,6 +15,7 @@
 - [x] Document prerequisites, build, install, PATH, upgrade, and uninstall.
 - [x] Validate clean install, repeated install, upgrade, and uninstall.
 - [x] Commit and push the exact macOS ARM64 publication paths.
+- [x] Dogfood the installed Native AOT binary against the selected AEC repository.
 - [ ] Add safe upgrades from known official `$aec` skill versions.
 - [ ] Complete v1.0 release validation, versioning, tagging, and publication.
 
