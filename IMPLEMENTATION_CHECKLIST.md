@@ -16,7 +16,8 @@
 - [x] Validate clean install, repeated install, upgrade, and uninstall.
 - [x] Commit and push the exact macOS ARM64 publication paths.
 - [x] Dogfood the installed Native AOT binary against the selected AEC repository.
-- [ ] Add safe upgrades from known official `$aec` skill versions.
+- [x] Migrate the sole pre-release v0.8 skill installation to the v0.9 baseline.
+- [ ] Add and dogfood `aec upgrade` for future official skill versions.
 - [ ] Complete v1.0 release validation, versioning, tagging, and publication.
 
 ## v0.9 — Commit-first initialization
@@ -62,4 +63,4 @@
 
 ## Immediate next work
 
-Plan safe upgrades from known official `$aec` skill versions.
+Design and implement `aec upgrade` from the clean v0.9 skill baseline.
