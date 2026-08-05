@@ -140,6 +140,93 @@ public sealed class AecInstructionBlockTests
     }
 
     [Theory]
+    [InlineData(false, 3)]
+    [InlineData(true, 4)]
+    public void ReadsAndRebindsARecognizedRepositoryBlock(
+        bool includeChatGptProvider,
+        int expectedVersion)
+    {
+        var oldRepository = Path.Combine(Path.GetTempPath(), "old data repository");
+        var original = includeChatGptProvider
+            ? AecInstructionBlock.MergeForChatGptProvider(
+                Utf8("prefix\r\nsuffix\r\n"),
+                oldRepository)
+            : AecInstructionBlock.Merge(Utf8("prefix\r\nsuffix\r\n"), oldRepository);
+
+        var binding = AecInstructionBlock.ReadRepositoryBinding(original);
+        var rebound = AecInstructionBlock.RebindRepository(original, Repository);
+        var expected = includeChatGptProvider
+            ? AecInstructionBlock.MergeForChatGptProvider(original, Repository)
+            : AecInstructionBlock.Merge(original, Repository);
+
+        Assert.NotNull(binding);
+        Assert.Equal(expectedVersion, binding.Version);
+        Assert.Equal(oldRepository, binding.Repository);
+        Assert.Equal(expected, rebound);
+        Assert.Equal(1, Encoding.UTF8.GetString(rebound).Split("<!-- AEC:BEGIN").Length - 1);
+        Assert.EndsWith(
+            "prefix\r\nsuffix\r\n",
+            Encoding.UTF8.GetString(rebound),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InstructionsWithoutAManagedBlockHaveNoRepositoryBinding()
+    {
+        Assert.Null(AecInstructionBlock.ReadRepositoryBinding(Utf8("ordinary instructions\n")));
+    }
+
+    [Fact]
+    public void RepositoryBindingRejectsAnOlderManagedBlock()
+    {
+        var content = Utf8(
+            "<!-- AEC:BEGIN version=2 -->\nold\n<!-- AEC:END -->\n");
+
+        var exception = Assert.Throws<InvalidDataException>(() =>
+            AecInstructionBlock.ReadRepositoryBinding(content));
+
+        Assert.Contains("supported initialized AEC block", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("relative-path")]
+    [InlineData("unexpected managed text")]
+    public void RepositoryBindingRequiresTheExactSupportedTemplate(string replacement)
+    {
+        var valid = Encoding.UTF8.GetString(AecInstructionBlock.Merge([], Repository));
+        var changed = replacement == "relative-path"
+            ? valid.Replace(Repository, replacement, StringComparison.Ordinal)
+            : valid.Replace(
+                "Treat that repository's Git commit history as the source of truth.",
+                replacement,
+                StringComparison.Ordinal);
+
+        Assert.Throws<InvalidDataException>(() =>
+            AecInstructionBlock.ReadRepositoryBinding(Utf8(changed)));
+    }
+
+    [Fact]
+    public void RepositoryPathComparisonIgnoresAnEquivalentTrailingSeparator()
+    {
+        Assert.True(AecInstructionBlock.RepositoryPathsEqual(
+            Repository,
+            Repository + Path.DirectorySeparatorChar));
+    }
+
+    [Fact]
+    public void RepositoryPathComparisonKeepsCaseDistinctOnUnix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        Assert.False(AecInstructionBlock.RepositoryPathsEqual(
+            Path.Combine(Repository, "CaseSensitive"),
+            Path.Combine(Repository, "casesensitive")));
+    }
+
+    [Theory]
     [InlineData("`")]
     [InlineData("\n")]
     [InlineData("\r")]

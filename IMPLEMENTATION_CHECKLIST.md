@@ -17,8 +17,22 @@
 - [x] Commit and push the exact macOS ARM64 publication paths.
 - [x] Dogfood the installed Native AOT binary against the selected AEC repository.
 - [x] Migrate the sole pre-release v0.8 skill installation to the v0.9 baseline.
+- [x] Document the approved pulled-repository initialization, `apply` routing, and path-confirmation flow.
 - [ ] Add and dogfood `aec upgrade` for future official skill versions.
 - [ ] Complete v1.0 release validation, versioning, tagging, and publication.
+
+## v0.10 — Pulled-repository attachment and path routing
+
+- [x] Approve the pulled-repository flow and `--force-path-change` semantics.
+- [x] Capture the pivotal `$aec` skill direction from the user.
+- [x] Add focused failing tests for v3/v4 binding, attachment, rebinding, and apply routing.
+- [x] Recognize only clean completed repositories with the expected initialization history.
+- [x] Attach a matching repository through install and apply without backup or commit.
+- [x] Rebind a confirmed moved repository with one canonical-only commit.
+- [x] Route `apply` and ChatGPT provider path mismatches back to ordinary `init`.
+- [x] Update the `$aec` skill, CLI version, help, and documentation.
+- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
+- [x] Commit and push the exact v0.10 paths.
 
 ## v0.9 — Commit-first initialization
 
@@ -63,4 +77,4 @@
 
 ## Immediate next work
 
-Design and implement `aec upgrade` from the clean v0.9 skill baseline.
+Validate and release the completed v0.10 increment, then plan `aec upgrade`.

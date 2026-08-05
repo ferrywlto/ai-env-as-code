@@ -99,7 +99,7 @@ public static class AecApplication
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
-        return InitCommand.Run(repository, codexHome, output);
+        return InitCommand.Run(repository, codexHome, options.ForcePathChange, output);
     }
 
     private static int RunApply(RepositoryOptions options, TextWriter output)
@@ -169,6 +169,7 @@ public static class AecApplication
         string? repository = null;
         string? codexHome = null;
         string? provider = null;
+        var forcePathChange = false;
 
         for (var index = 1; index < args.Length; index++)
         {
@@ -223,6 +224,18 @@ public static class AecApplication
                 continue;
             }
 
+            if (argument == "--force-path-change")
+            {
+                if (forcePathChange)
+                {
+                    throw new ArgumentException(
+                        "--force-path-change may be specified only once.");
+                }
+
+                forcePathChange = true;
+                continue;
+            }
+
             if (argument.StartsWith("--", StringComparison.Ordinal))
             {
                 throw new ArgumentException($"Unknown argument: {argument}");
@@ -242,10 +255,17 @@ public static class AecApplication
             throw new ArgumentException("--codex-home is not valid with --provider=chatgpt.");
         }
 
+        if (provider is not null && forcePathChange)
+        {
+            throw new ArgumentException(
+                "--force-path-change is not valid with --provider=chatgpt.");
+        }
+
         return new InitOptions(
             repository,
             codexHome,
-            provider);
+            provider,
+            forcePathChange);
     }
 
     internal static string ResolveCodexHome(string? explicitPath)
@@ -444,7 +464,8 @@ public static class AecApplication
         output.WriteLine("Usage:");
         output.WriteLine("  aec help");
         output.WriteLine("  aec --version");
-        output.WriteLine("  aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
+        output.WriteLine(
+            "  aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]");
         output.WriteLine("  aec init --repo ABSOLUTE_PATH --provider=chatgpt");
         output.WriteLine("  aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
         output.WriteLine("  aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
@@ -460,5 +481,9 @@ public static class AecApplication
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
 
-    private sealed record InitOptions(string Repository, string? CodexHome, string? Provider);
+    private sealed record InitOptions(
+        string Repository,
+        string? CodexHome,
+        string? Provider,
+        bool ForcePathChange);
 }

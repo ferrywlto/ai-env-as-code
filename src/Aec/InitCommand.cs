@@ -3,17 +3,58 @@ namespace Aec;
 internal static class InitCommand
 {
     private const string InitializationCommitMessage = "Initialize AEC instructions";
+    private const string RebindCommitMessage = "Rebind AEC repository path";
 
-    public static int Run(string directoryPath, string codexHome, TextWriter output)
+    public static int Run(
+        string directoryPath,
+        string codexHome,
+        bool forcePathChange,
+        TextWriter output)
     {
         var targetWasMissing = !Directory.Exists(directoryPath);
         var isFreshTarget = IsFreshTarget(directoryPath);
         AecApplication.EnsureNoLinksInExistingPath(codexHome, "Codex home path");
         AecApplication.EnsureRealDirectory(codexHome, "Codex home");
+        ApplyCommand.EnsureRuntimeOutsideRepository(directoryPath, codexHome);
+
+        if (isFreshTarget && forcePathChange)
+        {
+            throw new InvalidOperationException(
+                "--force-path-change requires an existing initialized repository.");
+        }
 
         var runtimePath = Path.Combine(codexHome, "AGENTS.md");
-        _ = AecApplication.ReadRequiredTextFile(runtimePath, "Runtime target");
         EnsureGitIsAvailable();
+
+        if (!isFreshTarget && HasCompletedInitializationHistory(directoryPath))
+        {
+            CompletedSnapshot completed;
+            try
+            {
+                completed = LoadCompletedRepository(directoryPath);
+            }
+            catch (Exception exception)
+            {
+                throw NotAttachable(directoryPath, exception);
+            }
+
+            return AttachCompletedRepository(
+                directoryPath,
+                codexHome,
+                runtimePath,
+                forcePathChange,
+                completed,
+                output);
+        }
+
+        if (!isFreshTarget && forcePathChange)
+        {
+            throw new InvalidOperationException(
+                "--force-path-change requires an existing initialized repository, not a partial baseline.");
+        }
+
+        // Fresh and partial-baseline flows begin by capturing the live runtime.
+        _ = AecApplication.ReadRequiredTextFile(runtimePath, "Runtime target");
 
         BaselineSnapshot baseline;
         if (isFreshTarget)
@@ -93,6 +134,264 @@ internal static class InitCommand
 
         output.WriteLine("initialized");
         return 0;
+    }
+
+    private static int AttachCompletedRepository(
+        string repository,
+        string codexHome,
+        string runtimePath,
+        bool forcePathChange,
+        CompletedSnapshot completed,
+        TextWriter output)
+    {
+        var pathMatches = AecInstructionBlock.RepositoryPathsEqual(
+            completed.Binding.Repository,
+            repository);
+        if (!pathMatches && !forcePathChange)
+        {
+            throw new InvalidOperationException(
+                "Initialized AEC instructions are bound to a different data repository. " +
+                $"Recorded repository: {completed.Binding.Repository}. " +
+                $"Selected repository: {repository}. " +
+                "Confirm the path change, then rerun `aec init` with --force-path-change.");
+        }
+
+        // Preflight an existing runtime before installing the skill or committing a
+        // rebind; Apply repeats the read to protect against concurrent changes.
+        _ = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+
+        if (pathMatches)
+        {
+            AecSkillInstaller.Install(codexHome);
+            ApplyCommand.RunForAttachment(
+                repository,
+                codexHome,
+                TextWriter.Null,
+                completed.Commit,
+                completed.Content);
+            VerifyInitializationResult(
+                repository,
+                Path.Combine(repository, AecApplication.SourceRelativePath),
+                runtimePath,
+                completed.Commit,
+                completed.Content);
+            output.WriteLine("initialized");
+            return 0;
+        }
+
+        EnsureCommitIdentity(repository);
+        AecSkillInstaller.Install(codexHome);
+        GitProcess.RunRequired(
+            repository,
+            "Git could not configure exact instruction bytes",
+            "config",
+            "--local",
+            "core.autocrlf",
+            "false");
+
+        var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
+        var rebound = AecInstructionBlock.RebindRepository(completed.Content, repository);
+        AtomicFile.ReplaceIfUnchanged(
+            sourcePath,
+            completed.Content,
+            rebound,
+            "Canonical source");
+
+        var commit = BackupCommand.CommitCanonicalSource(
+            repository,
+            RebindCommitMessage,
+            completed.Commit,
+            rebound,
+            allowEmpty: false);
+        ApplyCommand.RunForAttachment(
+            repository,
+            codexHome,
+            TextWriter.Null,
+            commit,
+            rebound);
+        VerifyInitializationResult(
+            repository,
+            sourcePath,
+            runtimePath,
+            commit,
+            rebound);
+
+        output.WriteLine("initialized");
+        return 0;
+    }
+
+    private static CompletedSnapshot LoadCompletedRepository(string repository)
+    {
+        AecApplication.EnsureRealDirectory(repository, "Repository");
+        var gitDirectory = Path.Combine(repository, ".git");
+        AecApplication.EnsureRealDirectory(gitDirectory, "Git directory");
+        AecApplication.EnsureSourceDirectories(repository);
+        EnsureContainedGitMetadata(repository, gitDirectory);
+        BackupCommand.ValidateRepository(repository);
+        EnsureMainBranch(repository);
+        BackupCommand.EnsureNoChangesOutsideSource(repository);
+
+        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        var content = ApplyCommand.ReadCommittedSource(repository, commit);
+        var binding = AecInstructionBlock.ReadRepositoryBinding(content)
+            ?? throw new InvalidDataException(
+                "Canonical instructions do not contain a supported initialized AEC block.");
+
+        var history = ReadFirstParentHistory(repository, required: true);
+        if (history.Length < 2 || !HasExpectedInitializationSubjects(repository, history))
+        {
+            throw new InvalidOperationException(
+                "Repository does not contain the expected AEC initialization history.");
+        }
+
+        ValidateInitializationHistory(repository, history[0], history[1]);
+
+        // Pin the inspected snapshot after all history checks so a concurrent checkout
+        // cannot silently redirect the later attachment apply.
+        var currentCommit = ApplyCommand.ResolveHeadCommit(repository);
+        if (!string.Equals(commit, currentCommit, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Repository HEAD changed while completed initialization was inspected.");
+        }
+
+        EnsureMainBranch(repository);
+        return new CompletedSnapshot(commit, content, binding);
+    }
+
+    private static bool HasCompletedInitializationHistory(string repository)
+    {
+        // A one-commit baseline may already contain a current block; the mandatory
+        // second commit is what distinguishes a completed initialization.
+        var history = ReadFirstParentHistory(repository, required: false);
+        return history.Length >= 2 && HasExpectedInitializationSubjects(repository, history);
+    }
+
+    private static string[] ReadFirstParentHistory(string repository, bool required)
+    {
+        // First-parent order keeps the original lifecycle commits stable even when
+        // later provider work introduces merge commits.
+        var result = GitProcess.Run(
+            repository,
+            "--no-replace-objects",
+            "rev-list",
+            "--first-parent",
+            "--reverse",
+            "HEAD");
+        if (result.ExitCode != 0)
+        {
+            if (required)
+            {
+                throw new InvalidOperationException(
+                    $"Git could not inspect AEC initialization history (exit code {result.ExitCode}).");
+            }
+
+            return [];
+        }
+
+        return result.Output.Split(
+            ['\r', '\n'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private static bool HasExpectedInitializationSubjects(
+        string repository,
+        string[] history)
+    {
+        return string.Equals(
+                   ReadCommitSubject(repository, history[0]),
+                   BackupCommand.CommitMessage,
+                   StringComparison.Ordinal) &&
+               string.Equals(
+                   ReadCommitSubject(repository, history[1]),
+                   InitializationCommitMessage,
+                   StringComparison.Ordinal);
+    }
+
+    private static string ReadCommitSubject(string repository, string commit)
+    {
+        return GitProcess.RunRequired(
+            repository,
+            "Git could not inspect AEC initialization history",
+            "--no-replace-objects",
+            "log",
+            "-1",
+            "--format=%s",
+            commit).Output.TrimEnd('\r', '\n');
+    }
+
+    private static void ValidateInitializationHistory(
+        string repository,
+        string baselineCommit,
+        string initializationCommit)
+    {
+        var baselineObject = GitProcess.RunRequiredBytes(
+            repository,
+            "Git could not inspect the AEC baseline commit",
+            "--no-replace-objects",
+            "cat-file",
+            "commit",
+            baselineCommit);
+        EnsureRootCommit(baselineObject);
+        _ = ReadOnlyBaselineTreeEntry(repository, baselineCommit);
+
+        var parent = GitProcess.RunRequired(
+            repository,
+            "Git could not inspect the AEC initialization parent",
+            "--no-replace-objects",
+            "rev-parse",
+            "--verify",
+            $"{initializationCommit}^").Output.Trim();
+        if (!string.Equals(parent, baselineCommit, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "AEC initialization commit does not directly follow its baseline commit.");
+        }
+
+        var initializationEntry = ReadOnlyBaselineTreeEntry(repository, initializationCommit);
+        var initializedContent = ReadBoundedBlob(
+            repository,
+            initializationEntry.ObjectId,
+            "AEC initialization canonical source");
+        if (AecInstructionBlock.ReadRepositoryBinding(initializedContent) is null)
+        {
+            throw new InvalidDataException(
+                "AEC initialization commit does not contain a supported initialized block.");
+        }
+    }
+
+    private static byte[] ReadBoundedBlob(
+        string repository,
+        string objectId,
+        string label)
+    {
+        var sizeText = GitProcess.RunRequired(
+            repository,
+            $"Git could not inspect {label} size",
+            "--no-replace-objects",
+            "cat-file",
+            "-s",
+            objectId).Output.Trim();
+        if (!long.TryParse(sizeText, out var size) ||
+            size < 0 ||
+            size > AecApplication.MaximumTextBytes)
+        {
+            throw new InvalidDataException($"{label} exceeds 1 MiB.");
+        }
+
+        var content = GitProcess.RunRequiredBytes(
+            repository,
+            $"Git could not read {label}",
+            "--no-replace-objects",
+            "cat-file",
+            "blob",
+            objectId);
+        if (content.LongLength != size)
+        {
+            throw new InvalidDataException($"{label} size changed while it was read.");
+        }
+
+        return content;
     }
 
     private static void VerifyContent(string path, byte[] expected, string label)
@@ -313,33 +612,10 @@ internal static class InitCommand
         }
 
         var treeEntry = ReadOnlyBaselineTreeEntry(repository, commit);
-        var sizeText = GitProcess.RunRequired(
+        var content = ReadBoundedBlob(
             repository,
-            "Git could not inspect the initialization baseline size",
-            "--no-replace-objects",
-            "cat-file",
-            "-s",
-            treeEntry.ObjectId).Output.Trim();
-        if (!long.TryParse(sizeText, out var size) ||
-            size < 0 ||
-            size > AecApplication.MaximumTextBytes)
-        {
-            throw new InvalidDataException(
-                "Initialization baseline canonical source exceeds 1 MiB.");
-        }
-
-        var content = GitProcess.RunRequiredBytes(
-            repository,
-            "Git could not read the initialization baseline",
-            "--no-replace-objects",
-            "cat-file",
-            "blob",
-            treeEntry.ObjectId);
-        if (content.LongLength != size)
-        {
-            throw new InvalidDataException(
-                "Initialization baseline size changed while it was read.");
-        }
+            treeEntry.ObjectId,
+            "Initialization baseline canonical source");
 
         var runtime = AecApplication.ReadRequiredTextFile(runtimePath, "Runtime target");
         if (!runtime.AsSpan().SequenceEqual(content))
@@ -574,7 +850,20 @@ internal static class InitCommand
             exception);
     }
 
+    private static InvalidOperationException NotAttachable(string path, Exception exception)
+    {
+        return new InvalidOperationException(
+            $"Existing repository is not a valid completed AEC initialization: {path}. " +
+            exception.Message,
+            exception);
+    }
+
     private sealed record BaselineSnapshot(string Commit, byte[] Content, byte[] WorkingSource);
+
+    private sealed record CompletedSnapshot(
+        string Commit,
+        byte[] Content,
+        AecInstructionBlock.RepositoryBinding Binding);
 
     private sealed record GitTreeEntry(string ObjectId);
 }

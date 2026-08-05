@@ -15,8 +15,23 @@ internal static class ChatGptInitCommand
 
         var canonicalPath = Path.Combine(repository, AecApplication.SourceRelativePath);
         var canonical = AecApplication.ReadRequiredTextFile(canonicalPath, "Canonical source");
-        var providerDirectory = Path.Combine(repository, "environment", "providers", "chatgpt");
+        // Compute the provider upgrade first so its established legacy, malformed,
+        // and future-version diagnostics remain authoritative without writing bytes.
         var merged = AecInstructionBlock.MergeForChatGptProvider(canonical, repository);
+        var binding = AecInstructionBlock.ReadRepositoryBinding(
+            canonical,
+            allowLegacyProviderUpgrade: true);
+        if (binding is not null &&
+            !AecInstructionBlock.RepositoryPathsEqual(binding.Repository, repository))
+        {
+            throw new InvalidOperationException(
+                "Canonical AEC instructions are bound to a different data repository. " +
+                $"Recorded repository: {binding.Repository}. " +
+                $"Selected repository: {repository}. " +
+                "Run ordinary `aec init` to confirm the path change first.");
+        }
+
+        var providerDirectory = Path.Combine(repository, "environment", "providers", "chatgpt");
         var scaffoldPaths = ScaffoldFileNames
             .Select(fileName => Path.Combine(providerDirectory, fileName))
             .ToArray();

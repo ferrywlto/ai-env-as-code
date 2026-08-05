@@ -1,6 +1,6 @@
 # AI Environment as Code
 
-Version 0.9 contains the first incremental slices of a minimal .NET tool for
+Version 0.10 contains the first incremental slices of a minimal .NET tool for
 creating a source-of-truth data repository, comparing its Codex instruction file
 with a local runtime target, moving approved changes in either explicit direction,
 scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
@@ -18,8 +18,9 @@ scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
 | 0.7 | Install the `$aec` Codex skill during ordinary `init` |
 | 0.8 | Require explicit repository-aware initialization |
 | 0.9 | Commit-first initialization through `backup` and `apply` |
+| 0.10 | Attach pulled repositories and explicitly rebind moved paths |
 
-The project and CLI report the current release as `0.9.0`.
+The project and CLI report the current release as `0.10.0`.
 
 ## apply
 
@@ -40,6 +41,12 @@ The canonical path must be a committed regular Git file with no staged or unstag
 changes, and its raw working bytes must exactly match the committed blob. This
 rejects line-ending, clean/smudge, and other Git filters that could make visibly
 different bytes appear clean. Unrelated repository changes are ignored and untouched.
+
+When the committed canonical source contains a supported v3 or v4 AEC block,
+`apply` checks its recorded repository path before reading runtime state. A path
+mismatch displays both paths, returns an error without mutation, and directs the
+caller to ordinary `aec init`. Malformed or unsupported AEC markers also fail
+closed. `apply` never accepts `--force-path-change`.
 
 When runtime bytes differ or the runtime file is absent, `apply` writes a flushed
 temporary file beside the target, confirms the observed runtime has not changed,
@@ -93,19 +100,21 @@ the inverse `restore` direction.
 ## init
 
 ```text
-aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
 ```
 
 `init` creates a data repository in a missing or empty directory. It may also resume
-only a recognizable baseline-only partial initialization; every other non-empty
-target is rejected. `--repo` is required and must be the absolute path of that
-source-of-truth repository. The current working directory and engine repository are
-never inferred.
+only a recognizable baseline-only partial initialization, or attach a clean,
+completed AEC repository pulled to the selected path. Other non-empty targets are
+rejected. `--repo` is required and must be the absolute path of that source-of-truth
+repository. The current working directory and engine repository are never inferred.
 
 `--codex-home` selects the runtime root. When omitted, `init` uses a non-empty
 `CODEX_HOME` and then `~/.codex`, matching `status` and `backup`. The Codex home must
-already exist, and its regular `AGENTS.md` must exist. A missing runtime fails before
-repository or skill mutation.
+already exist. Fresh and baseline-only initialization require its regular
+`AGENTS.md`; a missing runtime then fails before repository or skill mutation. A
+completed pulled repository may instead create the missing runtime from its
+committed canonical source.
 
 Ordinary `init` also installs these bundled skill metadata files:
 
@@ -120,7 +129,7 @@ different existing managed file is treated as a conflict and is never overwritte
 the command fails before creating the repository or changing runtime instructions.
 This permits multiple data repositories to share one exact skill installation.
 
-The skill invokes an installed `aec` executable directly. Version 0.9 provides the
+The skill invokes an installed `aec` executable directly. Version 0.10 provides the
 developer-built macOS ARM64 Native AOT workflow documented below, but `init` does
 not search for, build, or run an engine checkout as a fallback. Skill upgrades
 remain a separate future decision.
@@ -129,8 +138,14 @@ A resumable target must be a `main` repository containing one root commit named
 `Backup Codex AGENTS.md`, whose only file and exact bytes match the current runtime
 canonical path. The working canonical source may contain only that baseline or the
 exact expected managed result, with no changes outside that path. Completed
-repositories, lookalikes, unrelated changes, symbolic links, and special filesystem
-entries are rejected.
+repository handling uses the separate attachment rules below; baseline lookalikes,
+unrelated changes, symbolic links, and special filesystem entries are rejected.
+
+A completed repository must retain the recognizable two-commit initialization
+ancestry, use symbolic branch `main`, contain a real `.git` directory whose metadata
+remains inside the selected root, and have a clean index and work tree. Its working
+canonical source must exactly match committed `HEAD` and contain an exact supported
+v3 or v4 AEC block. Later commits and committed provider files are allowed.
 
 The AEC-managed instruction block is delimited and versioned explicitly:
 
@@ -153,7 +168,8 @@ is retained byte-for-byte when it already contains the expected managed content 
 or newer-version markers, invalid UTF-8, NUL bytes, and merged content over 1 MiB
 are rejected.
 
-An explicit `init` invocation authorizes this fixed lifecycle:
+For a fresh or baseline-only target, an explicit `init` invocation authorizes this
+fixed lifecycle:
 
 ```text
 runtime AGENTS.md
@@ -173,9 +189,70 @@ locally, exact staged bytes are verified, and the command does not push. No sepa
 `backup` or `apply` invocation is needed.
 
 A failure before the second commit leaves the runtime untouched and a recognizable
-baseline may resume. A failure after the second commit leaves a complete repository;
-use explicit `status` and then choose `apply` or `backup` rather than rerunning
-`init`.
+baseline may resume. A failure after the second commit leaves a complete repository.
+Rerunning ordinary `init` at the recorded path uses the attachment flow: it installs
+the bundled skill and applies committed instructions without another backup or
+commit.
+
+### v0.10 pulled-repository initialization
+
+The following flow lets `init` attach a pulled, already initialized AEC repository
+to another local machine without silently changing its recorded
+absolute path:
+
+```mermaid
+flowchart TD
+    Start["Select an absolute AEC data repository path"] --> State{"Repository state?"}
+
+    State -->|"Missing or empty"| FreshSkill["Install the bundled $aec skill"]
+    State -->|"Baseline-only partial"| Resume["Validate the committed runtime baseline"]
+    FreshSkill --> Fresh["Create the first AEC repository"]
+    Fresh --> Backup["Back up runtime instructions and commit"]
+    Resume --> ResumeSkill["Install the bundled $aec skill"]
+    ResumeSkill --> Insert
+    Backup --> Insert["Insert or update the AEC block"]
+    Insert --> InitCommit["Commit initialized instructions"]
+    InitCommit --> Apply["Apply committed instructions to runtime"]
+
+    State -->|"Pulled initialized repository"| Read["Read the existing AEC block"]
+    Read --> Path{"Recorded path equals --repo?"}
+
+    Path -->|"Yes"| AttachSkill["Install the bundled $aec skill"]
+    AttachSkill --> Apply
+    Path -->|"No"| Stop["Stop without changing repository or runtime<br/>Display recorded and selected paths"]
+    Stop --> Confirm{"User confirms the path change?"}
+
+    Confirm -->|"No"| Unchanged["Leave repository and runtime unchanged"]
+    Confirm -->|"Yes"| Rerun["Run aec init with<br/>--force-path-change"]
+    Rerun --> RebindSkill["Install the bundled $aec skill"]
+    RebindSkill --> Rebind["Update the existing v3 or v4 block in place<br/>Never create a duplicate block"]
+    Rebind --> PathCommit["Commit the confirmed repository path change"]
+    PathCommit --> Apply
+
+    State -->|"Other non-empty state"| Reject["Reject without mutation"]
+
+    Apply --> Ready["Local AEC environment is ready"]
+    Ready --> Routine["Later: run aec apply --repo PATH"]
+    Routine --> ApplyPath{"Recorded path equals --repo?"}
+    ApplyPath -->|"Yes"| Apply
+    ApplyPath -->|"No"| Redirect["Stop without changes<br/>Prompt the user to run aec init --repo PATH"]
+    Redirect -->|"User invokes aec init"| Read
+```
+
+Path mismatch detection is read-only. The command is deliberately non-interactive:
+it displays the recorded and selected paths and stops. The caller must obtain user
+confirmation before rerunning with `--force-path-change`. A confirmed rebind
+preserves every non-AEC byte and the existing v3 provider-neutral or v4
+ChatGPT-aware block type, commits only the canonical source as
+`Rebind AEC repository path`, and does not push. A machine using the previous path
+may subsequently require its own confirmed rebind.
+
+Before a routine `apply` writes runtime instructions, it must compare the repository
+path recorded in the AEC block with the selected `--repo`. A mismatch returns an
+error without changing Git, canonical instructions, installed skills, or runtime,
+and prompts the user to run `aec init --repo PATH`. The `--force-path-change` switch
+is valid only with ordinary `init`; fresh, partial-baseline, and provider modes
+reject it. `apply` remains Git-read-only and cannot confirm or perform a path change.
 
 ### ChatGPT provider initialization
 
@@ -220,6 +297,11 @@ Instructions outside that block are preserved. Provider mode never reads or writ
 `--codex-home` is an error. Ordinary `init` remains provider-neutral and does not
 create ChatGPT paths or add ChatGPT guidance. Provider mode also does not install,
 repair, or inspect the Codex skill.
+
+If an existing supported block records another repository path, provider mode stops
+before creating files or changing canonical instructions and directs the caller to
+the ordinary confirmed-init flow. `--force-path-change` is not valid in provider
+mode.
 
 The first change writes `initialized`; an idempotent rerun writes `unchanged`.
 Both return exit code 0. `unchanged` describes only the initialized file state—it

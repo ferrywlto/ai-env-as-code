@@ -28,6 +28,126 @@ internal static class AecInstructionBlock
         return Merge(content, ChatGptBlockLines(normalizedRepository), "4"u8);
     }
 
+    internal static RepositoryBinding? ReadRepositoryBinding(
+        byte[] content,
+        bool allowLegacyProviderUpgrade = false)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ValidateText(content);
+
+        var bodyOffset = HasUtf8Bom(content) ? Utf8Bom.Length : 0;
+        var begin = FindOccurrences(content, BeginStem, bodyOffset);
+        var end = FindOccurrences(content, EndStem, bodyOffset);
+        if (begin.Count == 0 && end.Count == 0)
+        {
+            return null;
+        }
+
+        if (begin.Count != 1 || end.Count != 1)
+        {
+            throw UnsupportedInitializedBlock();
+        }
+
+        MarkerLine beginLine;
+        MarkerLine endLine;
+        try
+        {
+            beginLine = ReadMarkerLine(content, begin.FirstIndex, bodyOffset, "AEC begin marker");
+            endLine = ReadMarkerLine(content, end.FirstIndex, bodyOffset, "AEC end marker");
+        }
+        catch (InvalidDataException exception)
+        {
+            throw UnsupportedInitializedBlock(exception);
+        }
+
+        if (!endLine.Content.SequenceEqual(EndMarker) ||
+            end.FirstIndex <= begin.FirstIndex ||
+            end.FirstIndex < beginLine.ContentEnd)
+        {
+            throw UnsupportedInitializedBlock();
+        }
+
+        var version = ReadSupportedInitializedVersion(
+            beginLine.Content,
+            allowLegacyProviderUpgrade);
+        if (version is null)
+        {
+            return null;
+        }
+
+        var newLine = beginLine.NewLine ?? throw UnsupportedInitializedBlock();
+        var suffixOffset = end.FirstIndex + EndMarker.Length;
+        var blockText = StrictUtf8.GetString(
+            content,
+            begin.FirstIndex,
+            suffixOffset - begin.FirstIndex);
+        var lines = blockText.Split(newLine, StringSplitOptions.None);
+        var expectedLineCount = version == 3 ? 8 : 12;
+        if (lines.Length != expectedLineCount)
+        {
+            throw UnsupportedInitializedBlock();
+        }
+
+        const string repositoryPrefix = "The AEC data repository selected by `--repo` is `";
+        const string repositorySuffix = "`.";
+        var repositoryLine = lines[3];
+        if (!repositoryLine.StartsWith(repositoryPrefix, StringComparison.Ordinal) ||
+            !repositoryLine.EndsWith(repositorySuffix, StringComparison.Ordinal))
+        {
+            throw UnsupportedInitializedBlock();
+        }
+
+        var repository = repositoryLine[
+            repositoryPrefix.Length..^repositorySuffix.Length];
+        string normalizedRepository;
+        try
+        {
+            normalizedRepository = NormalizeRepository(repository);
+        }
+        catch (ArgumentException exception)
+        {
+            throw UnsupportedInitializedBlock(exception);
+        }
+
+        // Re-rendering makes recognition strict: only blocks emitted by a supported AEC
+        // version can authorize applying or rebinding a pulled repository.
+        var expectedLines = version == 3
+            ? CodexBlockLines(normalizedRepository)
+            : ChatGptBlockLines(normalizedRepository);
+        var expectedBlock = RenderCurrentBlock(newLine, expectedLines);
+        if (!content.AsSpan(begin.FirstIndex, suffixOffset - begin.FirstIndex)
+                .SequenceEqual(expectedBlock))
+        {
+            throw UnsupportedInitializedBlock();
+        }
+
+        return new RepositoryBinding(version.Value, normalizedRepository);
+    }
+
+    internal static byte[] RebindRepository(byte[] content, string repository)
+    {
+        var binding = ReadRepositoryBinding(content)
+            ?? throw UnsupportedInitializedBlock();
+        var normalizedRepository = NormalizeRepository(repository);
+
+        return binding.Version == 3
+            ? Merge(content, CodexBlockLines(normalizedRepository), "3"u8)
+            : Merge(content, ChatGptBlockLines(normalizedRepository), "4"u8);
+    }
+
+    internal static bool RepositoryPathsEqual(string left, string right)
+    {
+        // macOS may use a case-sensitive APFS volume, so only Windows can safely
+        // treat differently-cased absolute paths as the same binding.
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return string.Equals(
+            NormalizeRepository(left),
+            NormalizeRepository(right),
+            comparison);
+    }
+
     private static string[] CodexBlockLines(string repository) =>
     [
         "<!-- AEC:BEGIN version=3 -->",
@@ -325,6 +445,49 @@ internal static class AecInstructionBlock
         return content.StartsWith(Utf8Bom);
     }
 
+    private static int? ReadSupportedInitializedVersion(
+        ReadOnlySpan<byte> beginLine,
+        bool allowLegacyProviderUpgrade)
+    {
+        VersionKind relativeToVersionThree;
+        try
+        {
+            relativeToVersionThree = ReadVersion(beginLine, "3"u8);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw UnsupportedInitializedBlock(exception);
+        }
+
+        if (relativeToVersionThree == VersionKind.Older)
+        {
+            // Provider initialization owns the existing v0-v2 migration to v4.
+            return allowLegacyProviderUpgrade ? null : throw UnsupportedInitializedBlock();
+        }
+
+        if (relativeToVersionThree == VersionKind.Current)
+        {
+            return 3;
+        }
+
+        var version = beginLine[BeginPrefix.Length..^MarkerSuffix.Length];
+        if (version.SequenceEqual("4"u8))
+        {
+            return 4;
+        }
+
+        throw UnsupportedInitializedBlock();
+    }
+
+    private static InvalidDataException UnsupportedInitializedBlock(Exception? inner = null)
+    {
+        const string message =
+            "Canonical instructions do not contain a supported initialized AEC block.";
+        return inner is null
+            ? new InvalidDataException(message)
+            : new InvalidDataException(message, inner);
+    }
+
     private static void EnsureAllowedLength(int length)
     {
         if (length > AecApplication.MaximumTextBytes)
@@ -341,6 +504,8 @@ internal static class AecInstructionBlock
     }
 
     private readonly record struct Occurrences(int Count, int FirstIndex);
+
+    internal sealed record RepositoryBinding(int Version, string Repository);
 
     private readonly ref struct MarkerLine(
         ReadOnlySpan<byte> content,

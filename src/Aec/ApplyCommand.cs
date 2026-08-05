@@ -4,7 +4,12 @@ internal static class ApplyCommand
 {
     public static int Run(string repository, string codexHome, TextWriter output)
     {
-        return Run(repository, codexHome, output, initialization: null);
+        return Run(
+            repository,
+            codexHome,
+            output,
+            initialization: null,
+            repositoryExpectation: null);
     }
 
     internal static int RunForInitialization(
@@ -22,14 +27,33 @@ internal static class ApplyCommand
             repository,
             codexHome,
             output,
-            new InitializationExpectation(expectedRuntime, expectedCommit, expectedSource));
+            new InitializationExpectation(expectedRuntime, expectedCommit, expectedSource),
+            repositoryExpectation: null);
+    }
+
+    internal static int RunForAttachment(
+        string repository,
+        string codexHome,
+        TextWriter output,
+        string expectedCommit,
+        byte[] expectedSource)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedCommit);
+        ArgumentNullException.ThrowIfNull(expectedSource);
+        return Run(
+            repository,
+            codexHome,
+            output,
+            initialization: null,
+            new RepositoryExpectation(expectedCommit, expectedSource));
     }
 
     private static int Run(
         string repository,
         string codexHome,
         TextWriter output,
-        InitializationExpectation? initialization)
+        InitializationExpectation? initialization,
+        RepositoryExpectation? repositoryExpectation)
     {
         EnsureRuntimeOutsideRepository(repository, codexHome);
         ValidateRepositoryRoot(repository);
@@ -41,6 +65,12 @@ internal static class ApplyCommand
             throw new InvalidOperationException(
                 "Repository HEAD changed after the initialization commit.");
         }
+        if (repositoryExpectation is not null &&
+            !string.Equals(commit, repositoryExpectation.Commit, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Repository HEAD changed before attachment apply.");
+        }
 
         var source = ReadCommittedSource(repository, commit);
         if (initialization is not null &&
@@ -48,6 +78,23 @@ internal static class ApplyCommand
         {
             throw new InvalidOperationException(
                 "Committed source does not match the expected initialization content.");
+        }
+        if (repositoryExpectation is not null &&
+            !source.AsSpan().SequenceEqual(repositoryExpectation.Source))
+        {
+            throw new InvalidOperationException(
+                "Committed source changed before attachment apply.");
+        }
+
+        var binding = AecInstructionBlock.ReadRepositoryBinding(source);
+        if (binding is not null &&
+            !AecInstructionBlock.RepositoryPathsEqual(binding.Repository, repository))
+        {
+            throw new InvalidOperationException(
+                "Committed AEC instructions are bound to a different data repository. " +
+                $"Recorded repository: {binding.Repository}. " +
+                $"Selected repository: {repository}. " +
+                "Run `aec init` with the selected --repo path before applying it.");
         }
 
         var runtimePath = Path.Combine(codexHome, "AGENTS.md");
@@ -88,7 +135,7 @@ internal static class ApplyCommand
         return 0;
     }
 
-    private static void ValidateRepositoryRoot(string repository)
+    internal static void ValidateRepositoryRoot(string repository)
     {
         var insideWorkTree = RunRequired(
             repository,
@@ -121,7 +168,7 @@ internal static class ApplyCommand
         }
     }
 
-    private static string ResolveHeadCommit(string repository)
+    internal static string ResolveHeadCommit(string repository)
     {
         var result = Run(repository, "rev-parse", "--verify", "--quiet", "HEAD^{commit}");
         if (result.ExitCode == 1)
@@ -141,7 +188,7 @@ internal static class ApplyCommand
             : commit;
     }
 
-    private static byte[] ReadCommittedSource(string repository, string commit)
+    internal static byte[] ReadCommittedSource(string repository, string commit)
     {
         var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
         var source = AecApplication.ReadRequiredTextFile(sourcePath, "Canonical source");
@@ -248,7 +295,7 @@ internal static class ApplyCommand
         }
     }
 
-    private static void EnsureRuntimeOutsideRepository(string repository, string codexHome)
+    internal static void EnsureRuntimeOutsideRepository(string repository, string codexHome)
     {
         var runtimePath = Path.GetFullPath(Path.Combine(codexHome, "AGENTS.md"));
         if (IsPathInsideDirectory(repository, runtimePath))
@@ -297,4 +344,6 @@ internal static class ApplyCommand
         byte[] Runtime,
         string Commit,
         byte[] Source);
+
+    private sealed record RepositoryExpectation(string Commit, byte[] Source);
 }

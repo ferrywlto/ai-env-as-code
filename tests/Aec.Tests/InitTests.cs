@@ -69,6 +69,160 @@ public sealed class InitTests
     }
 
     [Fact]
+    public void CompletedRepositoryAtTheSamePathAttachesToAMissingRuntime()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var headBefore = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        File.Delete(layout.Runtime);
+        Directory.Delete(Path.Combine(layout.CodexHome, "skills"), recursive: true);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.True(File.Exists(Path.Combine(layout.CodexHome, "skills", "aec", "SKILL.md")));
+        Assert.Equal(headBefore, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void MovedCompletedRepositoryRequiresPathChangeConfirmationWithoutMutation()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var oldRepository = layout.Target;
+        var movedRepository = Path.Combine(layout.Root, "pulled data repository");
+        Directory.Move(oldRepository, movedRepository);
+        var movedSource = Path.Combine(movedRepository, AecApplication.SourceRelativePath);
+        var headBefore = RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim();
+        var sourceBefore = File.ReadAllBytes(movedSource);
+        File.Delete(layout.Runtime);
+        Directory.Delete(Path.Combine(layout.CodexHome, "skills"), recursive: true);
+
+        var result = Run(movedRepository, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains(oldRepository, result.Error, StringComparison.Ordinal);
+        Assert.Contains(movedRepository, result.Error, StringComparison.Ordinal);
+        Assert.Contains("--force-path-change", result.Error, StringComparison.Ordinal);
+        Assert.False(File.Exists(layout.Runtime));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills")));
+        Assert.Equal(sourceBefore, File.ReadAllBytes(movedSource));
+        Assert.Equal(headBefore, RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(RunGit(movedRepository, "status", "--porcelain").Output);
+    }
+
+    [Theory]
+    [InlineData(false, 3, 3)]
+    [InlineData(true, 4, 4)]
+    public void ConfirmedPathChangeRebindsCommitsAndAppliesIdempotently(
+        bool includeChatGptProvider,
+        int expectedBlockVersion,
+        int expectedCommitCount)
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        if (includeChatGptProvider)
+        {
+            var current = File.ReadAllBytes(layout.Source);
+            File.WriteAllBytes(
+                layout.Source,
+                AecInstructionBlock.MergeForChatGptProvider(current, layout.Target));
+            Assert.Equal(
+                0,
+                RunGit(layout.Target, "add", "--", AecApplication.SourceRelativePath).ExitCode);
+            Assert.Equal(
+                0,
+                RunGit(layout.Target, "commit", "--quiet", "--message", "Enable ChatGPT provider").ExitCode);
+        }
+
+        var movedRepository = Path.Combine(layout.Root, "pulled data repository");
+        Directory.Move(layout.Target, movedRepository);
+        var movedSource = Path.Combine(movedRepository, AecApplication.SourceRelativePath);
+        File.Delete(layout.Runtime);
+        Directory.Delete(Path.Combine(layout.CodexHome, "skills"), recursive: true);
+
+        var result = Run(movedRepository, layout.CodexHome, forcePathChange: true);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        var source = File.ReadAllBytes(movedSource);
+        var binding = AecInstructionBlock.ReadRepositoryBinding(source);
+        Assert.NotNull(binding);
+        Assert.Equal(expectedBlockVersion, binding.Version);
+        Assert.Equal(movedRepository, binding.Repository);
+        Assert.Contains("Existing instruction.", File.ReadAllText(movedSource), StringComparison.Ordinal);
+        Assert.Equal(
+            1,
+            File.ReadAllText(movedSource)
+                .Split("<!-- AEC:BEGIN", StringSplitOptions.None).Length - 1);
+        Assert.Equal(source, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(
+            "Rebind AEC repository path",
+            RunGit(movedRepository, "log", "-1", "--format=%s").Output.Trim());
+        Assert.Equal(
+            expectedCommitCount.ToString(),
+            RunGit(movedRepository, "rev-list", "--count", "HEAD").Output.Trim());
+        Assert.Equal(
+            AecApplication.SourceRelativePath,
+            RunGit(
+                movedRepository,
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "-r",
+                "HEAD").Output.Trim());
+        Assert.Empty(RunGit(movedRepository, "status", "--porcelain").Output);
+
+        var head = RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim();
+        var repeated = Run(movedRepository, layout.CodexHome, forcePathChange: true);
+
+        Assert.Equal(0, repeated.ExitCode);
+        Assert.Equal(head, RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(source, File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void ForcePathChangeIsRejectedForFreshInitialization()
+    {
+        using var layout = new InitLayout();
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout.Target, layout.CodexHome, forcePathChange: true);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("existing initialized repository", result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(layout.Target));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills")));
+    }
+
+    [Fact]
+    public void ForcePathChangeIsRejectedForABaselineOnlyPartialInitialization()
+    {
+        using var layout = new InitLayout();
+        var baseline = CreateBaselineOnlyInitialization(layout);
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout.Target, layout.CodexHome, forcePathChange: true);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("partial baseline", result.Error, StringComparison.Ordinal);
+        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills")));
+    }
+
+    [Fact]
     public void PartialExactSkillInstallationIsCompletedWithoutRewritingExistingFile()
     {
         using var layout = new InitLayout();
@@ -275,7 +429,7 @@ public sealed class InitTests
     }
 
     [Fact]
-    public void RejectsSecondInitializationWithoutChangingTheRepository()
+    public void SecondInitializationAppliesTheCompletedRepositoryWithoutAnotherCommit()
     {
         using var layout = new InitLayout();
         var first = Run(layout.Target, layout.CodexHome);
@@ -285,17 +439,18 @@ public sealed class InitTests
         var headBefore = File.ReadAllBytes(gitHead);
         var commitBefore = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var sourceBefore = File.ReadAllBytes(source);
-        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+        File.WriteAllText(layout.Runtime, "divergent live instruction\n");
 
         var second = Run(layout.Target, layout.CodexHome);
 
-        Assert.Equal(1, second.ExitCode);
-        Assert.Empty(second.Output);
-        Assert.Contains("not empty", second.Error, StringComparison.Ordinal);
+        Assert.Equal(0, second.ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", second.Output);
+        Assert.Empty(second.Error);
         Assert.Equal(sourceBefore, File.ReadAllBytes(source));
-        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(headBefore, File.ReadAllBytes(gitHead));
         Assert.Equal(commitBefore, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -757,12 +912,28 @@ public sealed class InitTests
         Assert.Empty(File.ReadAllBytes(layout.Runtime));
     }
 
-    private static CommandResult Run(string target, string codexHome)
+    private static CommandResult Run(
+        string target,
+        string codexHome,
+        bool forcePathChange = false)
     {
         var output = new StringWriter();
         var error = new StringWriter();
+        var arguments = new List<string>
+        {
+            "init",
+            "--repo",
+            target,
+            "--codex-home",
+            codexHome
+        };
+        if (forcePathChange)
+        {
+            arguments.Add("--force-path-change");
+        }
+
         var exitCode = AecApplication.Run(
-            ["init", "--repo", target, "--codex-home", codexHome],
+            [.. arguments],
             output,
             error);
         return new CommandResult(exitCode, output.ToString(), error.ToString());
@@ -1073,6 +1244,43 @@ public sealed class InitProcessStateTests
         Assert.Contains("--repo may be specified only once", error.ToString(), StringComparison.Ordinal);
         Assert.False(Directory.Exists(first));
         Assert.False(Directory.Exists(second));
+    }
+
+    [Theory]
+    [InlineData("apply", "Unknown argument")]
+    [InlineData("provider", "not valid with --provider=chatgpt")]
+    [InlineData("duplicate", "may be specified only once")]
+    public void ForcePathChangeIsAcceptedOnlyOnceByOrdinaryInit(
+        string variation,
+        string expectedError)
+    {
+        using var directory = new ProcessStateDirectory();
+        var repository = System.IO.Path.Combine(directory.Path, "target");
+        var arguments = variation switch
+        {
+            "apply" => new[]
+            {
+                "apply", "--repo", repository, "--force-path-change"
+            },
+            "provider" => new[]
+            {
+                "init", "--repo", repository, "--provider=chatgpt", "--force-path-change"
+            },
+            _ => new[]
+            {
+                "init", "--repo", repository,
+                "--force-path-change", "--force-path-change"
+            }
+        };
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(arguments, output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Empty(output.ToString());
+        Assert.Contains(expectedError, error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(repository));
     }
 
     [Fact]

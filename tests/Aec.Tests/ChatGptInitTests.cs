@@ -109,6 +109,33 @@ public sealed class ChatGptInitTests
         }
     }
 
+    [Fact]
+    public void ProviderModeDirectsMovedRepositoriesToOrdinaryInitBeforeMutation()
+    {
+        using var layout = new ChatGptLayout();
+        var movedRepository = Path.Combine(layout.Root, "moved repository");
+        var canonicalBefore = File.ReadAllBytes(layout.CanonicalAgents);
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+        Directory.Move(layout.Repository, movedRepository);
+
+        var result = Run(movedRepository);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains(layout.Repository, result.Error, StringComparison.Ordinal);
+        Assert.Contains(movedRepository, result.Error, StringComparison.Ordinal);
+        Assert.Contains("ordinary `aec init`", result.Error, StringComparison.Ordinal);
+        Assert.Equal(
+            canonicalBefore,
+            File.ReadAllBytes(Path.Combine(movedRepository, AecApplication.SourceRelativePath)));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.False(Directory.Exists(Path.Combine(
+            movedRepository,
+            "environment",
+            "providers",
+            "chatgpt")));
+    }
+
     [Theory]
     [InlineData("--provider=other", "Unsupported provider")]
     [InlineData("--provider", "Unknown argument")]
@@ -419,7 +446,7 @@ public sealed class ChatGptInitTests
         Assert.Equal(0, result.ExitCode);
         Assert.Empty(result.Error);
         Assert.Contains(
-            "aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]",
+            "aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]",
             result.Output,
             StringComparison.Ordinal);
         Assert.Contains(

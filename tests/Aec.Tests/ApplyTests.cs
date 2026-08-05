@@ -60,6 +60,31 @@ public sealed class ApplyTests
     }
 
     [Fact]
+    public void DifferentRecordedRepositoryPathStopsAndDirectsTheUserToInit()
+    {
+        var recordedRepository = Path.Combine(
+            OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            "recorded aec repository");
+        var desired = AecInstructionBlock.Merge("desired\n"u8.ToArray(), recordedRepository);
+        using var layout = new ApplyLayout(desired, "preserve runtime\n"u8.ToArray());
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains(recordedRepository, result.Error, StringComparison.Ordinal);
+        Assert.Contains(layout.Repository, result.Error, StringComparison.Ordinal);
+        Assert.Contains("aec init", result.Error, StringComparison.Ordinal);
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
+    }
+
+    [Fact]
     public void InitializationApplyRejectsRuntimeChangedSinceItsBackup()
     {
         using var layout = new ApplyLayout(
@@ -432,7 +457,7 @@ public sealed class ApplyTests
         var exitCode = AecApplication.Run(["--version"], output, error);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"0.9.0{Environment.NewLine}", output.ToString());
+        Assert.Equal($"0.10.0{Environment.NewLine}", output.ToString());
         Assert.Empty(error.ToString());
     }
 
