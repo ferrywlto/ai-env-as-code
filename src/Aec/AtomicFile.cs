@@ -2,27 +2,58 @@ namespace Aec;
 
 internal static class AtomicFile
 {
-    public static void WriteNew(string path, byte[] content)
+    public static void WriteNew(
+        string path,
+        byte[] content,
+        UnixFileMode? unixCreateMode = null)
     {
-        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        stream.Write(content);
-        stream.Flush(flushToDisk: true);
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.None
+        };
+        if (!OperatingSystem.IsWindows() && unixCreateMode is not null)
+        {
+            options.UnixCreateMode = unixCreateMode.Value;
+        }
+
+        using (var stream = new FileStream(path, options))
+        {
+            stream.Write(content);
+            stream.Flush(flushToDisk: true);
+        }
+
+        if (!OperatingSystem.IsWindows() && unixCreateMode is not null)
+        {
+            // UnixCreateMode is filtered by umask, so set and verify the exact
+            // intended bits before the temporary inode replaces the target.
+            File.SetUnixFileMode(path, unixCreateMode.Value);
+            if (File.GetUnixFileMode(path) != unixCreateMode.Value)
+            {
+                throw new IOException($"Temporary file permissions could not be verified: {path}");
+            }
+        }
     }
 
     public static void ReplaceIfUnchanged(
         string path,
         byte[]? expectedCurrent,
         byte[] content,
-        string label = "Runtime target")
+        string label = "Runtime target",
+        UnixFileMode? missingFileMode = null)
     {
         var directory = Path.GetDirectoryName(path)
             ?? throw new InvalidOperationException($"{label} has no parent directory: {path}");
-        var temporaryPath = Path.Combine(directory, $".AGENTS.md.aec-{Guid.NewGuid():N}");
+        var temporaryPath = Path.Combine(
+            directory,
+            $".{Path.GetFileName(path)}.aec-{Guid.NewGuid():N}");
+        var expectedMode = ResolveUnixMode(path, expectedCurrent, missingFileMode);
 
         try
         {
             // Keeping the temporary file beside the target makes the final move stay on one filesystem.
-            WriteNew(temporaryPath, content);
+            WriteNew(temporaryPath, content, expectedMode);
 
             // Re-read after preparation so a newer target edit is not replaced by our stale snapshot.
             var current = AecApplication.ReadOptionalTextFile(path, label);
@@ -30,6 +61,15 @@ internal static class AtomicFile
             {
                 throw new IOException(
                     $"{label} changed during the operation; no data was overwritten.");
+            }
+
+            if (!OperatingSystem.IsWindows() &&
+                expectedCurrent is not null &&
+                expectedMode is not null &&
+                File.GetUnixFileMode(path) != expectedMode.Value)
+            {
+                throw new IOException(
+                    $"{label} permissions changed during the operation; no data was overwritten.");
             }
 
             // A missing snapshot uses a non-overwriting move, so a last-moment creation fails safely.
@@ -48,6 +88,23 @@ internal static class AtomicFile
         {
             throw new IOException($"{label} verification failed after writing.");
         }
+    }
+
+    private static UnixFileMode? ResolveUnixMode(
+        string path,
+        byte[]? expectedCurrent,
+        UnixFileMode? missingFileMode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        // Existing personal configuration may contain secrets, so retain its
+        // permission bits instead of inheriting the process's broader default mode.
+        return expectedCurrent is null
+            ? missingFileMode
+            : File.GetUnixFileMode(path);
     }
 
     private static bool MatchesSnapshot(byte[]? current, byte[]? expected)

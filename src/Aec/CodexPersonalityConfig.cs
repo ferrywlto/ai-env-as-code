@@ -9,6 +9,11 @@ internal enum CodexPersonality
     Pragmatic
 }
 
+internal readonly record struct RuntimeConfigUpdate(
+    byte[] Content,
+    bool Changed,
+    bool Inserted);
+
 internal static class CodexPersonalityConfig
 {
     private static readonly UTF8Encoding StrictUtf8 = new(
@@ -17,38 +22,139 @@ internal static class CodexPersonalityConfig
 
     internal static CodexPersonality ReadCanonical(byte[] content, string path)
     {
-        return Read(content, "Canonical config", path, canonical: true)
+        return Read(content, "Canonical config", path, canonical: true).Personality
             ?? throw new InvalidDataException(
                 $"Canonical config does not declare personality: {path}");
     }
 
     internal static CodexPersonality? ReadRuntime(byte[] content, string path)
     {
-        return Read(content, "Runtime config", path, canonical: false);
+        return Read(content, "Runtime config", path, canonical: false).Personality;
     }
 
-    private static CodexPersonality? Read(
+    internal static RuntimeConfigUpdate PlanRuntimeUpdate(
+        byte[]? content,
+        string path,
+        CodexPersonality desired)
+    {
+        if (content is null)
+        {
+            return CreateUpdate(
+                StrictUtf8.GetBytes($"personality = \"{ToConfigValue(desired)}\"\n"),
+                path,
+                inserted: true);
+        }
+
+        var parsed = Read(content, "Runtime config", path, canonical: false);
+        if (parsed.Personality == desired)
+        {
+            return new RuntimeConfigUpdate(content, Changed: false, Inserted: false);
+        }
+
+        var value = $"\"{ToConfigValue(desired)}\"";
+        string updated;
+        var inserted = parsed.Personality is null;
+        if (inserted)
+        {
+            // A root assignment placed before the untouched body cannot accidentally
+            // become part of a table already present in the runtime configuration.
+            updated = $"personality = {value}{DetectLineEnding(parsed.Text)}{parsed.Text}";
+        }
+        else
+        {
+            updated = string.Concat(
+                parsed.Text.AsSpan(0, parsed.ValueStart),
+                value,
+                parsed.Text.AsSpan(parsed.ValueStart + parsed.ValueLength));
+        }
+
+        return CreateUpdate(Encode(updated, parsed.HasBom), path, inserted);
+    }
+
+    private static RuntimeConfigUpdate CreateUpdate(
+        byte[] content,
+        string path,
+        bool inserted)
+    {
+        // Validate the planned bytes before ApplyCommand can mutate either runtime file.
+        if (content.Length > AecApplication.MaximumTextBytes)
+        {
+            throw new InvalidDataException(
+                $"Runtime config would exceed 1 MiB after applying personality: {path}");
+        }
+
+        return new RuntimeConfigUpdate(content, Changed: true, Inserted: inserted);
+    }
+
+    private static ParsedConfig Read(
         byte[] content,
         string label,
         string path,
         bool canonical)
     {
-        var text = Decode(content, label, path);
+        var decoded = Decode(content, label, path);
+        var text = decoded.Text;
         CodexPersonality? personality = null;
+        var valueStart = -1;
+        var valueLength = 0;
+        var textOffset = 0;
+        var inTableSection = false;
         var valueState = new ValueState();
         using var reader = new StringReader(text);
 
         while (reader.ReadLine() is { } line)
         {
+            var lineStart = textOffset;
+            textOffset += line.Length;
+            if (textOffset < text.Length && text[textOffset] == '\r')
+            {
+                textOffset++;
+                if (textOffset < text.Length && text[textOffset] == '\n')
+                {
+                    textOffset++;
+                }
+            }
+            else if (textOffset < text.Length && text[textOffset] == '\n')
+            {
+                textOffset++;
+            }
+
             if (valueState.IsActive)
             {
                 ConsumeUnmanagedValue(line, ref valueState, label, path);
                 continue;
             }
 
-            var trimmed = TrimTomlSpace(line.AsSpan());
+            var lineSpan = line.AsSpan();
+            var trimmed = TrimTomlSpace(lineSpan);
+            var trimmedStart = lineSpan.Length - TrimTomlSpaceStart(lineSpan).Length;
             if (trimmed.IsEmpty || trimmed[0] == '#')
             {
+                continue;
+            }
+
+            if (inTableSection)
+            {
+                if (trimmed[0] == '[')
+                {
+                    EnsureTableDoesNotConflictWithPersonality(trimmed, label, path);
+                    continue;
+                }
+
+                var tableEquals = FindAssignmentEquals(trimmed);
+                if (tableEquals < 0)
+                {
+                    throw new InvalidDataException(
+                        $"{label} contains ambiguous table TOML: {path}");
+                }
+
+                // Track multiline table values so text that resembles a later
+                // header inside a value is never interpreted as an actual table.
+                ConsumeUnmanagedValue(
+                    trimmed[(tableEquals + 1)..],
+                    ref valueState,
+                    label,
+                    path);
                 continue;
             }
 
@@ -60,9 +166,11 @@ internal static class CodexPersonalityConfig
                         $"Canonical config contains an unmanaged setting: {path}");
                 }
 
-                // Root assignments cannot resume after a TOML table header, so
-                // table-scoped personality keys are outside AEC ownership.
-                break;
+                EnsureTableDoesNotConflictWithPersonality(trimmed, label, path);
+                // Root assignments cannot resume after a TOML table header. Keep
+                // scanning headers for conflicts while ignoring table-scoped keys.
+                inTableSection = true;
+                continue;
             }
 
             var equals = FindAssignmentEquals(trimmed);
@@ -81,7 +189,12 @@ internal static class CodexPersonalityConfig
                         $"{label} has an ambiguous personality declaration: {path}");
                 }
 
-                var current = ParsePersonality(trimmed[(equals + 1)..], label, path);
+                var current = ParsePersonality(
+                    trimmed[(equals + 1)..],
+                    label,
+                    path,
+                    out var relativeValueStart,
+                    out var currentValueLength);
                 if (personality is not null)
                 {
                     throw new InvalidDataException(
@@ -89,6 +202,8 @@ internal static class CodexPersonalityConfig
                 }
 
                 personality = current;
+                valueStart = lineStart + trimmedStart + equals + 1 + relativeValueStart;
+                valueLength = currentValueLength;
                 continue;
             }
 
@@ -107,10 +222,15 @@ internal static class CodexPersonalityConfig
                 $"{label} contains an unterminated root value: {path}");
         }
 
-        return personality;
+        return new ParsedConfig(
+            text,
+            decoded.HasBom,
+            personality,
+            valueStart,
+            valueLength);
     }
 
-    private static string Decode(byte[] content, string label, string path)
+    private static DecodedConfig Decode(byte[] content, string label, string path)
     {
         string text;
         try
@@ -122,23 +242,106 @@ internal static class CodexPersonalityConfig
             throw new InvalidDataException($"{label} is not valid UTF-8: {path}", exception);
         }
 
-        if (text.Length > 0 && text[0] == '\uFEFF')
+        var hasBom = text.Length > 0 && text[0] == '\uFEFF';
+        if (hasBom)
         {
             text = text[1..];
         }
 
         // TOML permits tab, line feed, and carriage return as raw controls. Other
         // control characters must be escaped even when they appear in comments.
-        foreach (var current in text)
+        for (var index = 0; index < text.Length; index++)
         {
+            var current = text[index];
             if ((current < ' ' && current is not ('\t' or '\n' or '\r')) || current == '\u007F')
             {
                 throw new InvalidDataException(
                     $"{label} contains a forbidden control character: {path}");
             }
+
+            if (current == '\r' &&
+                (index + 1 >= text.Length || text[index + 1] != '\n'))
+            {
+                throw new InvalidDataException(
+                    $"{label} contains a lone carriage return: {path}");
+            }
         }
 
-        return text;
+        return new DecodedConfig(text, hasBom);
+    }
+
+    private static void EnsureTableDoesNotConflictWithPersonality(
+        ReadOnlySpan<char> line,
+        string label,
+        string path)
+    {
+        var arrayTable = line.StartsWith("[[", StringComparison.Ordinal);
+        var contentStart = arrayTable ? 2 : 1;
+        var closing = FindTableHeaderEnd(line, contentStart, arrayTable, label, path);
+        var key = ReadRootKey(line[contentStart..closing], label, path);
+        if (key.FirstSegment == "personality")
+        {
+            throw new InvalidDataException(
+                $"{label} contains a table that conflicts with personality: {path}");
+        }
+
+        var closingLength = arrayTable ? 2 : 1;
+        var trailing = TrimTomlSpaceStart(line[(closing + closingLength)..]);
+        if (!trailing.IsEmpty && trailing[0] != '#')
+        {
+            throw new InvalidDataException($"{label} contains an ambiguous table header: {path}");
+        }
+    }
+
+    private static int FindTableHeaderEnd(
+        ReadOnlySpan<char> line,
+        int contentStart,
+        bool arrayTable,
+        string label,
+        string path)
+    {
+        char quote = '\0';
+        var escaped = false;
+        for (var index = contentStart; index < line.Length; index++)
+        {
+            var current = line[index];
+            if (quote != '\0')
+            {
+                if (quote == '\"' && !escaped && current == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+
+                if (!escaped && current == quote)
+                {
+                    quote = '\0';
+                }
+
+                escaped = false;
+                continue;
+            }
+
+            if (current is '\"' or '\'')
+            {
+                quote = current;
+                continue;
+            }
+
+            if (current != ']')
+            {
+                continue;
+            }
+
+            if (!arrayTable || index + 1 < line.Length && line[index + 1] == ']')
+            {
+                return index;
+            }
+
+            break;
+        }
+
+        throw new InvalidDataException($"{label} contains an ambiguous table header: {path}");
     }
 
     private static int FindAssignmentEquals(ReadOnlySpan<char> line)
@@ -246,9 +449,12 @@ internal static class CodexPersonalityConfig
     private static CodexPersonality ParsePersonality(
         ReadOnlySpan<char> source,
         string label,
-        string path)
+        string path,
+        out int valueStart,
+        out int valueLength)
     {
         var remaining = TrimTomlSpaceStart(source);
+        valueStart = source.Length - remaining.Length;
         if (remaining.StartsWith("\"\"\"", StringComparison.Ordinal) ||
             remaining.StartsWith("'''", StringComparison.Ordinal))
         {
@@ -279,6 +485,8 @@ internal static class CodexPersonalityConfig
                 $"{label} has an ambiguous personality declaration: {path}");
         }
 
+        valueLength = consumed;
+
         return value switch
         {
             "none" => CodexPersonality.None,
@@ -287,6 +495,43 @@ internal static class CodexPersonalityConfig
             _ => throw new InvalidDataException(
                 $"{label} has unsupported personality '{value}': {path}")
         };
+    }
+
+    private static string ToConfigValue(CodexPersonality personality)
+    {
+        return personality switch
+        {
+            CodexPersonality.None => "none",
+            CodexPersonality.Friendly => "friendly",
+            CodexPersonality.Pragmatic => "pragmatic",
+            _ => throw new ArgumentOutOfRangeException(nameof(personality))
+        };
+    }
+
+    private static string DetectLineEnding(string text)
+    {
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (text[index] == '\n')
+            {
+                return index > 0 && text[index - 1] == '\r' ? "\r\n" : "\n";
+            }
+
+            if (text[index] == '\r')
+            {
+                return "\r\n";
+            }
+        }
+
+        return "\n";
+    }
+
+    private static byte[] Encode(string text, bool includeBom)
+    {
+        var body = StrictUtf8.GetBytes(text);
+        return includeBom
+            ? [0xEF, 0xBB, 0xBF, .. body]
+            : body;
     }
 
     private static string ReadBasicString(
@@ -579,6 +824,15 @@ internal static class CodexPersonalityConfig
     }
 
     private readonly record struct RootKey(string FirstSegment, int SegmentCount);
+
+    private readonly record struct DecodedConfig(string Text, bool HasBom);
+
+    private readonly record struct ParsedConfig(
+        string Text,
+        bool HasBom,
+        CodexPersonality? Personality,
+        int ValueStart,
+        int ValueLength);
 
     private enum TomlStringKind
     {

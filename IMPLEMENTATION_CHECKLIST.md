@@ -43,7 +43,8 @@
 - [x] Extend `status` to compare only the managed semantic value without mutation.
 - [x] Fail closed on invalid canonical, duplicate, unsupported, or ambiguous values.
 - [x] Release the read-only status checkpoint as v0.11.1.
-- [ ] Extend `apply` to update or warn before inserting managed runtime values.
+- [x] Extend `apply` to update or warn before inserting managed runtime values.
+- [x] Document and release the repository-to-runtime checkpoint as v0.11.2.
 - [ ] Extend `backup` to capture existing managed values and warn and stop when
   they are missing.
 - [ ] Extend `init` to enroll existing values or warn before adding the default.
@@ -93,5 +94,5 @@
 
 ## Immediate next work
 
-Extend only `apply` with managed-value update and missing-value insertion. Do not
-add backup or initialization behavior in the same increment.
+Extend only `backup` to capture an existing managed value and warn and stop when it
+is missing. Do not add initialization behavior in the same increment.

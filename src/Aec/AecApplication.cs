@@ -35,7 +35,7 @@ public static class AecApplication
             {
                 "status" => RunStatus(ParseRepositoryArguments(args, "status"), output),
                 "backup" => RunBackup(ParseRepositoryArguments(args, "backup"), output),
-                "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output),
+                "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output, error),
                 "init" => RunInit(ParseInitArguments(args), output),
                 _ => throw new ArgumentException($"Unknown command: {args[0]}")
             };
@@ -126,7 +126,10 @@ public static class AecApplication
         return InitCommand.Run(repository, codexHome, options.ForcePathChange, output);
     }
 
-    private static int RunApply(RepositoryOptions options, TextWriter output)
+    private static int RunApply(
+        RepositoryOptions options,
+        TextWriter output,
+        TextWriter warning)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
         var codexHome = ResolveCodexHome(options.CodexHome);
@@ -137,7 +140,7 @@ public static class AecApplication
         EnsureSourceDirectories(repository);
         EnsureRealDirectory(codexHome, "Codex home");
 
-        return ApplyCommand.Run(repository, codexHome, output);
+        return ApplyCommand.Run(repository, codexHome, output, warning);
     }
 
     private static RepositoryOptions ParseRepositoryArguments(string[] args, string command)

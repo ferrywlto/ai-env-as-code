@@ -1,8 +1,7 @@
 # AI Environment as Code
 
-Version 0.11.1 adds read-only status reporting for the first managed Codex
-`config.toml` value while retaining the existing minimal .NET workflows for Codex
-instructions and manual ChatGPT backups.
+Version 0.11.2 applies the first managed Codex `config.toml` value from committed
+canonical data while preserving machine-owned runtime settings.
 
 ## Version history
 
@@ -19,8 +18,9 @@ instructions and manual ChatGPT backups.
 | 0.9 | Commit-first initialization through `backup` and `apply` |
 | 0.10 | Attach pulled repositories and explicitly rebind moved paths |
 | 0.11.1 | Compare managed Codex `personality` state through `status` |
+| 0.11.2 | Apply committed Codex `personality` while preserving runtime config |
 
-The project and CLI report the current release as `0.11.1`.
+The project and CLI report the current release as `0.11.2`.
 
 ## apply
 
@@ -33,12 +33,14 @@ aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 ```text
 committed <repo>/environment/providers/codex/AGENTS.md
   -> <codex-home>/AGENTS.md
+committed <repo>/environment/providers/codex/config.toml personality
+  -> <codex-home>/config.toml personality
 ```
 
 The repository must be the exact root of a non-bare Git working tree with a
 committed `HEAD`. Detached HEAD is accepted because `apply` does not create a commit.
-The canonical path must be a committed regular Git file with no staged or unstaged
-changes, and its raw working bytes must exactly match the committed blob. This
+Both canonical paths must be committed regular Git files with no staged or unstaged
+changes, and their raw working bytes must exactly match their committed blobs. This
 rejects line-ending, clean/smudge, and other Git filters that could make visibly
 different bytes appear clean. Unrelated repository changes are ignored and untouched.
 
@@ -48,14 +50,53 @@ mismatch displays both paths, returns an error without mutation, and directs the
 caller to ordinary `aec init`. Malformed or unsupported AEC markers also fail
 closed. `apply` never accepts `--force-path-change`.
 
-When runtime bytes differ or the runtime file is absent, `apply` writes a flushed
-temporary file beside the target, confirms the observed runtime has not changed,
-moves the file into place, and verifies the resulting bytes. A runtime target inside
-the data repository is rejected. The command writes `applied` after a successful
-write or `unchanged` when no write is needed; both return exit code 0.
+The managed configuration decision is intentionally non-interactive:
 
-Invocation itself authorizes replacing observed runtime drift. There is no second
-confirmation flag, separate backup, receipt, Git mutation, commit, or push.
+```mermaid
+flowchart TD
+    Start["Run aec apply with an explicit --repo"] --> Validate["Validate committed canonical files<br/>and both observed runtime files"]
+    Validate --> Valid{"Are all inputs valid?"}
+    Valid -->|"No"| Stop["Stop without changing runtime"]
+    Valid -->|"Yes"| Present{"Does runtime have a root personality?"}
+    Present -->|"Yes"| Match{"Does it match the committed value?"}
+    Match -->|"Yes"| KeepConfig["Leave config.toml unchanged"]
+    Match -->|"No"| Replace["Replace only the managed value token<br/>Preserve all other runtime bytes"]
+    Present -->|"No"| Warn["Warn on stderr that personality will be added"]
+    Warn --> Exists{"Does runtime config.toml exist?"}
+    Exists -->|"Yes"| Insert["Insert the committed value at the top<br/>Preserve the original body"]
+    Exists -->|"No"| Create["Create config.toml with the committed value"]
+    KeepConfig --> Agents{"Does runtime AGENTS.md differ?"}
+    Replace --> Agents
+    Insert --> Agents
+    Create --> Agents
+    Agents -->|"Yes"| ApplyAgents["Apply committed AGENTS.md bytes"]
+    Agents -->|"No"| KeepAgents["Leave AGENTS.md unchanged"]
+    ApplyAgents --> Changed{"Did either runtime file change?"}
+    KeepAgents --> Changed
+    Changed -->|"Yes"| Applied["Write applied and return 0"]
+    Changed -->|"No"| Unchanged["Write unchanged and return 0"]
+```
+
+An existing managed value is normalized only when its meaning differs; comments,
+line endings, unrelated root settings, tables, and other bytes remain intact. A
+missing value produces a warning on standard error, then the same invocation inserts
+the committed value at the top or creates the missing runtime file. Invoking `apply`
+is already the authorization, so there is no second confirmation prompt.
+
+On Unix, an existing runtime config retains its permission bits and a newly created
+config is restricted to the current user. A planned result over 1 MiB is rejected
+before either runtime file changes.
+
+Both runtime plans are validated before mutation. Each changed file is written
+through its own flushed sibling temporary file, compare-before-replace check, and
+post-write verification. Two separate files cannot form one portable atomic
+transaction; interruption between them is safe to detect and resume with `status`
+and another `apply`. A runtime target inside the data repository is rejected.
+
+The command writes `applied` when either runtime file changes or `unchanged` when
+neither needs a write; both return exit code 0.
+
+There is no separate backup, receipt, Git mutation, commit, or push.
 
 ## backup
 
@@ -389,10 +430,10 @@ apply:  committed canonical values -> runtime managed values
 
 `init` captures an existing supported runtime value. When the key is absent, `init`
 warns before adding `personality = "none"` and creating the canonical config.
-`apply` likewise warns before inserting a missing runtime key. `backup` remains
-strictly runtime-to-repository: when the key is absent, it warns and stops without
-changing either side. Configuration `apply`, `backup`, and initialization remain
-later v0.11 checkpoints.
+`apply` warns before inserting a missing runtime key and otherwise replaces only the
+managed value. `backup` remains strictly runtime-to-repository: when the key is
+absent, it warns and stops without changing either side. Configuration `backup` and
+initialization remain later v0.11 checkpoints.
 
 ## Build, test, and run
 

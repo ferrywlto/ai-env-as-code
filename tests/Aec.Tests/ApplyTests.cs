@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace Aec.Tests;
 
@@ -6,6 +7,7 @@ namespace Aec.Tests;
 public sealed class ApplyTests
 {
     private const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
+    private const string ConfigSourceRelativePath = "environment/providers/codex/config.toml";
 
     [Fact]
     public void AppliesExactCommittedBytesWithoutChangingGit()
@@ -41,12 +43,290 @@ public sealed class ApplyTests
     }
 
     [Fact]
+    public void AppliesManagedPersonalityWithoutChangingOtherRuntimeConfigBytes()
+    {
+        var runtimeConfig = Encoding.UTF8.GetBytes(
+            "# café\nmodel = \"gpt-test\"\npersonality = 'none' # retain this comment\n" +
+            "[projects.\"/tmp/example\"]\npersonality = \"pragmatic\"\n");
+        using var layout = new ApplyLayout(
+            "same\n"u8.ToArray(),
+            "same\n"u8.ToArray(),
+            canonicalConfig: "\"personality\" = \"friendly\"\n"u8.ToArray(),
+            runtimeConfig: runtimeConfig);
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"applied{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        Assert.Equal(
+            "# café\nmodel = \"gpt-test\"\npersonality = \"friendly\" # retain this comment\n" +
+            "[projects.\"/tmp/example\"]\npersonality = \"pragmatic\"\n",
+            File.ReadAllText(layout.RuntimeConfig));
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
+        AssertNoTemporaryFiles(layout);
+    }
+
+    [Fact]
+    public void MissingManagedPersonalityIsAddedAtTopWithWarning()
+    {
+        var runtimeConfig = new byte[] { 0xEF, 0xBB, 0xBF }
+            .Concat("model = \"gpt-test\"\r\n[projects.\"/tmp/example\"]\r\ntrust_level = \"trusted\"\r\n"u8.ToArray())
+            .ToArray();
+        using var layout = new ApplyLayout(
+            "same\n"u8.ToArray(),
+            "same\n"u8.ToArray(),
+            canonicalConfig: "personality = \"pragmatic\"\n"u8.ToArray(),
+            runtimeConfig: runtimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"applied{Environment.NewLine}", result.Output);
+        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
+        Assert.Contains("personality", result.Error, StringComparison.Ordinal);
+        Assert.Equal(
+            new byte[] { 0xEF, 0xBB, 0xBF }
+                .Concat("personality = \"pragmatic\"\r\nmodel = \"gpt-test\"\r\n"u8.ToArray())
+                .Concat("[projects.\"/tmp/example\"]\r\ntrust_level = \"trusted\"\r\n"u8.ToArray())
+                .ToArray(),
+            File.ReadAllBytes(layout.RuntimeConfig));
+        AssertNoTemporaryFiles(layout);
+    }
+
+    [Fact]
+    public void MissingRuntimeConfigIsCreatedWithWarning()
+    {
+        using var layout = new ApplyLayout(
+            "same\n"u8.ToArray(),
+            "same\n"u8.ToArray(),
+            canonicalConfig: "personality = \"friendly\"\n"u8.ToArray());
+        File.Delete(layout.RuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"applied{Environment.NewLine}", result.Output);
+        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
+        Assert.Contains("personality", result.Error, StringComparison.Ordinal);
+        Assert.Equal("personality = \"friendly\"\n"u8.ToArray(), File.ReadAllBytes(layout.RuntimeConfig));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                File.GetUnixFileMode(layout.RuntimeConfig));
+        }
+        AssertNoTemporaryFiles(layout);
+    }
+
+    [Fact]
+    public void ExistingRuntimeConfigPermissionsArePreserved()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var layout = new ApplyLayout(
+            "same\n"u8.ToArray(),
+            "same\n"u8.ToArray(),
+            canonicalConfig: "personality = \"friendly\"\n"u8.ToArray());
+        // GroupWrite is commonly masked by umask, so this verifies the explicit
+        // post-creation mode restoration rather than only the creation request.
+        var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupWrite;
+        File.SetUnixFileMode(layout.RuntimeConfig, mode);
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"applied{Environment.NewLine}", result.Output);
+        Assert.Equal(mode, File.GetUnixFileMode(layout.RuntimeConfig));
+    }
+
+    [Fact]
+    public void OversizedPlannedRuntimeConfigIsRejectedBeforeEitherRuntimeWrite()
+    {
+        var prefix = "personality = \"none\"\n#"u8.ToArray();
+        var runtimeConfig = new byte[AecApplication.MaximumTextBytes];
+        prefix.CopyTo(runtimeConfig, 0);
+        Array.Fill(runtimeConfig, (byte)'a', prefix.Length, runtimeConfig.Length - prefix.Length);
+        using var layout = new ApplyLayout(
+            "desired\n"u8.ToArray(),
+            "runtime\n"u8.ToArray(),
+            canonicalConfig: "personality = \"pragmatic\"\n"u8.ToArray(),
+            runtimeConfig: runtimeConfig);
+        var agentsBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("would exceed 1 MiB", result.Error, StringComparison.Ordinal);
+        Assert.Equal(agentsBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(runtimeConfig, File.ReadAllBytes(layout.RuntimeConfig));
+        AssertNoTemporaryFiles(layout);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LoneCarriageReturnIsRejectedBeforeEitherRuntimeWrite(bool canonical)
+    {
+        var canonicalConfig = canonical
+            ? "personality = \"friendly\"\r"u8.ToArray()
+            : "personality = \"friendly\"\n"u8.ToArray();
+        var runtimeConfig = canonical
+            ? "personality = \"none\"\n"u8.ToArray()
+            : "model = \"gpt-test\"\r[projects.\"/tmp/example\"]\r"u8.ToArray();
+        using var layout = new ApplyLayout(
+            "desired\n"u8.ToArray(),
+            "runtime\n"u8.ToArray(),
+            canonicalConfig: canonicalConfig,
+            runtimeConfig: runtimeConfig);
+        var agentsBefore = File.ReadAllBytes(layout.Runtime);
+        var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("lone carriage return", result.Error, StringComparison.Ordinal);
+        Assert.Equal(agentsBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(configBefore, File.ReadAllBytes(layout.RuntimeConfig));
+        AssertNoTemporaryFiles(layout);
+    }
+
+    [Theory]
+    [InlineData("[personality]\nvalue = \"nested\"\n")]
+    [InlineData("[[personality]]\nvalue = \"nested\"\n")]
+    [InlineData("[\"personality\".options]\nvalue = \"nested\"\n")]
+    [InlineData("[features]\nenabled = true\n[personality]\nvalue = \"nested\"\n")]
+    public void PersonalityTableConflictIsRejectedBeforeEitherRuntimeWrite(string runtimeConfig)
+    {
+        using var layout = new ApplyLayout(
+            "desired\n"u8.ToArray(),
+            "runtime\n"u8.ToArray(),
+            canonicalConfig: "personality = \"friendly\"\n"u8.ToArray(),
+            runtimeConfig: Encoding.UTF8.GetBytes(runtimeConfig));
+        var agentsBefore = File.ReadAllBytes(layout.Runtime);
+        var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.DoesNotContain("warning:", result.Error, StringComparison.Ordinal);
+        Assert.Contains("conflicts with personality", result.Error, StringComparison.Ordinal);
+        Assert.Equal(agentsBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(configBefore, File.ReadAllBytes(layout.RuntimeConfig));
+        AssertNoTemporaryFiles(layout);
+    }
+
+    [Fact]
+    public void EquivalentManagedPersonalityDoesNotRewriteRuntimeConfig()
+    {
+        var runtimeConfig = "\"personality\" = \"fr\\u0069endly\" # keep encoding\n"u8.ToArray();
+        using var layout = new ApplyLayout(
+            "same\n"u8.ToArray(),
+            "same\n"u8.ToArray(),
+            canonicalConfig: "personality = \"friendly\"\n"u8.ToArray(),
+            runtimeConfig: runtimeConfig);
+        var timestamp = new DateTime(2020, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(layout.RuntimeConfig, timestamp);
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        Assert.Equal(runtimeConfig, File.ReadAllBytes(layout.RuntimeConfig));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.RuntimeConfig));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DirtyCanonicalConfigIsRejectedBeforeEitherRuntimeWrite(bool stageChange)
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        File.WriteAllText(layout.ConfigSource, "personality = \"friendly\"\n");
+        if (stageChange)
+        {
+            Assert.Equal(0, Git(layout, "add", "--", ConfigSourceRelativePath).ExitCode);
+        }
+
+        var agentsBefore = File.ReadAllBytes(layout.Runtime);
+        var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains(
+            stageChange ? "staged changes" : "unstaged changes",
+            result.Error,
+            StringComparison.Ordinal);
+        Assert.Equal(agentsBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(configBefore, File.ReadAllBytes(layout.RuntimeConfig));
+    }
+
+    [Fact]
+    public void InvalidRuntimeConfigIsRejectedBeforeAgentsWrite()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        File.WriteAllText(
+            layout.RuntimeConfig,
+            "personality = \"none\"\npersonality = \"friendly\"\n");
+        var agentsBefore = File.ReadAllBytes(layout.Runtime);
+        var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("more than once", result.Error, StringComparison.Ordinal);
+        Assert.Equal(agentsBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(configBefore, File.ReadAllBytes(layout.RuntimeConfig));
+    }
+
+    [Fact]
+    public void GitFiltersThatHideDifferentRawConfigBytesAreRejected()
+    {
+        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        File.WriteAllText(
+            Path.Combine(layout.Repository, ".gitattributes"),
+            $"{ConfigSourceRelativePath} text eol=lf\n");
+        File.WriteAllBytes(layout.ConfigSource, "personality = \"friendly\"\r\n"u8.ToArray());
+        Assert.Equal(
+            0,
+            Git(layout, "add", "--", ".gitattributes", ConfigSourceRelativePath).ExitCode);
+        Assert.Equal(
+            0,
+            Git(layout, "commit", "--quiet", "--message", "Normalize config").ExitCode);
+        Assert.Equal(
+            string.Empty,
+            Git(layout, "status", "--porcelain", "--", ConfigSourceRelativePath).Output);
+        var agentsBefore = File.ReadAllBytes(layout.Runtime);
+        var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("do not exactly match", result.Error, StringComparison.Ordinal);
+        Assert.Equal(agentsBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(configBefore, File.ReadAllBytes(layout.RuntimeConfig));
+    }
+
+    [Fact]
     public void EqualRuntimeIsUnchangedWithoutRewritingIt()
     {
         var desired = "same\n"u8.ToArray();
         using var layout = new ApplyLayout(desired, desired);
         var timestamp = new DateTime(2020, 2, 3, 4, 5, 6, DateTimeKind.Utc);
         File.SetLastWriteTimeUtc(layout.Runtime, timestamp);
+        File.SetLastWriteTimeUtc(layout.RuntimeConfig, timestamp);
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
 
         var result = Run(layout);
@@ -55,6 +335,7 @@ public sealed class ApplyTests
         Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
         Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.Runtime));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.RuntimeConfig));
         Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
     }
@@ -67,6 +348,9 @@ public sealed class ApplyTests
             "recorded aec repository");
         var desired = AecInstructionBlock.Merge("desired\n"u8.ToArray(), recordedRepository);
         using var layout = new ApplyLayout(desired, "preserve runtime\n"u8.ToArray());
+        File.Delete(layout.ConfigSource);
+        Assert.Equal(0, Git(layout, "add", "--", ConfigSourceRelativePath).ExitCode);
+        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Remove config").ExitCode);
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
         var sourceBefore = File.ReadAllBytes(layout.Source);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
@@ -124,6 +408,33 @@ public sealed class ApplyTests
         Assert.Equal(0, exitCode);
         Assert.Equal($"unchanged{Environment.NewLine}", output.ToString());
         Assert.Equal(desired, File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void InitializationApplyDoesNotRequireOrCreateConfigBeforeItsCheckpoint()
+    {
+        var desired = "desired\n"u8.ToArray();
+        using var layout = new ApplyLayout(
+            desired,
+            "captured runtime\n"u8.ToArray(),
+            commitSource: false);
+        File.Delete(layout.ConfigSource);
+        File.Delete(layout.RuntimeConfig);
+        Assert.Equal(0, Git(layout, "add", "--", SourceRelativePath).ExitCode);
+        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Source only").ExitCode);
+
+        var exitCode = ApplyCommand.RunForInitialization(
+            layout.Repository,
+            layout.CodexHome,
+            TextWriter.Null,
+            "captured runtime\n"u8.ToArray(),
+            Git(layout, "rev-parse", "HEAD").Output.Trim(),
+            desired);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(desired, File.ReadAllBytes(layout.Runtime));
+        Assert.False(File.Exists(layout.ConfigSource));
+        Assert.False(File.Exists(layout.RuntimeConfig));
     }
 
     [Fact]
@@ -457,7 +768,7 @@ public sealed class ApplyTests
         var exitCode = AecApplication.Run(["--version"], output, error);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"0.11.1{Environment.NewLine}", output.ToString());
+        Assert.Equal($"0.11.2{Environment.NewLine}", output.ToString());
         Assert.Empty(error.ToString());
     }
 
@@ -476,7 +787,7 @@ public sealed class ApplyTests
     {
         Assert.DoesNotContain(
             Directory.GetFiles(layout.CodexHome),
-            path => Path.GetFileName(path).StartsWith(".AGENTS.md.aec-", StringComparison.Ordinal));
+            path => Path.GetFileName(path).Contains(".aec-", StringComparison.Ordinal));
     }
 
     private static GitResult Git(ApplyLayout layout, params string[] arguments)
@@ -532,13 +843,20 @@ public sealed class ApplyTests
 
     private sealed class ApplyLayout : IDisposable
     {
-        public ApplyLayout(byte[] desired, byte[]? runtime, bool commitSource = true)
+        public ApplyLayout(
+            byte[] desired,
+            byte[]? runtime,
+            bool commitSource = true,
+            byte[]? canonicalConfig = null,
+            byte[]? runtimeConfig = null)
         {
             Root = Path.Combine(RealTemporaryDirectory(), "aec-apply-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data repository");
             CodexHome = Path.Combine(Root, "codex home");
             Source = Path.Combine(Repository, SourceRelativePath);
+            ConfigSource = Path.Combine(Repository, ConfigSourceRelativePath);
             Runtime = Path.Combine(CodexHome, "AGENTS.md");
+            RuntimeConfig = Path.Combine(CodexHome, "config.toml");
 
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
             Directory.CreateDirectory(CodexHome);
@@ -555,9 +873,17 @@ public sealed class ApplyTests
             ConfigureGit("core.hooksPath", hooks);
 
             File.WriteAllBytes(Source, desired);
+            File.WriteAllBytes(
+                ConfigSource,
+                canonicalConfig ?? "personality = \"none\"\n"u8.ToArray());
             if (commitSource)
             {
-                RequireGit(Repository, "add", "--", SourceRelativePath);
+                RequireGit(
+                    Repository,
+                    "add",
+                    "--",
+                    SourceRelativePath,
+                    ConfigSourceRelativePath);
                 RequireGit(Repository, "commit", "--quiet", "--message", "Test canonical source");
             }
 
@@ -565,6 +891,10 @@ public sealed class ApplyTests
             {
                 File.WriteAllBytes(Runtime, runtime);
             }
+
+            File.WriteAllBytes(
+                RuntimeConfig,
+                runtimeConfig ?? "personality = \"none\"\n"u8.ToArray());
         }
 
         public string Root { get; }
@@ -575,7 +905,11 @@ public sealed class ApplyTests
 
         public string Source { get; }
 
+        public string ConfigSource { get; }
+
         public string Runtime { get; }
+
+        public string RuntimeConfig { get; }
 
         public void Dispose()
         {

@@ -2,12 +2,18 @@ namespace Aec;
 
 internal static class ApplyCommand
 {
-    public static int Run(string repository, string codexHome, TextWriter output)
+    public static int Run(
+        string repository,
+        string codexHome,
+        TextWriter output,
+        TextWriter warning)
     {
         return Run(
             repository,
             codexHome,
             output,
+            warning,
+            manageCodexConfig: true,
             initialization: null,
             repositoryExpectation: null);
     }
@@ -27,7 +33,12 @@ internal static class ApplyCommand
             repository,
             codexHome,
             output,
-            new InitializationExpectation(expectedRuntime, expectedCommit, expectedSource),
+            TextWriter.Null,
+            manageCodexConfig: false,
+            initialization: new InitializationExpectation(
+                expectedRuntime,
+                expectedCommit,
+                expectedSource),
             repositoryExpectation: null);
     }
 
@@ -44,14 +55,18 @@ internal static class ApplyCommand
             repository,
             codexHome,
             output,
+            TextWriter.Null,
+            manageCodexConfig: false,
             initialization: null,
-            new RepositoryExpectation(expectedCommit, expectedSource));
+            repositoryExpectation: new RepositoryExpectation(expectedCommit, expectedSource));
     }
 
     private static int Run(
         string repository,
         string codexHome,
         TextWriter output,
+        TextWriter warning,
+        bool manageCodexConfig,
         InitializationExpectation? initialization,
         RepositoryExpectation? repositoryExpectation)
     {
@@ -97,10 +112,33 @@ internal static class ApplyCommand
                 "Run `aec init` with the selected --repo path before applying it.");
         }
 
+        byte[]? canonicalConfig = null;
+        CodexPersonality? desiredPersonality = null;
+        if (manageCodexConfig)
+        {
+            canonicalConfig = ReadCommittedConfig(repository, commit);
+            desiredPersonality = CodexPersonalityConfig.ReadCanonical(
+                canonicalConfig,
+                Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
+        }
+
         var runtimePath = Path.Combine(codexHome, "AGENTS.md");
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
+        byte[]? runtimeConfig = null;
+        RuntimeConfigUpdate configUpdate = default;
+        if (manageCodexConfig)
+        {
+            runtimeConfig = AecApplication.ReadOptionalTextFile(runtimeConfigPath, "Runtime config");
+            // Build and validate the config edit before either runtime file is
+            // changed, so malformed TOML cannot cause a partial ordinary apply.
+            configUpdate = CodexPersonalityConfig.PlanRuntimeUpdate(
+                runtimeConfig,
+                runtimeConfigPath,
+                desiredPersonality!.Value);
+        }
 
-        // Revalidate provenance after observing runtime so a concurrent checkout or source edit stops apply.
+        // Revalidate provenance after observing runtime so a concurrent checkout or canonical edit stops apply.
         var currentCommit = ResolveHeadCommit(repository);
         if (!string.Equals(commit, currentCommit, StringComparison.Ordinal))
         {
@@ -113,7 +151,17 @@ internal static class ApplyCommand
             throw new InvalidOperationException("Canonical source changed during apply.");
         }
 
-        if (runtime is not null && runtime.AsSpan().SequenceEqual(source))
+        if (manageCodexConfig)
+        {
+            var refreshedConfig = ReadCommittedConfig(repository, commit);
+            if (!refreshedConfig.AsSpan().SequenceEqual(canonicalConfig))
+            {
+                throw new InvalidOperationException("Canonical config changed during apply.");
+            }
+        }
+
+        var agentsChanged = runtime is null || !runtime.AsSpan().SequenceEqual(source);
+        if (!agentsChanged && (!manageCodexConfig || !configUpdate.Changed))
         {
             output.WriteLine("unchanged");
             return 0;
@@ -127,10 +175,33 @@ internal static class ApplyCommand
                 "Runtime target changed after the initialization backup; committed source was not applied.");
         }
 
-        AtomicFile.ReplaceIfUnchanged(
-            runtimePath,
-            initialization?.Runtime ?? runtime,
-            source);
+        if (manageCodexConfig && configUpdate.Changed)
+        {
+            if (configUpdate.Inserted)
+            {
+                warning.WriteLine(
+                    "warning: runtime config does not declare root `personality`; " +
+                    "the committed value will be added.");
+            }
+
+            // Each target has its own compare-before-replace guard. A later
+            // interruption is safe to resume with another status/apply cycle.
+            AtomicFile.ReplaceIfUnchanged(
+                runtimeConfigPath,
+                runtimeConfig,
+                configUpdate.Content,
+                "Runtime config",
+                UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        if (agentsChanged)
+        {
+            AtomicFile.ReplaceIfUnchanged(
+                runtimePath,
+                initialization?.Runtime ?? runtime,
+                source);
+        }
+
         output.WriteLine("applied");
         return 0;
     }
@@ -190,9 +261,31 @@ internal static class ApplyCommand
 
     internal static byte[] ReadCommittedSource(string repository, string commit)
     {
-        var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
-        var source = AecApplication.ReadRequiredTextFile(sourcePath, "Canonical source");
-        var committedBlob = ResolveCommittedBlob(repository, commit);
+        return ReadCommittedFile(
+            repository,
+            commit,
+            AecApplication.SourceRelativePath,
+            "Canonical source");
+    }
+
+    private static byte[] ReadCommittedConfig(string repository, string commit)
+    {
+        return ReadCommittedFile(
+            repository,
+            commit,
+            AecApplication.ConfigSourceRelativePath,
+            "Canonical config");
+    }
+
+    private static byte[] ReadCommittedFile(
+        string repository,
+        string commit,
+        string relativePath,
+        string label)
+    {
+        var sourcePath = Path.Combine(repository, relativePath);
+        var source = AecApplication.ReadRequiredTextFile(sourcePath, label);
+        var committedBlob = ResolveCommittedBlob(repository, commit, relativePath, label);
 
         EnsureDiffIsClean(
             Run(
@@ -205,9 +298,9 @@ internal static class ApplyCommand
                 "--no-textconv",
                 commit,
                 "--",
-                AecApplication.SourceRelativePath),
-            "Canonical source has staged changes.",
-            "Git could not inspect staged canonical source changes");
+                relativePath),
+            $"{label} has staged changes.",
+            $"Git could not inspect staged {label.ToLowerInvariant()} changes");
         EnsureDiffIsClean(
             Run(
                 repository,
@@ -217,34 +310,40 @@ internal static class ApplyCommand
                 "--no-ext-diff",
                 "--no-textconv",
                 "--",
-                AecApplication.SourceRelativePath),
-            "Canonical source has unstaged changes.",
-            "Git could not inspect unstaged canonical source changes");
+                relativePath),
+            $"{label} has unstaged changes.",
+            $"Git could not inspect unstaged {label.ToLowerInvariant()} changes");
 
         // Git's normal diff can hide clean/smudge or line-ending transforms; raw hashing cannot.
         var workingBlob = RunRequired(
             repository,
-            "Git could not hash the canonical source",
+            $"Git could not hash the {label.ToLowerInvariant()}",
             "hash-object",
             "--no-filters",
             "--",
-            AecApplication.SourceRelativePath).Output.Trim();
+            relativePath).Output.Trim();
         if (!string.Equals(committedBlob, workingBlob, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "Canonical source bytes do not exactly match the committed Git blob; filters or file changes are present.");
+                $"{label} bytes do not exactly match the committed Git blob; " +
+                "filters or file changes are present.");
         }
 
-        var reread = AecApplication.ReadRequiredTextFile(sourcePath, "Canonical source");
+        var reread = AecApplication.ReadRequiredTextFile(sourcePath, label);
         if (!reread.AsSpan().SequenceEqual(source))
         {
-            throw new InvalidOperationException("Canonical source changed while its Git provenance was checked.");
+            throw new InvalidOperationException(
+                $"{label} changed while its Git provenance was checked.");
         }
 
         return source;
     }
 
-    private static string ResolveCommittedBlob(string repository, string commit)
+    private static string ResolveCommittedBlob(
+        string repository,
+        string commit,
+        string relativePath,
+        string label)
     {
         var tree = RunRequired(
             repository,
@@ -253,18 +352,19 @@ internal static class ApplyCommand
             "-z",
             commit,
             "--",
-            AecApplication.SourceRelativePath).Output;
+            relativePath).Output;
         if (tree.Length == 0 || !tree.EndsWith('\0') || tree[..^1].Contains('\0'))
         {
-            throw new InvalidOperationException("Canonical source is not a single committed Git file.");
+            throw new InvalidOperationException($"{label} is not a single committed Git file.");
         }
 
         var record = tree[..^1];
         var tab = record.IndexOf('\t');
         if (tab < 0 ||
-            !string.Equals(record[(tab + 1)..], AecApplication.SourceRelativePath, StringComparison.Ordinal))
+            !string.Equals(record[(tab + 1)..], relativePath, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Git returned malformed canonical source metadata.");
+            throw new InvalidOperationException(
+                $"Git returned malformed {label.ToLowerInvariant()} metadata.");
         }
 
         var fields = record[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -273,7 +373,7 @@ internal static class ApplyCommand
             fields[1] != "blob" ||
             fields[2].Length == 0)
         {
-            throw new InvalidOperationException("Canonical source must be a committed regular Git file.");
+            throw new InvalidOperationException($"{label} must be a committed regular Git file.");
         }
 
         return fields[2];
