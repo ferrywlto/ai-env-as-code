@@ -42,6 +42,14 @@ public sealed class GitTestEnvironment : IDisposable
 [Collection(ProcessStateCollection.Name)]
 public sealed class StatusTests
 {
+    private const string DefaultCanonicalConfig = "personality = \"none\"\n";
+    private const string DefaultRuntimeConfig =
+        "model = \"local-model\"\n" +
+        "personality = \"none\"\n" +
+        "\n" +
+        "[features]\n" +
+        "example = true\n";
+
     [Fact]
     public void ReportsInSyncForEqualFiles()
     {
@@ -50,7 +58,7 @@ public sealed class StatusTests
         var result = Run(layout);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"in_sync{Environment.NewLine}", result.Output);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
         Assert.Empty(result.Error);
     }
 
@@ -62,7 +70,7 @@ public sealed class StatusTests
         var result = Run(layout);
 
         Assert.Equal(2, result.ExitCode);
-        Assert.Equal($"different{Environment.NewLine}", result.Output);
+        Assert.Equal(StatusOutput("different", "in_sync"), result.Output);
         Assert.Empty(result.Error);
     }
 
@@ -74,7 +82,7 @@ public sealed class StatusTests
         var result = Run(layout);
 
         Assert.Equal(2, result.ExitCode);
-        Assert.Equal($"different{Environment.NewLine}", result.Output);
+        Assert.Equal(StatusOutput("different", "in_sync"), result.Output);
     }
 
     [Fact]
@@ -85,7 +93,7 @@ public sealed class StatusTests
         var result = Run(layout);
 
         Assert.Equal(2, result.ExitCode);
-        Assert.Equal($"missing{Environment.NewLine}", result.Output);
+        Assert.Equal(StatusOutput("missing", "in_sync"), result.Output);
         Assert.Empty(result.Error);
     }
 
@@ -130,7 +138,7 @@ public sealed class StatusTests
             var result = Run(layout);
 
             Assert.Equal(0, result.ExitCode);
-            Assert.Equal($"in_sync{Environment.NewLine}", result.Output);
+            Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
         }
         finally
         {
@@ -156,7 +164,7 @@ public sealed class StatusTests
                 error);
 
             Assert.Equal(0, exitCode);
-            Assert.Equal($"in_sync{Environment.NewLine}", output.ToString());
+            Assert.Equal(StatusOutput("in_sync", "in_sync"), output.ToString());
             Assert.Empty(error.ToString());
         }
         finally
@@ -179,7 +187,7 @@ public sealed class StatusTests
             var result = Run(layout);
 
             Assert.Equal(0, result.ExitCode);
-            Assert.Equal($"in_sync{Environment.NewLine}", result.Output);
+            Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
         }
         finally
         {
@@ -191,7 +199,7 @@ public sealed class StatusTests
     public void MissingCodexHomeIsAnError()
     {
         using var layout = new TemporaryLayout("desired\n", null);
-        Directory.Delete(layout.CodexHome);
+        Directory.Delete(layout.CodexHome, recursive: true);
 
         var result = Run(layout);
 
@@ -265,19 +273,432 @@ public sealed class StatusTests
         Assert.Contains("must not be a symbolic link", result.Error, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("none")]
+    [InlineData("friendly")]
+    [InlineData("pragmatic")]
+    public void AcceptsOfficiallySupportedPersonalityValues(string personality)
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            $"personality = \"{personality}\"\n",
+            $"personality = \"{personality}\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void ComparesOnlyTheManagedRuntimeValue()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "# Machine-owned settings remain outside AEC ownership.\r\n" +
+            "model = \"another-model\"\r\n" +
+            "personality    =    \"none\" # same managed value; comments may contain \"\"\"\r\n" +
+            "[features]\r\n" +
+            "example = false\r\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void ReportsDifferentForAnotherSupportedRuntimeValue()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "personality = \"friendly\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "different"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void ReportsMissingWhenRuntimeConfigIsAbsent()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            null);
+
+        var result = Run(layout);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "missing"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void ReportsMissingWhenManagedRuntimeValueIsAbsent()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "model = \"local-model\"\n[features]\nexample = true\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "missing"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void IgnoresASettingWithTheSameNameInsideATable()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "[features]\npersonality = \"none\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "missing"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void FailsWhenCanonicalConfigIsAbsent()
+    {
+        using var layout = new TemporaryLayout("same\n", "same\n", null, DefaultRuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Canonical config does not exist", result.Error, StringComparison.Ordinal);
+        Assert.Contains("supported root `personality` value", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("aec init --repo", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FailsWhenCanonicalConfigContainsUnmanagedSettings()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            "model = \"local-model\"\npersonality = \"none\"\n",
+            DefaultRuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Canonical config contains an unmanaged setting", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FailsWhenCanonicalConfigDoesNotDeclarePersonality()
+    {
+        using var layout = new TemporaryLayout("same\n", "same\n", "# no managed value\n", DefaultRuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("does not declare personality", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FailsWhenCanonicalConfigDeclaresPersonalityTwice()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            "personality = \"none\"\npersonality = \"friendly\"\n",
+            DefaultRuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Canonical config declares personality more than once", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FailsWhenCanonicalConfigUsesAnUnsupportedPersonality()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            "personality = \"playful\"\n",
+            DefaultRuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Canonical config has unsupported personality", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FailsWhenRuntimeConfigDeclaresPersonalityTwice()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "personality = \"none\"\npersonality = \"friendly\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Runtime config declares personality more than once", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FailsWhenRuntimeConfigUsesAnUnsupportedPersonality()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "personality = \"playful\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Runtime config has unsupported personality", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AcceptsAQuotedManagedKey()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "\"personality\" = \"none\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void IgnoresManagedTextInsideAnUnrelatedMultilineString()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "instructions = \"\"\"\npersonality = \"friendly\"\n\"\"\"\n" +
+            "personality = \"none\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void ReadsPersonalityAfterAnUnrelatedNestedMultilineArray()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "matrix = [\n  [1, 2],\n  [3, 4],\n]\n" +
+            "personality = \"none\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void AcceptsAnEscapedManagedKey()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "\"personal\\u0069ty\" = \"none\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void ComparesTheDecodedManagedValue()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            "personality = \"friendly\"\n",
+            "personality = \"frien\\u0064ly\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void FailsClosedForAMultilineManagedValue()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "personality = \"\"\"none\"\"\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("ambiguous personality declaration", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IgnoresAnUnrelatedLiteralKeyContainingABackslash()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            DefaultCanonicalConfig,
+            "'machine\\path' = \"local\"\npersonality = \"none\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
+        Assert.Empty(result.Error);
+    }
+
+    [Fact]
+    public void RejectsNonTomlWhitespaceInCanonicalConfig()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            "personality\u00A0=\u00A0\"none\"\n",
+            DefaultRuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("ambiguous root key", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsForbiddenControlCharactersInCanonicalComments()
+    {
+        using var layout = new TemporaryLayout(
+            "same\n",
+            "same\n",
+            "# invalid\0comment\npersonality = \"none\"\n",
+            DefaultRuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("forbidden control character", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FailsWhenCanonicalConfigIsNotValidUtf8()
+    {
+        using var layout = new TemporaryLayout("same\n", "same\n");
+        File.WriteAllBytes(layout.CanonicalConfig, [0xFF]);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Canonical config is not valid UTF-8", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsCanonicalConfigFilesOverOneMiB()
+    {
+        using var layout = new TemporaryLayout("same\n", "same\n");
+        File.WriteAllBytes(layout.CanonicalConfig, new byte[(1024 * 1024) + 1]);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Canonical config exceeds 1 MiB", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsSymbolicLinkCanonicalConfig()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var layout = new TemporaryLayout("same\n", "same\n");
+        var externalConfig = Path.Combine(layout.Root, "external-config.toml");
+        File.WriteAllText(externalConfig, DefaultCanonicalConfig);
+        File.Delete(layout.CanonicalConfig);
+        File.CreateSymbolicLink(layout.CanonicalConfig, externalConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Canonical config must not be a symbolic link", result.Error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void StatusDoesNotChangeSourceOrTargetContent()
     {
         using var layout = new TemporaryLayout("desired\n", "current\n");
         var sourceBefore = File.ReadAllBytes(layout.Source);
         var targetBefore = File.ReadAllBytes(layout.Target);
+        var canonicalConfigBefore = File.ReadAllBytes(layout.CanonicalConfig);
+        var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
         var filesBefore = Directory.GetFiles(layout.Root, "*", SearchOption.AllDirectories);
 
         _ = Run(layout);
 
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
         Assert.Equal(targetBefore, File.ReadAllBytes(layout.Target));
+        Assert.Equal(canonicalConfigBefore, File.ReadAllBytes(layout.CanonicalConfig));
+        Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
         Assert.Equal(filesBefore, Directory.GetFiles(layout.Root, "*", SearchOption.AllDirectories));
+    }
+
+    private static string StatusOutput(string agentsStatus, string configStatus)
+    {
+        return
+            $"codex/AGENTS.md   {agentsStatus}{Environment.NewLine}" +
+            $"codex/config.toml {configStatus}{Environment.NewLine}";
     }
 
     private static CommandResult Run(TemporaryLayout layout)
@@ -296,13 +717,24 @@ public sealed class StatusTests
 
     private sealed class TemporaryLayout : IDisposable
     {
-        public TemporaryLayout(string? source, string? target)
+        public TemporaryLayout(
+            string? source,
+            string? target,
+            string? canonicalConfig = DefaultCanonicalConfig,
+            string? runtimeConfig = DefaultRuntimeConfig)
         {
             Root = Path.Combine(Path.GetTempPath(), "aec-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
             CodexHome = Path.Combine(Root, "codex-home");
             Source = Path.Combine(Repository, "environment", "providers", "codex", "AGENTS.md");
             Target = Path.Combine(CodexHome, "AGENTS.md");
+            CanonicalConfig = Path.Combine(
+                Repository,
+                "environment",
+                "providers",
+                "codex",
+                "config.toml");
+            RuntimeConfig = Path.Combine(CodexHome, "config.toml");
 
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
             Directory.CreateDirectory(CodexHome);
@@ -316,6 +748,16 @@ public sealed class StatusTests
             {
                 File.WriteAllText(Target, target, new UTF8Encoding(false));
             }
+
+            if (canonicalConfig is not null)
+            {
+                File.WriteAllText(CanonicalConfig, canonicalConfig, new UTF8Encoding(false));
+            }
+
+            if (runtimeConfig is not null)
+            {
+                File.WriteAllText(RuntimeConfig, runtimeConfig, new UTF8Encoding(false));
+            }
         }
 
         public string Root { get; }
@@ -327,6 +769,10 @@ public sealed class StatusTests
         public string Source { get; }
 
         public string Target { get; }
+
+        public string CanonicalConfig { get; }
+
+        public string RuntimeConfig { get; }
 
         public void Dispose()
         {

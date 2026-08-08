@@ -1,9 +1,8 @@
 # AI Environment as Code
 
-Version 0.10 contains the first incremental slices of a minimal .NET tool for
-creating a source-of-truth data repository, comparing its Codex instruction file
-with a local runtime target, moving approved changes in either explicit direction,
-scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
+Version 0.11.1 adds read-only status reporting for the first managed Codex
+`config.toml` value while retaining the existing minimal .NET workflows for Codex
+instructions and manual ChatGPT backups.
 
 ## Version history
 
@@ -19,8 +18,9 @@ scaffolding manual ChatGPT instruction backups, and installing its Codex skill.
 | 0.8 | Require explicit repository-aware initialization |
 | 0.9 | Commit-first initialization through `backup` and `apply` |
 | 0.10 | Attach pulled repositories and explicitly rebind moved paths |
+| 0.11.1 | Compare managed Codex `personality` state through `status` |
 
-The project and CLI report the current release as `0.10.0`.
+The project and CLI report the current release as `0.11.1`.
 
 ## apply
 
@@ -316,36 +316,83 @@ The `status` command is read-only:
 aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 ```
 
-`--repo` is required and identifies the source-of-truth data repository. The tool
-reads this fixed source:
+`--repo` identifies these canonical sources:
 
 ```text
 <repo>/environment/providers/codex/AGENTS.md
+<repo>/environment/providers/codex/config.toml
 ```
 
 `--codex-home` identifies the observed runtime root. When omitted, the tool uses a
-non-empty `CODEX_HOME` environment variable and then falls back to `~/.codex`. The
-observed target is always:
+non-empty `CODEX_HOME` environment variable and then falls back to `~/.codex`. It
+observes `<codex-home>/AGENTS.md` and `<codex-home>/config.toml`. Explicit paths and
+`CODEX_HOME` must be absolute; neither the executable nor current working directory
+is treated as the data repository.
+
+The command compares exact `AGENTS.md` bytes. For `config.toml`, it compares only
+the root `personality` value and ignores formatting, comments, unrelated root
+settings, and table-scoped settings. The canonical config may contain only that
+managed setting. Supported values are `none`, `friendly`, and `pragmatic`. Managed
+declarations may use bare or quoted root keys and single-line basic or literal TOML
+strings; multiline managed strings fail closed.
+
+After validating both artifacts without changing any file, `status` writes:
 
 ```text
-<codex-home>/AGENTS.md
+codex/AGENTS.md   in_sync
+codex/config.toml in_sync
 ```
 
-Explicit paths and `CODEX_HOME` must be absolute. For `status`, the executable's
-location and the current working directory are never treated as the data repository.
-
-The command compares the exact bytes without changing either file. It writes one
-status to standard output:
+Each line uses one of these states:
 
 | Status | Meaning | Exit code |
 |---|---|---:|
-| `in_sync` | Source and target bytes are equal | 0 |
-| `different` | Source and target bytes differ | 2 |
-| `missing` | Codex home exists but its runtime target is absent | 2 |
+| `in_sync` | Canonical and runtime content agree | 0 when both agree |
+| `different` | Managed canonical and runtime content differ | 2 |
+| `missing` | The runtime file or managed runtime value is absent | 2 |
 
 Invalid arguments, missing roots or canonical data, symbolic links, directories,
-files over 1 MiB, and file-system failures write a diagnostic to standard error and
-return exit code 1.
+files over 1 MiB, invalid UTF-8, duplicate or ambiguous managed declarations,
+unsupported personality values, and file-system failures write a diagnostic to
+standard error and return exit code 1 without partial status output.
+
+## Planned Codex configuration ownership
+
+AEC manages selected personal Codex settings rather than copying the whole runtime
+`config.toml`. The canonical source is:
+
+```text
+<repo>/environment/providers/codex/config.toml
+```
+
+The canonical file contains only AEC-managed root settings. Runtime content outside
+those settings remains machine-owned and must be preserved. The first managed key
+is `personality`:
+
+```toml
+personality = "none"
+```
+
+`none` is the default when the runtime key is missing. The
+[OpenAI Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+documents `none`, `friendly`, and `pragmatic` as supported personality values; AEC
+accepts all three. `model` and `model_reasoning_effort` remain outside AEC ownership
+unless a later explicit design decision enrolls them.
+
+The intended data flow remains directional:
+
+```text
+status: compare canonical and runtime managed values without mutation
+backup: existing runtime managed values -> canonical values -> Git commit
+apply:  committed canonical values -> runtime managed values
+```
+
+`init` captures an existing supported runtime value. When the key is absent, `init`
+warns before adding `personality = "none"` and creating the canonical config.
+`apply` likewise warns before inserting a missing runtime key. `backup` remains
+strictly runtime-to-repository: when the key is absent, it warns and stops without
+changing either side. Configuration `apply`, `backup`, and initialization remain
+later v0.11 checkpoints.
 
 ## Build, test, and run
 

@@ -23,6 +23,14 @@ public sealed class BackupTests
         Assert.Equal("Backup Codex AGENTS.md", Git(layout, "log", "-1", "--format=%s").Output.Trim());
         Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
 
+        // Config management is initialized by a later v0.11 checkpoint. Seed its
+        // canonical and runtime values here so this test remains focused on backup.
+        File.WriteAllText(
+            Path.Combine(layout.Repository, AecApplication.ConfigSourceRelativePath),
+            "personality = \"none\"\n");
+        File.WriteAllText(
+            Path.Combine(layout.CodexHome, "config.toml"),
+            "personality = \"none\"\n");
         var statusOutput = new StringWriter();
         var statusError = new StringWriter();
         var statusExitCode = AecApplication.Run(
@@ -30,7 +38,10 @@ public sealed class BackupTests
             statusOutput,
             statusError);
         Assert.Equal(0, statusExitCode);
-        Assert.Equal($"in_sync{Environment.NewLine}", statusOutput.ToString());
+        Assert.Equal(
+            $"codex/AGENTS.md   in_sync{Environment.NewLine}" +
+            $"codex/config.toml in_sync{Environment.NewLine}",
+            statusOutput.ToString());
         Assert.Empty(statusError.ToString());
     }
 

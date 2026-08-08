@@ -17,9 +17,18 @@ public sealed class FifoProbeTests
         var codexHome = Path.Combine(root, "codex-home");
         var source = Path.Combine(repository, "environment", "providers", "codex", "AGENTS.md");
         var target = Path.Combine(codexHome, "AGENTS.md");
+        var canonicalConfig = Path.Combine(
+            repository,
+            "environment",
+            "providers",
+            "codex",
+            "config.toml");
+        var runtimeConfig = Path.Combine(codexHome, "config.toml");
         Directory.CreateDirectory(Path.GetDirectoryName(source)!);
         Directory.CreateDirectory(codexHome);
         File.WriteAllText(source, "desired\n");
+        File.WriteAllText(canonicalConfig, "personality = \"none\"\n");
+        File.WriteAllText(runtimeConfig, "personality = \"none\"\n");
 
         try
         {
@@ -58,7 +67,10 @@ public sealed class FifoProbeTests
 
             var result = await status;
             Assert.Equal(2, result.exitCode);
-            Assert.Equal($"different{Environment.NewLine}", result.Output);
+            Assert.Equal(
+                $"codex/AGENTS.md   different{Environment.NewLine}" +
+                $"codex/config.toml in_sync{Environment.NewLine}",
+                result.Output);
             Assert.Empty(result.Error);
         }
         finally

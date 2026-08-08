@@ -4,6 +4,7 @@ public static class AecApplication
 {
     internal const int MaximumTextBytes = 1024 * 1024;
     internal const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
+    internal const string ConfigSourceRelativePath = "environment/providers/codex/config.toml";
 
     public static int Run(string[] args, TextWriter output, TextWriter error)
     {
@@ -59,21 +60,44 @@ public static class AecApplication
         var targetPath = Path.Combine(codexHome, "AGENTS.md");
         var desired = ReadRequiredTextFile(sourcePath, "Canonical source");
         var current = ReadOptionalTextFile(targetPath, "Runtime target");
+        var agentsStatus = CompareExactBytes(desired, current);
 
+        var canonicalConfigPath = Path.Combine(repository, ConfigSourceRelativePath);
+        var canonicalConfig = ReadOptionalTextFile(canonicalConfigPath, "Canonical config")
+            ?? throw new FileNotFoundException(
+                "Canonical config does not exist: " + canonicalConfigPath +
+                ". Create it with only a supported root `personality` value " +
+                "(`none`, `friendly`, or `pragmatic`) before running status.");
+        var desiredPersonality = CodexPersonalityConfig.ReadCanonical(
+            canonicalConfig,
+            canonicalConfigPath);
+
+        var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
+        var runtimeConfig = ReadOptionalTextFile(runtimeConfigPath, "Runtime config");
+        var currentPersonality = runtimeConfig is null
+            ? null
+            : CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath);
+        var configStatus = currentPersonality is null
+            ? "missing"
+            : currentPersonality == desiredPersonality
+                ? "in_sync"
+                : "different";
+
+        // Validate both artifacts before writing so an invalid config never leaves
+        // callers with a misleading partial status report.
+        output.WriteLine($"codex/AGENTS.md   {agentsStatus}");
+        output.WriteLine($"codex/config.toml {configStatus}");
+        return agentsStatus == "in_sync" && configStatus == "in_sync" ? 0 : 2;
+    }
+
+    private static string CompareExactBytes(byte[] desired, byte[]? current)
+    {
         if (current is null)
         {
-            output.WriteLine("missing");
-            return 2;
+            return "missing";
         }
 
-        if (desired.AsSpan().SequenceEqual(current))
-        {
-            output.WriteLine("in_sync");
-            return 0;
-        }
-
-        output.WriteLine("different");
-        return 2;
+        return desired.AsSpan().SequenceEqual(current) ? "in_sync" : "different";
     }
 
     private static int RunBackup(RepositoryOptions options, TextWriter output)

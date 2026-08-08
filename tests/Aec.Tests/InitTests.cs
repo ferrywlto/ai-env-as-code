@@ -1041,6 +1041,14 @@ public sealed class InitTests
                 "-r",
                 "HEAD").Output.Trim());
 
+        // Config initialization is wired in a later v0.11 checkpoint. Seed both
+        // sides here so this lifecycle assertion continues to exercise status.
+        File.WriteAllText(
+            Path.Combine(layout.Target, AecApplication.ConfigSourceRelativePath),
+            "personality = \"none\"\n");
+        File.WriteAllText(
+            Path.Combine(layout.CodexHome, "config.toml"),
+            "personality = \"none\"\n");
         var statusOutput = new StringWriter();
         var statusError = new StringWriter();
         var statusExitCode = AecApplication.Run(
@@ -1048,7 +1056,10 @@ public sealed class InitTests
             statusOutput,
             statusError);
         Assert.Equal(0, statusExitCode);
-        Assert.Equal($"in_sync{Environment.NewLine}", statusOutput.ToString());
+        Assert.Equal(
+            $"codex/AGENTS.md   in_sync{Environment.NewLine}" +
+            $"codex/config.toml in_sync{Environment.NewLine}",
+            statusOutput.ToString());
         Assert.Empty(statusError.ToString());
     }
 

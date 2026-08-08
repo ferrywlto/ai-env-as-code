@@ -34,6 +34,22 @@
 - [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
 - [x] Commit and push the exact v0.10 paths.
 
+## v0.11 patch series — Managed Codex configuration values
+
+- [x] Manage only selected root settings and preserve unrelated runtime config.
+- [x] Manage `personality`; accept `none`, `friendly`, and `pragmatic`, using
+  `none` as the missing-value default.
+- [x] Keep `model` and `model_reasoning_effort` outside initial ownership.
+- [x] Extend `status` to compare only the managed semantic value without mutation.
+- [x] Fail closed on invalid canonical, duplicate, unsupported, or ambiguous values.
+- [x] Release the read-only status checkpoint as v0.11.1.
+- [ ] Extend `apply` to update or warn before inserting managed runtime values.
+- [ ] Extend `backup` to capture existing managed values and warn and stop when
+  they are missing.
+- [ ] Extend `init` to enroll existing values or warn before adding the default.
+- [ ] Update help, skill guidance, and final documentation as their checkpoints land.
+- [ ] Pass Debug, Release, and macOS ARM64 Native AOT validation.
+
 ## v0.9 — Commit-first initialization
 
 - [x] Confirm a missing runtime is an error.
@@ -77,4 +93,5 @@
 
 ## Immediate next work
 
-Validate and release the completed v0.10 increment, then plan `aec upgrade`.
+Extend only `apply` with managed-value update and missing-value insertion. Do not
+add backup or initialization behavior in the same increment.
