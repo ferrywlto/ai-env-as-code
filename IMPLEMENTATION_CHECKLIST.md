@@ -48,8 +48,10 @@
 - [x] Extend `backup` to capture existing managed values and warn and stop when
   they are missing.
 - [x] Document and release the runtime-to-repository checkpoint as v0.11.3.
-- [ ] Extend `init` to enroll existing values or warn before adding the default.
-- [ ] Update help, skill guidance, and final documentation as their checkpoints land.
+- [x] Extend `init` to enroll existing values or warn before adding the default.
+- [x] Document the two-file initialization history, missing-value default, and
+  legacy-history compatibility for v0.11.4.
+- [ ] Update the installed skill guidance for the completed v0.11 command set.
 - [ ] Pass Debug, Release, and macOS ARM64 Native AOT validation.
 
 ## v0.9 — Commit-first initialization
@@ -95,5 +97,5 @@
 
 ## Immediate next work
 
-Extend only `init` to enroll an existing managed value or warn before adding the
-`none` default. Keep ordinary `backup` and `apply` behavior unchanged.
+Reconcile the installed `$aec` skill guidance with the completed managed-config
+flows, then run the final v0.11.4 release validation.

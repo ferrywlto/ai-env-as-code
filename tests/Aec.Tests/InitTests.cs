@@ -6,6 +6,168 @@ namespace Aec.Tests;
 [Collection(ProcessStateCollection.Name)]
 public sealed class InitTests
 {
+    [Fact]
+    public void InitialBaselineCapturesExistingManagedPersonality()
+    {
+        using var layout = new InitLayout();
+        var runtimeConfig =
+            "model = \"gpt-test\"\n" +
+            "personality = 'friendly'\n" +
+            "[projects.\"/tmp/example\"]\ntrust_level = \"trusted\"\n";
+        File.WriteAllText(layout.RuntimeConfig, runtimeConfig);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Error);
+        Assert.Equal(
+            $"Backup Codex environment{Environment.NewLine}" +
+            $"Initialize AEC instructions{Environment.NewLine}",
+            RunGit(layout.Target, "log", "--reverse", "--format=%s").Output);
+        Assert.Equal(
+            $"{AecApplication.SourceRelativePath}{Environment.NewLine}" +
+            AecApplication.ConfigSourceRelativePath,
+            RunGit(
+                layout.Target,
+                "ls-tree",
+                "-r",
+                "--name-only",
+                "HEAD~1").Output.Trim());
+        Assert.Equal(
+            "personality = \"friendly\"\n",
+            RunGit(
+                layout.Target,
+                "show",
+                $"HEAD~1:{AecApplication.ConfigSourceRelativePath}").Output);
+        Assert.Equal(runtimeConfig, File.ReadAllText(layout.RuntimeConfig));
+        Assert.Equal(
+            AecApplication.SourceRelativePath,
+            RunGit(
+                layout.Target,
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "-r",
+                "HEAD").Output.Trim());
+    }
+
+    [Fact]
+    public void MissingRuntimePersonalityWarnsAndEnrollsNoneAfterBothCommits()
+    {
+        using var layout = new InitLayout();
+        const string runtimeConfig = "model = \"gpt-test\"\n";
+        File.WriteAllText(layout.RuntimeConfig, runtimeConfig);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
+        Assert.Contains("personality", result.Error, StringComparison.Ordinal);
+        Assert.Contains("none", result.Error, StringComparison.Ordinal);
+        Assert.Equal(
+            "personality = \"none\"\n",
+            RunGit(
+                layout.Target,
+                "show",
+                $"HEAD~1:{AecApplication.ConfigSourceRelativePath}").Output);
+        Assert.Equal(
+            "personality = \"none\"\n" + runtimeConfig,
+            File.ReadAllText(layout.RuntimeConfig));
+        Assert.Equal(
+            "2",
+            RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, RunGit(layout.Target, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void MissingRuntimeConfigIsCreatedOnlyAfterInitializationCommits()
+    {
+        using var layout = new InitLayout();
+        File.Delete(layout.RuntimeConfig);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
+        Assert.Equal(
+            "personality = \"none\"\n",
+            RunGit(
+                layout.Target,
+                "show",
+                $"HEAD~1:{AecApplication.ConfigSourceRelativePath}").Output);
+        Assert.Equal("personality = \"none\"\n", File.ReadAllText(layout.RuntimeConfig));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                File.GetUnixFileMode(layout.RuntimeConfig));
+        }
+    }
+
+    [Fact]
+    public void FailedInitializationAfterBaselineDoesNotEnrollMissingRuntimePersonality()
+    {
+        using var layout = new InitLayout();
+        const string runtimeConfig = "model = \"gpt-test\"\n";
+        File.WriteAllText(layout.RuntimeConfig, runtimeConfig);
+        File.WriteAllText(
+            layout.Runtime,
+            "<!-- AEC:BEGIN version=999 -->\nfuture\n<!-- AEC:END -->\n");
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("newer unsupported", result.Error, StringComparison.Ordinal);
+        Assert.Equal(runtimeConfig, File.ReadAllText(layout.RuntimeConfig));
+        Assert.Equal("1", RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
+        Assert.Equal(
+            "personality = \"none\"\n",
+            RunGit(
+                layout.Target,
+                "show",
+                $"HEAD:{AecApplication.ConfigSourceRelativePath}").Output);
+    }
+
+    [Fact]
+    public void InvalidRuntimeConfigStopsBeforeRepositoryOrSkillMutation()
+    {
+        using var layout = new InitLayout();
+        File.WriteAllText(
+            layout.RuntimeConfig,
+            "personality = \"friendly\"\npersonality = \"pragmatic\"\n");
+        var agentsBefore = File.ReadAllBytes(layout.Runtime);
+        var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("more than once", result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(layout.Target));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
+        Assert.Equal(agentsBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(configBefore, File.ReadAllBytes(layout.RuntimeConfig));
+    }
+
+    [Fact]
+    public void OversizedPlannedRuntimeConfigStopsBeforeRepositoryOrSkillMutation()
+    {
+        using var layout = new InitLayout();
+        var runtimeConfig = "#" +
+            new string('a', AecApplication.MaximumTextBytes - 2) +
+            "\n";
+        File.WriteAllText(layout.RuntimeConfig, runtimeConfig);
+        Assert.Equal(AecApplication.MaximumTextBytes, new FileInfo(layout.RuntimeConfig).Length);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("would exceed 1 MiB", result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(layout.Target));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
+        Assert.Equal(runtimeConfig, File.ReadAllText(layout.RuntimeConfig));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -19,7 +181,7 @@ public sealed class InitTests
 
         var result = Run(layout.Target, layout.CodexHome);
 
-        AssertInitialized(layout, result);
+        AssertInitialized(layout, result, managedEnvironmentBaseline: true);
         Assert.Contains(
             $"The AEC data repository selected by `--repo` is `{layout.Target}`.",
             File.ReadAllText(layout.Source),
@@ -76,15 +238,24 @@ public sealed class InitTests
         var headBefore = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var sourceBefore = File.ReadAllBytes(layout.Source);
         File.Delete(layout.Runtime);
+        File.Delete(layout.RuntimeConfig);
         Directory.Delete(Path.Combine(layout.CodexHome, "skills"), recursive: true);
 
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
-        Assert.Empty(result.Error);
+        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
+        Assert.Contains("personality", result.Error, StringComparison.Ordinal);
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal("personality = \"none\"\n", File.ReadAllText(layout.RuntimeConfig));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                File.GetUnixFileMode(layout.RuntimeConfig));
+        }
         Assert.True(File.Exists(Path.Combine(layout.CodexHome, "skills", "aec", "SKILL.md")));
         Assert.Equal(headBefore, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
@@ -146,6 +317,9 @@ public sealed class InitTests
         Directory.Move(layout.Target, movedRepository);
         var movedSource = Path.Combine(movedRepository, AecApplication.SourceRelativePath);
         File.Delete(layout.Runtime);
+        File.WriteAllText(
+            layout.RuntimeConfig,
+            "model = \"gpt-test\"\npersonality = \"friendly\"\n");
         Directory.Delete(Path.Combine(layout.CodexHome, "skills"), recursive: true);
 
         var result = Run(movedRepository, layout.CodexHome, forcePathChange: true);
@@ -164,6 +338,9 @@ public sealed class InitTests
             File.ReadAllText(movedSource)
                 .Split("<!-- AEC:BEGIN", StringSplitOptions.None).Length - 1);
         Assert.Equal(source, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(
+            "model = \"gpt-test\"\npersonality = \"none\"\n",
+            File.ReadAllText(layout.RuntimeConfig));
         Assert.Equal(
             "Rebind AEC repository path",
             RunGit(movedRepository, "log", "-1", "--format=%s").Output.Trim());
@@ -187,6 +364,35 @@ public sealed class InitTests
         Assert.Equal(0, repeated.ExitCode);
         Assert.Equal(head, RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(source, File.ReadAllBytes(layout.Runtime));
+    }
+
+    [Fact]
+    public void ConfirmedPathChangePreflightsConfigBeforeSkillOrRebindCommit()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var movedRepository = Path.Combine(layout.Root, "pulled data repository");
+        Directory.Move(layout.Target, movedRepository);
+        Directory.Delete(Path.Combine(layout.CodexHome, "skills"), recursive: true);
+        var runtimeConfig = "#" +
+            new string('a', AecApplication.MaximumTextBytes - 2) +
+            "\n";
+        File.WriteAllText(layout.RuntimeConfig, runtimeConfig);
+        var expectedHead = RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim();
+        var sourcePath = Path.Combine(movedRepository, AecApplication.SourceRelativePath);
+        var sourceBefore = File.ReadAllBytes(sourcePath);
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(movedRepository, layout.CodexHome, forcePathChange: true);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("would exceed 1 MiB", result.Error, StringComparison.Ordinal);
+        Assert.Equal(expectedHead, RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(sourceBefore, File.ReadAllBytes(sourcePath));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(runtimeConfig, File.ReadAllText(layout.RuntimeConfig));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
+        Assert.Empty(RunGit(movedRepository, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -440,6 +646,9 @@ public sealed class InitTests
         var commitBefore = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var sourceBefore = File.ReadAllBytes(source);
         File.WriteAllText(layout.Runtime, "divergent live instruction\n");
+        File.WriteAllText(
+            layout.RuntimeConfig,
+            "model = \"gpt-test\"\npersonality = \"friendly\"\n");
 
         var second = Run(layout.Target, layout.CodexHome);
 
@@ -448,23 +657,202 @@ public sealed class InitTests
         Assert.Empty(second.Error);
         Assert.Equal(sourceBefore, File.ReadAllBytes(source));
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(
+            "model = \"gpt-test\"\npersonality = \"none\"\n",
+            File.ReadAllText(layout.RuntimeConfig));
         Assert.Equal(headBefore, File.ReadAllBytes(gitHead));
         Assert.Equal(commitBefore, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
     }
 
-    [Fact]
-    public void ResumesARecognizableBaselineOnlyInitialization()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResumesARecognizableBaselineOnlyInitialization(bool managedEnvironmentBaseline)
     {
         using var layout = new InitLayout();
-        var baseline = CreateBaselineOnlyInitialization(layout);
+        var baseline = CreateBaselineOnlyInitialization(
+            layout,
+            managedEnvironmentBaseline);
 
         var result = Run(layout.Target, layout.CodexHome);
 
-        AssertInitialized(layout, result);
+        AssertInitialized(layout, result, managedEnvironmentBaseline);
         Assert.Equal(
             baseline,
             RunGit(layout.Target, "rev-parse", "HEAD~1").Output.Trim());
+
+        var initializedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var attached = Run(layout.Target, layout.CodexHome);
+        Assert.Equal(0, attached.ExitCode);
+        Assert.Equal(initializedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+    }
+
+    [Fact]
+    public void CompletedModernHistoryRejectsASecondCommitThatChangesBaselineConfig()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var configSource = Path.Combine(
+            layout.Target,
+            AecApplication.ConfigSourceRelativePath);
+        File.WriteAllText(configSource, "personality = \"friendly\"\n");
+        Assert.Equal(
+            0,
+            RunGit(
+                layout.Target,
+                "add",
+                "--",
+                AecApplication.ConfigSourceRelativePath).ExitCode);
+        Assert.Equal(
+            0,
+            RunGit(
+                layout.Target,
+                "commit",
+                "--amend",
+                "--quiet",
+                "--no-edit").ExitCode);
+        var expectedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+        var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("changed the baseline canonical config", result.Error, StringComparison.Ordinal);
+        Assert.Equal(expectedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
+        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void CompletedHistoryRejectsAMergeAsTheInitializationCommit()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var baseline = RunGit(layout.Target, "rev-parse", "HEAD~1").Output.Trim();
+        var previousHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var tree = RunGit(layout.Target, "rev-parse", "HEAD^{tree}").Output.Trim();
+        var side = RunGit(
+            layout.Target,
+            "commit-tree",
+            tree,
+            "-m",
+            "Unrelated root").Output.Trim();
+        var merge = RunGit(
+            layout.Target,
+            "commit-tree",
+            tree,
+            "-p",
+            baseline,
+            "-p",
+            side,
+            "-m",
+            "Initialize AEC instructions").Output.Trim();
+        Assert.NotEmpty(side);
+        Assert.NotEmpty(merge);
+        Assert.Equal(
+            0,
+            RunGit(
+                layout.Target,
+                "update-ref",
+                "refs/heads/main",
+                merge,
+                previousHead).ExitCode);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("exactly one parent", result.Error, StringComparison.Ordinal);
+        Assert.Equal(merge, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void CompletedHistoryRejectsInitializationThatChangedUnmanagedInstructions()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        File.AppendAllText(layout.Source, "tampered unrelated instruction\n");
+        Assert.Equal(
+            0,
+            RunGit(layout.Target, "add", "--", AecApplication.SourceRelativePath).ExitCode);
+        Assert.Equal(
+            0,
+            RunGit(
+                layout.Target,
+                "commit",
+                "--amend",
+                "--quiet",
+                "--no-edit").ExitCode);
+        var expectedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("unmanaged instruction", result.Error, StringComparison.Ordinal);
+        Assert.Equal(expectedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void LegacyCompletedHistoryAttachesAfterCanonicalConfigWasAddedLater()
+    {
+        using var layout = new InitLayout();
+        CreateLegacyCompletedInitialization(layout);
+        var configSource = Path.Combine(
+            layout.Target,
+            AecApplication.ConfigSourceRelativePath);
+        File.WriteAllText(configSource, "personality = \"none\"\n");
+        Assert.Equal(
+            0,
+            RunGit(
+                layout.Target,
+                "add",
+                "--",
+                AecApplication.ConfigSourceRelativePath).ExitCode);
+        Assert.Equal(
+            0,
+            RunGit(
+                layout.Target,
+                "commit",
+                "--quiet",
+                "--message",
+                "Add canonical config").ExitCode);
+        var expectedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        Assert.Equal(expectedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(File.ReadAllBytes(layout.Source), File.ReadAllBytes(layout.Runtime));
+        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void LegacyCompletedHistoryWithoutCanonicalConfigFailsBeforeMutation()
+    {
+        using var layout = new InitLayout();
+        CreateLegacyCompletedInitialization(layout);
+        var expectedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+        var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("Canonical config", result.Error, StringComparison.Ordinal);
+        Assert.Equal(expectedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
+        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -483,6 +871,30 @@ public sealed class InitTests
         Assert.Equal("newer runtime instruction\n", File.ReadAllText(layout.Runtime));
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
         Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+    }
+
+    [Fact]
+    public void LegacyPartialInitializationRejectsRuntimePersonalityChangedAfterPendingConfig()
+    {
+        using var layout = new InitLayout();
+        var baseline = CreateBaselineOnlyInitialization(layout);
+        var configSource = Path.Combine(
+            layout.Target,
+            AecApplication.ConfigSourceRelativePath);
+        File.WriteAllText(configSource, "personality = \"none\"\n");
+        File.WriteAllText(layout.RuntimeConfig, "personality = \"friendly\"\n");
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        var configBefore = File.ReadAllBytes(configSource);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("personality", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.Equal(configBefore, File.ReadAllBytes(configSource));
+        Assert.Equal("personality = \"friendly\"\n", File.ReadAllText(layout.RuntimeConfig));
+        Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
     }
 
     [Theory]
@@ -585,11 +997,16 @@ public sealed class InitTests
         Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
     }
 
-    [Fact]
-    public void FailedInstructionCommitLeavesRuntimeAtTheCommittedBaselineAndCanResume()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailedInstructionCommitLeavesRuntimeAtTheCommittedBaselineAndCanResume(
+        bool managedEnvironmentBaseline)
     {
         using var layout = new InitLayout();
-        var baseline = CreateBaselineOnlyInitialization(layout);
+        var baseline = CreateBaselineOnlyInitialization(
+            layout,
+            managedEnvironmentBaseline);
         Assert.Equal(
             0,
             RunGit(layout.Target, "config", "--local", "commit.gpgSign", "true").ExitCode);
@@ -605,6 +1022,7 @@ public sealed class InitTests
                 "gpg.program",
                 Path.Combine(layout.Root, "missing-gpg")).ExitCode);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
+        var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
 
         var failed = Run(layout.Target, layout.CodexHome);
 
@@ -612,13 +1030,54 @@ public sealed class InitTests
         Assert.Contains("commit", failed.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
 
         Assert.Equal(
             0,
             RunGit(layout.Target, "config", "--local", "commit.gpgSign", "false").ExitCode);
         var resumed = Run(layout.Target, layout.CodexHome);
 
-        AssertInitialized(layout, resumed);
+        AssertInitialized(layout, resumed, managedEnvironmentBaseline);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void InitializationEnvironmentCommitRejectsUnexpectedCanonicalContent(
+        bool changeConfig)
+    {
+        using var layout = new InitLayout();
+        var baseline = CreateBaselineOnlyInitialization(
+            layout,
+            managedEnvironmentBaseline: true);
+        var runtime = File.ReadAllBytes(layout.Runtime);
+        var expectedSource = AecInstructionBlock.Merge(runtime, layout.Target);
+        var configPath = Path.Combine(
+            layout.Target,
+            AecApplication.ConfigSourceRelativePath);
+        var expectedConfig = File.ReadAllBytes(configPath);
+        File.WriteAllBytes(layout.Source, expectedSource);
+        if (changeConfig)
+        {
+            File.WriteAllText(configPath, "personality = \"friendly\"\n");
+        }
+        else
+        {
+            File.WriteAllText(layout.Source, "concurrent canonical edit\n");
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            BackupCommand.CommitCanonicalEnvironment(
+                layout.Target,
+                "Initialize AEC instructions",
+                baseline,
+                expectedSource,
+                expectedConfig,
+                allowEmpty: true));
+
+        Assert.Contains("changed before", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(runtime, File.ReadAllBytes(layout.Runtime));
     }
 
     [Fact]
@@ -839,7 +1298,7 @@ public sealed class InitTests
         Assert.Equal(0, result.ExitCode);
         Assert.Equal("2", RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
         Assert.Equal(
-            $"Backup Codex AGENTS.md{Environment.NewLine}" +
+            $"Backup Codex environment{Environment.NewLine}" +
             $"Initialize AEC instructions{Environment.NewLine}",
             RunGit(layout.Target, "log", "--reverse", "--format=%s").Output);
         Assert.Empty(
@@ -939,7 +1398,9 @@ public sealed class InitTests
         return new CommandResult(exitCode, output.ToString(), error.ToString());
     }
 
-    private static string CreateBaselineOnlyInitialization(InitLayout layout)
+    private static string CreateBaselineOnlyInitialization(
+        InitLayout layout,
+        bool managedEnvironmentBaseline = false)
     {
         Directory.CreateDirectory(layout.Target);
         Assert.Equal(
@@ -956,14 +1417,50 @@ public sealed class InitTests
         Directory.CreateDirectory(Path.GetDirectoryName(layout.Source)!);
         File.WriteAllBytes(layout.Source, File.ReadAllBytes(layout.Runtime));
 
-        // Partial initialization has a deliberately legacy AGENTS-only baseline;
-        // ordinary backup now captures the complete managed environment.
-        var exitCode = BackupCommand.RunForInitialization(
-            layout.Target,
-            layout.CodexHome,
-            TextWriter.Null);
+        var exitCode = managedEnvironmentBaseline
+            ? BackupCommand.RunForInitialization(
+                layout.Target,
+                layout.CodexHome,
+                CodexPersonality.None,
+                TextWriter.Null)
+            : CreateLegacyBaselineCommit(layout);
         Assert.Equal(0, exitCode);
         return RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+    }
+
+    private static int CreateLegacyBaselineCommit(InitLayout layout)
+    {
+        var add = RunGit(
+            layout.Target,
+            "add",
+            "--",
+            AecApplication.SourceRelativePath);
+        if (add.ExitCode != 0)
+        {
+            return add.ExitCode;
+        }
+
+        return RunGit(
+            layout.Target,
+            "commit",
+            "--quiet",
+            "--message",
+            BackupCommand.CommitMessage).ExitCode;
+    }
+
+    private static void CreateLegacyCompletedInitialization(InitLayout layout)
+    {
+        var baseline = CreateBaselineOnlyInitialization(layout);
+        var initialized = AecInstructionBlock.Merge(
+            File.ReadAllBytes(layout.Runtime),
+            layout.Target);
+        File.WriteAllBytes(layout.Source, initialized);
+        _ = BackupCommand.CommitCanonicalSource(
+            layout.Target,
+            "Initialize AEC instructions",
+            baseline,
+            initialized,
+            allowEmpty: true);
     }
 
     private static void AssertBaselineOnly(InitLayout layout, byte[] expected)
@@ -971,7 +1468,7 @@ public sealed class InitTests
         Assert.True(Directory.Exists(layout.Target));
         Assert.Equal("1", RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
         Assert.Equal(
-            "Backup Codex AGENTS.md",
+            "Backup Codex environment",
             RunGit(layout.Target, "log", "-1", "--format=%s").Output.Trim());
         Assert.Equal(
             expected,
@@ -979,10 +1476,19 @@ public sealed class InitTests
                 layout.Target,
                 "show",
                 $"HEAD:{AecApplication.SourceRelativePath}").Output));
+        Assert.Equal(
+            "personality = \"none\"\n",
+            RunGit(
+                layout.Target,
+                "show",
+                $"HEAD:{AecApplication.ConfigSourceRelativePath}").Output);
         Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
     }
 
-    private static void AssertInitialized(InitLayout layout, CommandResult result)
+    private static void AssertInitialized(
+        InitLayout layout,
+        CommandResult result,
+        bool managedEnvironmentBaseline)
     {
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
@@ -1013,8 +1519,19 @@ public sealed class InitTests
         var head = RunGit(layout.Target, "rev-parse", "--verify", "HEAD");
         Assert.Equal(0, head.ExitCode);
         Assert.Equal("2", RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
+        var baselineSubject = RunGit(
+            layout.Target,
+            "log",
+            "-1",
+            "--format=%s",
+            "HEAD~1").Output.Trim();
         Assert.Equal(
-            $"Backup Codex AGENTS.md{Environment.NewLine}" +
+            managedEnvironmentBaseline
+                ? "Backup Codex environment"
+                : "Backup Codex AGENTS.md",
+            baselineSubject);
+        Assert.Equal(
+            $"{baselineSubject}{Environment.NewLine}" +
             $"Initialize AEC instructions{Environment.NewLine}",
             RunGit(layout.Target, "log", "--reverse", "--format=%s").Output);
         Assert.Equal(
@@ -1023,30 +1540,48 @@ public sealed class InitTests
                 layout.Target,
                 "show",
                 $"HEAD~1:{AecApplication.SourceRelativePath}").Output);
+        var baselineConfig = RunGit(
+            layout.Target,
+            "show",
+            $"HEAD~1:{AecApplication.ConfigSourceRelativePath}");
+        if (managedEnvironmentBaseline)
+        {
+            Assert.Equal(0, baselineConfig.ExitCode);
+            Assert.Equal("personality = \"none\"\n", baselineConfig.Output);
+        }
+        else
+        {
+            Assert.NotEqual(0, baselineConfig.ExitCode);
+        }
         Assert.Equal(
             File.ReadAllText(layout.Source),
             RunGit(
                 layout.Target,
                 "show",
                 $"HEAD:{AecApplication.SourceRelativePath}").Output);
-        Assert.Equal(
-            AecApplication.SourceRelativePath,
-            RunGit(
+        var initializedPaths = RunGit(
                 layout.Target,
                 "diff-tree",
                 "--no-commit-id",
                 "--name-only",
                 "-r",
-                "HEAD").Output.Trim());
+                "HEAD")
+            .Output.Split(
+                ['\r', '\n'],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var expectedInitializedPaths = managedEnvironmentBaseline
+            ? new[] { AecApplication.SourceRelativePath }
+            : new[]
+            {
+                AecApplication.SourceRelativePath,
+                AecApplication.ConfigSourceRelativePath
+            };
+        Assert.Equal(
+            expectedInitializedPaths.Order(StringComparer.Ordinal),
+            initializedPaths);
 
-        // Config initialization is wired in a later v0.11 checkpoint. Seed both
-        // sides here so this lifecycle assertion continues to exercise status.
-        File.WriteAllText(
-            Path.Combine(layout.Target, AecApplication.ConfigSourceRelativePath),
-            "personality = \"none\"\n");
-        File.WriteAllText(
-            Path.Combine(layout.CodexHome, "config.toml"),
-            "personality = \"none\"\n");
         var statusOutput = new StringWriter();
         var statusError = new StringWriter();
         var statusExitCode = AecApplication.Run(
@@ -1112,10 +1647,12 @@ public sealed class InitTests
             Target = Path.Combine(Root, "data repository");
             CodexHome = Path.Combine(Root, "codex home");
             Runtime = Path.Combine(CodexHome, "AGENTS.md");
+            RuntimeConfig = Path.Combine(CodexHome, "config.toml");
             Source = Path.Combine(Target, "environment", "providers", "codex", "AGENTS.md");
             Directory.CreateDirectory(Root);
             Directory.CreateDirectory(CodexHome);
             File.WriteAllText(Runtime, "Existing instruction.\n");
+            File.WriteAllText(RuntimeConfig, "personality = \"none\"\n");
         }
 
         public string Root { get; }
@@ -1125,6 +1662,8 @@ public sealed class InitTests
         public string CodexHome { get; }
 
         public string Runtime { get; }
+
+        public string RuntimeConfig { get; }
 
         public string Source { get; }
 
@@ -1607,6 +2146,9 @@ public sealed class InitProcessStateTests
             Directory.CreateDirectory(Path);
             Directory.CreateDirectory(CodexHome);
             File.WriteAllText(System.IO.Path.Combine(CodexHome, "AGENTS.md"), "Existing instruction.\n");
+            File.WriteAllText(
+                System.IO.Path.Combine(CodexHome, "config.toml"),
+                "personality = \"none\"\n");
         }
 
         public string Path { get; }

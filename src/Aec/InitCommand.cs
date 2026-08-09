@@ -9,7 +9,8 @@ internal static class InitCommand
         string directoryPath,
         string codexHome,
         bool forcePathChange,
-        TextWriter output)
+        TextWriter output,
+        TextWriter warning)
     {
         var targetWasMissing = !Directory.Exists(directoryPath);
         var isFreshTarget = IsFreshTarget(directoryPath);
@@ -44,7 +45,8 @@ internal static class InitCommand
                 runtimePath,
                 forcePathChange,
                 completed,
-                output);
+                output,
+                warning);
         }
 
         if (!isFreshTarget && forcePathChange)
@@ -53,8 +55,29 @@ internal static class InitCommand
                 "--force-path-change requires an existing initialized repository, not a partial baseline.");
         }
 
-        // Fresh and partial-baseline flows begin by capturing the live runtime.
+        // Fresh and partial-baseline flows validate all managed runtime input before
+        // installing the skill or creating repository state.
         _ = AecApplication.ReadRequiredTextFile(runtimePath, "Runtime target");
+        var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
+        var runtimeConfig = AecApplication.ReadOptionalTextFile(
+            runtimeConfigPath,
+            "Runtime config");
+        var runtimePersonality = runtimeConfig is null
+            ? null
+            : CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath);
+        if (runtimePersonality is null)
+        {
+            warning.WriteLine(
+                "warning: runtime config does not declare root `personality`; " +
+                "`personality = \"none\"` will be enrolled and added after " +
+                "the initialization commits.");
+        }
+        // Validate the eventual runtime edit before skill or repository mutation.
+        // Apply plans it again later to retain its compare-before-replace guard.
+        _ = CodexPersonalityConfig.PlanRuntimeUpdate(
+            runtimeConfig,
+            runtimeConfigPath,
+            runtimePersonality ?? CodexPersonality.None);
 
         BaselineSnapshot baseline;
         if (isFreshTarget)
@@ -63,14 +86,24 @@ internal static class InitCommand
             AecSkillInstaller.Install(codexHome);
             InitializeRepository(directoryPath);
 
-            BackupCommand.RunForInitialization(directoryPath, codexHome, TextWriter.Null);
-            baseline = LoadBaseline(directoryPath, runtimePath);
+            BackupCommand.RunForInitialization(
+                directoryPath,
+                codexHome,
+                runtimePersonality,
+                TextWriter.Null);
+            baseline = LoadBaseline(
+                directoryPath,
+                runtimePath,
+                runtimePersonality);
         }
         else
         {
             try
             {
-                baseline = LoadBaseline(directoryPath, runtimePath);
+                baseline = LoadBaseline(
+                    directoryPath,
+                    runtimePath,
+                    runtimePersonality);
             }
             catch (Exception exception)
             {
@@ -111,26 +144,42 @@ internal static class InitCommand
                 "Canonical source");
         }
 
-        var initializationCommit = BackupCommand.CommitCanonicalSource(
+        var configSourcePath = Path.Combine(
+            directoryPath,
+            AecApplication.ConfigSourceRelativePath);
+        if (!MatchesOptionalBytes(baseline.WorkingConfig, baseline.Config))
+        {
+            AtomicFile.ReplaceIfUnchanged(
+                configSourcePath,
+                baseline.WorkingConfig,
+                baseline.Config,
+                "Canonical config");
+        }
+
+        var initializationCommit = BackupCommand.CommitCanonicalEnvironment(
             directoryPath,
             InitializationCommitMessage,
             baseline.Commit,
             merged,
+            baseline.Config,
             allowEmpty: true);
         ApplyCommand.RunForInitialization(
             directoryPath,
             codexHome,
             TextWriter.Null,
             baseline.Content,
+            baseline.RuntimePersonality,
             initializationCommit,
-            merged);
+            merged,
+            baseline.Config);
 
         VerifyInitializationResult(
             directoryPath,
             sourcePath,
             runtimePath,
             initializationCommit,
-            merged);
+            merged,
+            baseline.Config);
 
         output.WriteLine("initialized");
         return 0;
@@ -142,7 +191,8 @@ internal static class InitCommand
         string runtimePath,
         bool forcePathChange,
         CompletedSnapshot completed,
-        TextWriter output)
+        TextWriter output,
+        TextWriter warning)
     {
         var pathMatches = AecInstructionBlock.RepositoryPathsEqual(
             completed.Binding.Repository,
@@ -156,9 +206,25 @@ internal static class InitCommand
                 "Confirm the path change, then rerun `aec init` with --force-path-change.");
         }
 
-        // Preflight an existing runtime before installing the skill or committing a
-        // rebind; Apply repeats the read to protect against concurrent changes.
-        _ = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        // Preflight both managed runtime inputs before installing the skill or
+        // committing a rebind; Apply repeats the reads before changing either file.
+        var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
+        var runtimeConfig = AecApplication.ReadOptionalTextFile(
+            runtimeConfigPath,
+            "Runtime config");
+        var runtimePersonality = runtimeConfig is null
+            ? null
+            : CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath);
+        var desiredPersonality = CodexPersonalityConfig.ReadCanonical(
+            completed.Config,
+            Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
+        // A deterministic planning failure must happen before skill installation
+        // and, for a moved repository, before the rebind commit.
+        _ = CodexPersonalityConfig.PlanRuntimeUpdate(
+            runtimeConfig,
+            runtimeConfigPath,
+            desiredPersonality);
 
         if (pathMatches)
         {
@@ -167,14 +233,19 @@ internal static class InitCommand
                 repository,
                 codexHome,
                 TextWriter.Null,
+                warning,
+                runtime,
+                runtimePersonality,
                 completed.Commit,
-                completed.Content);
+                completed.Content,
+                completed.Config);
             VerifyInitializationResult(
                 repository,
                 Path.Combine(repository, AecApplication.SourceRelativePath),
                 runtimePath,
                 completed.Commit,
-                completed.Content);
+                completed.Content,
+                completed.Config);
             output.WriteLine("initialized");
             return 0;
         }
@@ -207,14 +278,19 @@ internal static class InitCommand
             repository,
             codexHome,
             TextWriter.Null,
+            warning,
+            runtime,
+            runtimePersonality,
             commit,
-            rebound);
+            rebound,
+            completed.Config);
         VerifyInitializationResult(
             repository,
             sourcePath,
             runtimePath,
             commit,
-            rebound);
+            rebound,
+            completed.Config);
 
         output.WriteLine("initialized");
         return 0;
@@ -229,10 +305,14 @@ internal static class InitCommand
         EnsureContainedGitMetadata(repository, gitDirectory);
         BackupCommand.ValidateRepository(repository);
         EnsureMainBranch(repository);
-        BackupCommand.EnsureNoChangesOutsideSource(repository);
+        BackupCommand.EnsureNoChangesOutsideManagedSources(repository);
 
         var commit = ApplyCommand.ResolveHeadCommit(repository);
         var content = ApplyCommand.ReadCommittedSource(repository, commit);
+        var config = ApplyCommand.ReadCommittedConfig(repository, commit);
+        _ = CodexPersonalityConfig.ReadCanonical(
+            config,
+            Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
         var binding = AecInstructionBlock.ReadRepositoryBinding(content)
             ?? throw new InvalidDataException(
                 "Canonical instructions do not contain a supported initialized AEC block.");
@@ -256,7 +336,7 @@ internal static class InitCommand
         }
 
         EnsureMainBranch(repository);
-        return new CompletedSnapshot(commit, content, binding);
+        return new CompletedSnapshot(commit, content, config, binding);
     }
 
     private static bool HasCompletedInitializationHistory(string repository)
@@ -298,10 +378,15 @@ internal static class InitCommand
         string repository,
         string[] history)
     {
-        return string.Equals(
-                   ReadCommitSubject(repository, history[0]),
-                   BackupCommand.CommitMessage,
-                   StringComparison.Ordinal) &&
+        var baselineSubject = ReadCommitSubject(repository, history[0]);
+        return (string.Equals(
+                    baselineSubject,
+                    BackupCommand.CommitMessage,
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    baselineSubject,
+                    BackupCommand.OrdinaryCommitMessage,
+                    StringComparison.Ordinal)) &&
                string.Equals(
                    ReadCommitSubject(repository, history[1]),
                    InitializationCommitMessage,
@@ -333,30 +418,86 @@ internal static class InitCommand
             "commit",
             baselineCommit);
         EnsureRootCommit(baselineObject);
-        _ = ReadOnlyBaselineTreeEntry(repository, baselineCommit);
-
-        var parent = GitProcess.RunRequired(
+        var baselineSubject = ReadCommitSubject(repository, baselineCommit);
+        var baselineFormat = baselineSubject switch
+        {
+            BackupCommand.CommitMessage => BaselineFormat.LegacyAgentsOnly,
+            BackupCommand.OrdinaryCommitMessage => BaselineFormat.ManagedEnvironment,
+            _ => throw new InvalidOperationException(
+                "AEC initialization baseline has an unsupported commit subject.")
+        };
+        var baselineEntries = ReadTreeEntries(repository, baselineCommit);
+        EnsureBaselineTreeShape(baselineEntries, baselineFormat);
+        var baselineContent = ReadBoundedBlob(
             repository,
-            "Git could not inspect the AEC initialization parent",
+            baselineEntries[AecApplication.SourceRelativePath].ObjectId,
+            "AEC initialization baseline canonical source");
+
+        var initializationObject = GitProcess.RunRequiredBytes(
+            repository,
+            "Git could not inspect the AEC initialization commit",
             "--no-replace-objects",
-            "rev-parse",
-            "--verify",
-            $"{initializationCommit}^").Output.Trim();
-        if (!string.Equals(parent, baselineCommit, StringComparison.Ordinal))
+            "cat-file",
+            "commit",
+            initializationCommit);
+        EnsureSingleParent(initializationObject, baselineCommit);
+
+        var initializationEntries = ReadTreeEntries(repository, initializationCommit);
+        var hasSource = initializationEntries.TryGetValue(
+            AecApplication.SourceRelativePath,
+            out var initializationEntry);
+        var hasConfig = initializationEntries.TryGetValue(
+            AecApplication.ConfigSourceRelativePath,
+            out var initializationConfigEntry);
+        var expectedEntryCount = hasConfig ? 2 : 1;
+        if (!hasSource || initializationEntries.Count != expectedEntryCount ||
+            (baselineFormat == BaselineFormat.ManagedEnvironment && !hasConfig))
         {
             throw new InvalidOperationException(
-                "AEC initialization commit does not directly follow its baseline commit.");
+                "AEC initialization commit contains an unexpected tree shape.");
         }
 
-        var initializationEntry = ReadOnlyBaselineTreeEntry(repository, initializationCommit);
         var initializedContent = ReadBoundedBlob(
             repository,
-            initializationEntry.ObjectId,
+            initializationEntry!.ObjectId,
             "AEC initialization canonical source");
-        if (AecInstructionBlock.ReadRepositoryBinding(initializedContent) is null)
+        var binding = AecInstructionBlock.ReadRepositoryBinding(initializedContent);
+        if (binding is null)
         {
             throw new InvalidDataException(
                 "AEC initialization commit does not contain a supported initialized block.");
+        }
+
+        var expectedInitializedContent = binding.Version == 3
+            ? AecInstructionBlock.Merge(baselineContent, binding.Repository)
+            : AecInstructionBlock.MergeForChatGptProvider(
+                baselineContent,
+                binding.Repository);
+        if (!initializedContent.AsSpan().SequenceEqual(expectedInitializedContent))
+        {
+            throw new InvalidOperationException(
+                "AEC initialization commit changed an unmanaged instruction.");
+        }
+
+        if (hasConfig)
+        {
+            var initializedConfig = ReadBoundedBlob(
+                repository,
+                initializationConfigEntry!.ObjectId,
+                "AEC initialization canonical config");
+            _ = CodexPersonalityConfig.ReadCanonical(
+                initializedConfig,
+                Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
+
+            if (baselineFormat == BaselineFormat.ManagedEnvironment &&
+                !string.Equals(
+                    baselineEntries[AecApplication.ConfigSourceRelativePath].ObjectId,
+                    initializationConfigEntry.ObjectId,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "AEC initialization commit changed the baseline canonical config.");
+            }
         }
     }
 
@@ -534,7 +675,8 @@ internal static class InitCommand
         string sourcePath,
         string runtimePath,
         string expectedCommit,
-        byte[] expectedContent)
+        byte[] expectedContent,
+        byte[] expectedConfig)
     {
         var head = ResolveBaselineHead(repository, "Git could not verify initialized HEAD");
         if (!string.Equals(head, expectedCommit, StringComparison.Ordinal))
@@ -544,24 +686,46 @@ internal static class InitCommand
         }
 
         EnsureMainBranch(repository);
-        BackupCommand.EnsureNoChangesOutsideSource(repository);
-        var sourceStatus = GitProcess.RunRequired(
+        BackupCommand.EnsureNoChangesOutsideManagedSources(repository);
+        var managedStatus = GitProcess.RunRequired(
             repository,
-            "Git could not verify the initialized canonical source",
+            "Git could not verify the initialized canonical environment",
             "status",
             "--porcelain=v1",
             "-z",
             "--untracked-files=all",
             "--",
-            AecApplication.SourceRelativePath);
-        if (sourceStatus.Output.Length != 0)
+            AecApplication.SourceRelativePath,
+            AecApplication.ConfigSourceRelativePath);
+        if (managedStatus.Output.Length != 0)
         {
             throw new InvalidOperationException(
-                "Canonical source is not clean after initialization.");
+                "Canonical environment is not clean after initialization.");
         }
 
         VerifyContent(sourcePath, expectedContent, "Canonical source");
         VerifyContent(runtimePath, expectedContent, "Runtime target");
+        var configSourcePath = Path.Combine(
+            repository,
+            AecApplication.ConfigSourceRelativePath);
+        VerifyContent(configSourcePath, expectedConfig, "Canonical config");
+
+        var desiredPersonality = CodexPersonalityConfig.ReadCanonical(
+            expectedConfig,
+            configSourcePath);
+        var runtimeConfigPath = Path.Combine(
+            Path.GetDirectoryName(runtimePath)
+                ?? throw new InvalidOperationException("Runtime target has no parent directory."),
+            "config.toml");
+        var runtimeConfig = AecApplication.ReadRequiredTextFile(
+            runtimeConfigPath,
+            "Runtime config");
+        if (CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath) !=
+            desiredPersonality)
+        {
+            throw new IOException(
+                "Runtime personality verification failed after initialization.");
+        }
     }
 
     private static void EnsureGitDirectory(string repository)
@@ -577,11 +741,14 @@ internal static class InitCommand
         }
     }
 
-    private static BaselineSnapshot LoadBaseline(string repository, string runtimePath)
+    private static BaselineSnapshot LoadBaseline(
+        string repository,
+        string runtimePath,
+        CodexPersonality? runtimePersonality)
     {
         EnsureExactBaselineLayout(repository);
         BackupCommand.ValidateRepository(repository);
-        BackupCommand.EnsureNoChangesOutsideSource(repository);
+        BackupCommand.EnsureNoChangesOutsideManagedSources(repository);
         var commit = ResolveBaselineHead(
             repository,
             "Git could not resolve the initialization baseline");
@@ -605,16 +772,22 @@ internal static class InitCommand
             "-1",
             "--format=%s",
             commit).Output.TrimEnd('\r', '\n');
-        if (!string.Equals(subject, BackupCommand.CommitMessage, StringComparison.Ordinal))
+        var format = subject switch
         {
-            throw new InvalidOperationException(
-                $"Initialization baseline commit subject must be '{BackupCommand.CommitMessage}'.");
-        }
+            BackupCommand.CommitMessage => BaselineFormat.LegacyAgentsOnly,
+            BackupCommand.OrdinaryCommitMessage => BaselineFormat.ManagedEnvironment,
+            _ => throw new InvalidOperationException(
+                "Initialization baseline commit subject must be " +
+                $"'{BackupCommand.CommitMessage}' or " +
+                $"'{BackupCommand.OrdinaryCommitMessage}'.")
+        };
 
-        var treeEntry = ReadOnlyBaselineTreeEntry(repository, commit);
+        var treeEntries = ReadTreeEntries(repository, commit);
+        EnsureBaselineTreeShape(treeEntries, format);
+        var sourceEntry = treeEntries[AecApplication.SourceRelativePath];
         var content = ReadBoundedBlob(
             repository,
-            treeEntry.ObjectId,
+            sourceEntry.ObjectId,
             "Initialization baseline canonical source");
 
         var runtime = AecApplication.ReadRequiredTextFile(runtimePath, "Runtime target");
@@ -622,6 +795,57 @@ internal static class InitCommand
         {
             throw new InvalidOperationException(
                 "Current runtime does not match the committed initialization baseline.");
+        }
+
+        var desiredPersonality = runtimePersonality ?? CodexPersonality.None;
+        var configPath = Path.Combine(repository, AecApplication.ConfigSourceRelativePath);
+        var workingConfig = AecApplication.ReadOptionalTextFile(configPath, "Canonical config");
+        byte[] config;
+        if (format == BaselineFormat.ManagedEnvironment)
+        {
+            config = ReadBoundedBlob(
+                repository,
+                treeEntries[AecApplication.ConfigSourceRelativePath].ObjectId,
+                "Initialization baseline canonical config");
+            var committedPersonality = CodexPersonalityConfig.ReadCanonical(config, configPath);
+            if (committedPersonality != desiredPersonality)
+            {
+                throw new InvalidOperationException(
+                    "Current runtime personality does not match the committed initialization baseline.");
+            }
+
+            if (workingConfig is null || !workingConfig.AsSpan().SequenceEqual(config))
+            {
+                throw new InvalidOperationException(
+                    "Canonical config does not match the committed initialization baseline.");
+            }
+        }
+        else
+        {
+            if (workingConfig is null)
+            {
+                config = CodexPersonalityConfig.PlanCanonicalUpdate(
+                    content: null,
+                    configPath,
+                    desiredPersonality).Content;
+            }
+            else
+            {
+                // A legacy root commit has no config blob. Once a failed resume
+                // has prepared one in the work tree, its exact value becomes the
+                // retry checkpoint and must not silently recapture later drift.
+                var pendingPersonality = CodexPersonalityConfig.ReadCanonical(
+                    workingConfig,
+                    configPath);
+                if (pendingPersonality != desiredPersonality)
+                {
+                    throw new InvalidOperationException(
+                        "Current runtime personality does not match the pending " +
+                        "initialization config.");
+                }
+
+                config = workingConfig;
+            }
         }
 
         var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
@@ -636,7 +860,13 @@ internal static class InitCommand
         }
 
         EnsureMainBranch(repository);
-        return new BaselineSnapshot(commit, content, workingSource);
+        return new BaselineSnapshot(
+            commit,
+            content,
+            workingSource,
+            config,
+            workingConfig,
+            runtimePersonality);
     }
 
     private static void EnsureMainBranch(string repository)
@@ -695,7 +925,46 @@ internal static class InitCommand
         }
     }
 
-    private static GitTreeEntry ReadOnlyBaselineTreeEntry(
+    private static void EnsureSingleParent(
+        byte[] commitObject,
+        string expectedParent)
+    {
+        var remaining = commitObject.AsSpan();
+        ReadOnlySpan<byte> actualParent = default;
+        var parentCount = 0;
+        while (true)
+        {
+            var lineEnd = remaining.IndexOf((byte)'\n');
+            if (lineEnd < 0)
+            {
+                throw new InvalidDataException(
+                    "AEC initialization commit has malformed metadata.");
+            }
+
+            var line = remaining[..lineEnd];
+            if (line.Length == 0)
+            {
+                break;
+            }
+
+            if (line.StartsWith("parent "u8))
+            {
+                parentCount++;
+                actualParent = line["parent "u8.Length..];
+            }
+
+            remaining = remaining[(lineEnd + 1)..];
+        }
+
+        var expectedParentBytes = System.Text.Encoding.ASCII.GetBytes(expectedParent);
+        if (parentCount != 1 || !actualParent.SequenceEqual(expectedParentBytes))
+        {
+            throw new InvalidOperationException(
+                "AEC initialization commit must have exactly one parent, its baseline commit.");
+        }
+    }
+
+    private static Dictionary<string, GitTreeEntry> ReadTreeEntries(
         string repository,
         string commit)
     {
@@ -708,28 +977,49 @@ internal static class InitCommand
             "-z",
             commit).Output;
         var records = tree.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-        if (records.Length != 1)
+        var entries = new Dictionary<string, GitTreeEntry>(StringComparer.Ordinal);
+        foreach (var record in records)
         {
-            throw new InvalidOperationException(
-                "Initialization baseline must commit only the canonical source.");
+            var tab = record.IndexOf('\t');
+            var fields = tab < 0
+                ? []
+                : record[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var path = tab < 0 ? string.Empty : record[(tab + 1)..];
+            if (fields.Length != 3 ||
+                fields[0] is not ("100644" or "100755") ||
+                fields[1] != "blob" ||
+                fields[2].Length == 0 ||
+                path.Length == 0 ||
+                !entries.TryAdd(path, new GitTreeEntry(fields[2])))
+            {
+                throw new InvalidOperationException(
+                    "Initialization history contains an invalid Git tree entry.");
+            }
         }
 
-        var tab = records[0].IndexOf('\t');
-        var fields = tab < 0
-            ? []
-            : records[0][..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var path = tab < 0 ? string.Empty : records[0][(tab + 1)..];
-        if (fields.Length != 3 ||
-            fields[0] is not ("100644" or "100755") ||
-            fields[1] != "blob" ||
-            fields[2].Length == 0 ||
-            !string.Equals(path, AecApplication.SourceRelativePath, StringComparison.Ordinal))
+        return entries;
+    }
+
+    private static void EnsureBaselineTreeShape(
+        IReadOnlyDictionary<string, GitTreeEntry> entries,
+        BaselineFormat format)
+    {
+        var expected = format == BaselineFormat.ManagedEnvironment
+            ? new[]
+            {
+                AecApplication.SourceRelativePath,
+                AecApplication.ConfigSourceRelativePath
+            }
+            : [AecApplication.SourceRelativePath];
+        if (!entries.Keys.Order(StringComparer.Ordinal).SequenceEqual(
+                expected.Order(StringComparer.Ordinal),
+                StringComparer.Ordinal))
         {
             throw new InvalidOperationException(
-                "Initialization baseline tree does not contain the canonical source exactly.");
+                format == BaselineFormat.ManagedEnvironment
+                    ? "Managed initialization baseline must commit exactly AGENTS.md and config.toml."
+                    : "Legacy initialization baseline must commit only AGENTS.md.");
         }
-
-        return new GitTreeEntry(fields[2]);
     }
 
     private static void EnsureExactBaselineLayout(string repository)
@@ -742,9 +1032,20 @@ internal static class InitCommand
         EnsureOnlyEntries(repository, ".git", "environment");
         EnsureOnlyEntries(Path.Combine(repository, "environment"), "providers");
         EnsureOnlyEntries(Path.Combine(repository, "environment", "providers"), "codex");
-        EnsureOnlyEntries(
-            Path.Combine(repository, "environment", "providers", "codex"),
-            "AGENTS.md");
+        var codexDirectory = Path.Combine(repository, "environment", "providers", "codex");
+        var codexEntries = Directory
+            .EnumerateFileSystemEntries(codexDirectory)
+            .Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var agentsOnly = new[] { "AGENTS.md" };
+        var managedEnvironment = new[] { "AGENTS.md", "config.toml" };
+        if (!codexEntries.SequenceEqual(agentsOnly, StringComparer.Ordinal) &&
+            !codexEntries.SequenceEqual(managedEnvironment, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Initialization baseline has unexpected entries under: {codexDirectory}");
+        }
         EnsureContainedGitMetadata(repository, gitDirectory);
     }
 
@@ -858,12 +1159,30 @@ internal static class InitCommand
             exception);
     }
 
-    private sealed record BaselineSnapshot(string Commit, byte[] Content, byte[] WorkingSource);
+    private static bool MatchesOptionalBytes(byte[]? current, byte[] expected)
+    {
+        return current is not null && current.AsSpan().SequenceEqual(expected);
+    }
+
+    private sealed record BaselineSnapshot(
+        string Commit,
+        byte[] Content,
+        byte[] WorkingSource,
+        byte[] Config,
+        byte[]? WorkingConfig,
+        CodexPersonality? RuntimePersonality);
 
     private sealed record CompletedSnapshot(
         string Commit,
         byte[] Content,
+        byte[] Config,
         AecInstructionBlock.RepositoryBinding Binding);
 
     private sealed record GitTreeEntry(string ObjectId);
+
+    private enum BaselineFormat
+    {
+        LegacyAgentsOnly,
+        ManagedEnvironment
+    }
 }

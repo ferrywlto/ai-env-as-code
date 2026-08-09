@@ -1,7 +1,8 @@
 # AI Environment as Code
 
-Version 0.11.3 captures the first managed Codex `config.toml` value from runtime
-alongside instructions in one source-of-truth Git commit.
+Version 0.11.4 enrolls the first managed Codex `config.toml` value during `init`,
+so a new repository starts with both instructions and managed configuration in its
+source-of-truth history.
 
 ## Version history
 
@@ -20,8 +21,9 @@ alongside instructions in one source-of-truth Git commit.
 | 0.11.1 | Compare managed Codex `personality` state through `status` |
 | 0.11.2 | Apply committed Codex `personality` while preserving runtime config |
 | 0.11.3 | Back up runtime Codex `personality` with runtime instructions |
+| 0.11.4 | Enroll Codex `personality` in the initial environment baseline |
 
-The project and CLI report the current release as `0.11.3`.
+The project and CLI report the current release as `0.11.4`.
 
 ## apply
 
@@ -170,11 +172,14 @@ rejected. `--repo` is required and must be the absolute path of that source-of-t
 repository. The current working directory and engine repository are never inferred.
 
 `--codex-home` selects the runtime root. When omitted, `init` uses a non-empty
-`CODEX_HOME` and then `~/.codex`, matching `status` and `backup`. The Codex home must
+`CODEX_HOME` and then `~/.codex`, matching the other commands. The Codex home must
 already exist. Fresh and baseline-only initialization require its regular
-`AGENTS.md`; a missing runtime then fails before repository or skill mutation. A
-completed pulled repository may instead create the missing runtime from its
-committed canonical source.
+`AGENTS.md`; a missing runtime fails before repository or skill mutation. Runtime
+`config.toml` may be missing, but any existing file must be valid supported TOML.
+If its root `personality` is absent, `init` warns that `none` will be enrolled and
+waits until both initialization commits succeed before adding it to runtime. A
+completed pulled repository may create either missing runtime file from committed
+canonical state.
 
 Ordinary `init` also installs these bundled skill metadata files:
 
@@ -194,18 +199,23 @@ developer-built macOS ARM64 Native AOT workflow documented below, but `init` doe
 not search for, build, or run an engine checkout as a fallback. Skill upgrades
 remain a separate future decision.
 
-A resumable target must be a `main` repository containing one root commit named
-`Backup Codex AGENTS.md`, whose only file and exact bytes match the current runtime
-canonical path. The working canonical source may contain only that baseline or the
-exact expected managed result, with no changes outside that path. Completed
-repository handling uses the separate attachment rules below; baseline lookalikes,
-unrelated changes, symbolic links, and special filesystem entries are rejected.
+A resumable target must be a `main` repository containing one recognized root
+baseline. Current baselines use `Backup Codex environment` and contain exactly the
+runtime `AGENTS.md` bytes plus canonical managed `config.toml`; legacy baselines use
+`Backup Codex AGENTS.md` and contain only the runtime instructions. The runtime
+managed value must still agree semantically with a current baseline, while both a
+missing value and explicit `none` agree with a committed `none`. The working
+canonical files may contain only the baseline or exact expected managed result.
+Baseline lookalikes, unrelated changes, links, and special entries are rejected.
 
 A completed repository must retain the recognizable two-commit initialization
 ancestry, use symbolic branch `main`, contain a real `.git` directory whose metadata
-remains inside the selected root, and have a clean index and work tree. Its working
-canonical source must exactly match committed `HEAD` and contain an exact supported
-v3 or v4 AEC block. Later commits and committed provider files are allowed.
+remains inside the selected root, and have a clean index and work tree. Both current
+canonical files must exactly match committed `HEAD`; instructions must contain a
+supported v3 or v4 AEC block and config must contain one supported managed value.
+Legacy histories remain attachable after canonical config was added in a later
+commit. A truly pre-config completed `HEAD` fails closed instead of inventing state.
+Later commits and committed provider files are allowed.
 
 The AEC-managed instruction block is delimited and versioned explicitly:
 
@@ -228,31 +238,34 @@ is retained byte-for-byte when it already contains the expected managed content 
 or newer-version markers, invalid UTF-8, NUL bytes, and merged content over 1 MiB
 are rejected.
 
-For a fresh or baseline-only target, an explicit `init` invocation authorizes this
-fixed lifecycle:
+For a fresh target, an explicit `init` invocation authorizes this fixed lifecycle:
 
 ```text
-runtime AGENTS.md
-  -> environment/providers/codex/AGENTS.md
-  -> commit: Backup Codex AGENTS.md
-  -> canonical source with reconciled AEC block
+runtime AGENTS.md + runtime personality (missing means none)
+  -> canonical AGENTS.md + canonical config.toml
+  -> commit: Backup Codex environment
+  -> reconcile only the canonical AEC instruction block
   -> commit: Initialize AEC instructions
-  -> runtime AGENTS.md through apply
+  -> apply both committed managed files to runtime
 ```
 
-The first commit preserves the runtime bytes without AEC mutation. The second commit
-is always created, including as an empty commit when the baseline already has the
-exact current block. Only then does `init` run the apply flow. It performs no write
-when runtime already equals the committed source; otherwise it stops if runtime
-changed after backup. Git hooks are isolated, line-ending conversion is disabled
-locally, exact staged bytes are verified, and the command does not push. No separate
-`backup` or `apply` invocation is needed.
+The root commit preserves exact runtime instruction bytes and records only the
+managed personality, not machine-owned runtime config. The second commit changes
+only instructions and is always created, including as an empty commit when the
+baseline already has the exact current block. A recognized legacy baseline resumes
+after its existing AGENTS-only root and introduces canonical config in that second
+commit without rewriting history. Runtime remains untouched until both commits
+succeed. Apply then preserves unrelated runtime TOML while adding or replacing only
+`personality`; it stops if either managed runtime value changed since preflight. Git
+hooks are isolated, line-ending conversion is disabled locally, exact staged bytes
+are verified, and the command does not push. No separate `backup` or `apply`
+invocation is needed.
 
 A failure before the second commit leaves the runtime untouched and a recognizable
 baseline may resume. A failure after the second commit leaves a complete repository.
 Rerunning ordinary `init` at the recorded path uses the attachment flow: it installs
-the bundled skill and applies committed instructions without another backup or
-commit.
+the bundled skill and applies the committed managed environment without another
+backup or commit.
 
 ### v0.10 pulled-repository initialization
 
@@ -264,17 +277,18 @@ absolute path:
 flowchart TD
     Start["Select an absolute AEC data repository path"] --> State{"Repository state?"}
 
-    State -->|"Missing or empty"| FreshSkill["Install the bundled $aec skill"]
-    State -->|"Baseline-only partial"| Resume["Validate the committed runtime baseline"]
+    State -->|"Missing or empty"| Preflight["Read runtime AGENTS.md and personality<br/>Warn and choose none when missing"]
+    Preflight --> FreshSkill["Install the bundled $aec skill"]
+    State -->|"Baseline-only partial"| Resume["Validate instructions and managed config<br/>against the committed baseline"]
     FreshSkill --> Fresh["Create the first AEC repository"]
-    Fresh --> Backup["Back up runtime instructions and commit"]
+    Fresh --> Backup["Commit runtime instructions and managed personality<br/>as Backup Codex environment"]
     Resume --> ResumeSkill["Install the bundled $aec skill"]
     ResumeSkill --> Insert
     Backup --> Insert["Insert or update the AEC block"]
     Insert --> InitCommit["Commit initialized instructions"]
-    InitCommit --> Apply["Apply committed instructions to runtime"]
+    InitCommit --> Apply["Apply committed instructions and personality to runtime"]
 
-    State -->|"Pulled initialized repository"| Read["Read the existing AEC block"]
+    State -->|"Pulled initialized repository"| Read["Validate both committed canonical files<br/>and read the existing AEC block"]
     Read --> Path{"Recorded path equals --repo?"}
 
     Path -->|"Yes"| AttachSkill["Install the bundled $aec skill"]
@@ -449,9 +463,10 @@ apply:  committed canonical values -> runtime managed values
 
 `apply` warns before inserting a missing runtime key and otherwise replaces only the
 managed value. `backup` remains strictly runtime-to-repository: when the key is
-absent, it warns and stops without changing either side. The planned v0.11.4
-checkpoint will extend `init` to capture an existing supported runtime value or warn
-before adding `personality = "none"` and creating canonical config.
+absent, it warns and stops without changing either side. `init` captures an existing
+supported runtime value in the root environment commit. When it is absent, `init`
+warns, records `none` in that commit, and adds `personality = "none"` to runtime only
+after both initialization commits succeed.
 
 ## Build, test, and run
 

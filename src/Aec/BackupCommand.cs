@@ -15,6 +15,35 @@ internal static class BackupCommand
         TextWriter output,
         TextWriter warning)
     {
+        return RunManagedEnvironment(
+            repository,
+            codexHome,
+            output,
+            warning,
+            initialization: null);
+    }
+
+    internal static int RunForInitialization(
+        string repository,
+        string codexHome,
+        CodexPersonality? expectedRuntimePersonality,
+        TextWriter output)
+    {
+        return RunManagedEnvironment(
+            repository,
+            codexHome,
+            output,
+            TextWriter.Null,
+            new InitializationBackupExpectation(expectedRuntimePersonality));
+    }
+
+    private static int RunManagedEnvironment(
+        string repository,
+        string codexHome,
+        TextWriter output,
+        TextWriter warning,
+        InitializationBackupExpectation? initialization)
+    {
         ValidateRepository(repository);
         EnsureNoChangesOutsideManagedSources(repository);
 
@@ -36,18 +65,34 @@ internal static class BackupCommand
         var runtimePersonality = runtimeConfig is null
             ? null
             : CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath);
-        if (runtimePersonality is null)
+        CodexPersonality desiredPersonality;
+        if (initialization is not null)
+        {
+            if (runtimePersonality != initialization.RuntimePersonality)
+            {
+                throw new InvalidOperationException(
+                    "Runtime personality changed after initialization preflight; " +
+                    "the baseline was not committed.");
+            }
+
+            desiredPersonality = runtimePersonality ?? CodexPersonality.None;
+        }
+        else if (runtimePersonality is null)
         {
             warning.WriteLine(
                 "warning: runtime config does not declare root `personality`; " +
                 "backup stopped without changing the repository.");
             return 1;
         }
+        else
+        {
+            desiredPersonality = runtimePersonality.Value;
+        }
 
         var configUpdate = CodexPersonalityConfig.PlanCanonicalUpdate(
             configSource,
             configSourcePath,
-            runtimePersonality.Value);
+            desiredPersonality);
 
         if (!source.AsSpan().SequenceEqual(runtime))
         {
@@ -102,52 +147,6 @@ internal static class BackupCommand
         return 0;
     }
 
-    internal static int RunForInitialization(
-        string repository,
-        string codexHome,
-        TextWriter output)
-    {
-        ValidateRepository(repository);
-        EnsureNoChangesOutsideSource(repository);
-
-        var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
-        var runtimePath = Path.Combine(codexHome, "AGENTS.md");
-        var source = AecApplication.ReadRequiredTextFile(sourcePath, "Canonical source");
-        var runtime = AecApplication.ReadRequiredTextFile(runtimePath, "Runtime target");
-
-        if (!source.AsSpan().SequenceEqual(runtime))
-        {
-            ReplaceSource(sourcePath, runtime);
-        }
-
-        GitProcess.RunRequired(
-            repository,
-            "Git could not stage the canonical source",
-            "add",
-            "--force",
-            "--",
-            AecApplication.SourceRelativePath);
-
-        EnsureNoChangesOutsideSource(repository);
-        var expectedBlob = EnsureStagedBytesMatchSource(repository);
-
-        if (HasHead(repository) && !HasStagedSourceChange(repository))
-        {
-            output.WriteLine("unchanged");
-            return 0;
-        }
-
-        CommitStagedIndex(
-            repository,
-            CommitMessage,
-            [(AecApplication.SourceRelativePath, expectedBlob)]);
-
-        var head = ResolveHead(repository);
-        VerifyCommit(repository, expectedBlob, CommitMessage);
-        output.WriteLine($"committed {head}");
-        return 0;
-    }
-
     internal static string CommitCanonicalSource(
         string repository,
         string commitMessage,
@@ -196,6 +195,81 @@ internal static class BackupCommand
         VerifyCommit(repository, expectedBlob, commitMessage);
         EnsureBranchMatches(repository, "refs/heads/main");
         EnsureNoChangesOutsideSource(repository);
+        return head;
+    }
+
+    internal static string CommitCanonicalEnvironment(
+        string repository,
+        string commitMessage,
+        string expectedParent,
+        byte[] expectedSource,
+        byte[] expectedConfig,
+        bool allowEmpty)
+    {
+        ArgumentNullException.ThrowIfNull(expectedSource);
+        ArgumentNullException.ThrowIfNull(expectedConfig);
+        ValidateRepository(repository);
+        EnsureNoChangesOutsideManagedSources(repository);
+        EnsureBranchMatches(repository, "refs/heads/main");
+        EnsureHeadMatches(repository, expectedParent);
+
+        EnsureWorkingFileMatchesExpected(
+            repository,
+            AecApplication.SourceRelativePath,
+            expectedSource,
+            "Canonical source");
+        EnsureWorkingFileMatchesExpected(
+            repository,
+            AecApplication.ConfigSourceRelativePath,
+            expectedConfig,
+            "Canonical config");
+        StageManagedSources(repository);
+        var expectedSourceBlob = EnsureStagedBytesMatchWorkingFile(
+            repository,
+            AecApplication.SourceRelativePath,
+            "canonical source");
+        var expectedConfigBlob = EnsureStagedBytesMatchWorkingFile(
+            repository,
+            AecApplication.ConfigSourceRelativePath,
+            "canonical config");
+        EnsureBlobMatchesExpected(
+            repository,
+            expectedSourceBlob,
+            expectedSource,
+            "canonical source");
+        EnsureBlobMatchesExpected(
+            repository,
+            expectedConfigBlob,
+            expectedConfig,
+            "canonical config");
+        if (!allowEmpty && !HasStagedManagedChange(repository))
+        {
+            throw new InvalidOperationException(
+                "Canonical environment has no change to commit.");
+        }
+
+        EnsureNoChangesOutsideManagedSources(repository);
+        EnsureBranchMatches(repository, "refs/heads/main");
+        EnsureHeadMatches(repository, expectedParent);
+        CommitStagedIndex(
+            repository,
+            commitMessage,
+            [
+                (AecApplication.SourceRelativePath, expectedSourceBlob),
+                (AecApplication.ConfigSourceRelativePath, expectedConfigBlob)
+            ],
+            "refs/heads/main",
+            expectedParent);
+
+        var head = ResolveHead(repository);
+        VerifyCommitParent(repository, expectedParent);
+        VerifyManagedCommit(
+            repository,
+            expectedSourceBlob,
+            expectedConfigBlob,
+            commitMessage);
+        EnsureBranchMatches(repository, "refs/heads/main");
+        EnsureNoChangesOutsideManagedSources(repository);
         return head;
     }
 
@@ -313,7 +387,7 @@ internal static class BackupCommand
         }
     }
 
-    private static void EnsureNoChangesOutsideManagedSources(string repository)
+    internal static void EnsureNoChangesOutsideManagedSources(string repository)
     {
         var status = GitProcess.RunRequired(
             repository,
@@ -331,41 +405,6 @@ internal static class BackupCommand
         {
             throw new InvalidOperationException(
                 "Repository has changes outside the managed Codex environment files.");
-        }
-    }
-
-    private static void ReplaceSource(string sourcePath, byte[] content)
-    {
-        var directory = Path.GetDirectoryName(sourcePath)
-            ?? throw new InvalidOperationException($"Canonical source has no parent directory: {sourcePath}");
-        var temporaryPath = Path.Combine(directory, $".AGENTS.md.aec-{Guid.NewGuid():N}");
-
-        try
-        {
-            using (var stream = new FileStream(
-                       temporaryPath,
-                       FileMode.CreateNew,
-                       FileAccess.Write,
-                       FileShare.None))
-            {
-                stream.Write(content);
-                stream.Flush(flushToDisk: true);
-            }
-
-            File.Move(temporaryPath, sourcePath, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
-        }
-
-        var written = AecApplication.ReadRequiredTextFile(sourcePath, "Canonical source");
-        if (!written.AsSpan().SequenceEqual(content))
-        {
-            throw new IOException("Canonical source verification failed after writing the runtime data.");
         }
     }
 
@@ -454,21 +493,64 @@ internal static class BackupCommand
         }
     }
 
+    private static void EnsureWorkingFileMatchesExpected(
+        string repository,
+        string relativePath,
+        byte[] expected,
+        string label)
+    {
+        var path = Path.Combine(repository, relativePath);
+        var actual = AecApplication.ReadRequiredTextFile(path, label);
+        if (!actual.AsSpan().SequenceEqual(expected))
+        {
+            throw new InvalidOperationException(
+                $"{label} changed before the initialization commit.");
+        }
+    }
+
     private static void EnsureBlobMatchesExpected(
         string repository,
         string blob,
         byte[] expected)
     {
+        EnsureBlobMatchesExpected(
+            repository,
+            blob,
+            expected,
+            "canonical source");
+    }
+
+    private static void EnsureBlobMatchesExpected(
+        string repository,
+        string blob,
+        byte[] expected,
+        string label)
+    {
         var staged = GitProcess.RunRequiredBytes(
             repository,
-            "Git could not read the staged canonical source",
+            $"Git could not read the staged {label}",
             "cat-file",
             "blob",
             blob);
         if (!staged.AsSpan().SequenceEqual(expected))
         {
             throw new InvalidOperationException(
-                "Staged canonical source does not match the expected initialization content.");
+                $"Staged {label} does not match the expected initialization content.");
+        }
+    }
+
+    private static void VerifyCommitParent(string repository, string expectedParent)
+    {
+        var actualParent = GitProcess.RunRequired(
+            repository,
+            "Git could not verify the initialization commit parent",
+            "rev-parse",
+            "--verify",
+            "HEAD^").Output.Trim();
+        if (!string.Equals(actualParent, expectedParent, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Initialization commit parent changed during the operation.");
         }
     }
 
@@ -865,4 +947,7 @@ internal static class BackupCommand
                 "Repository branch changed during the canonical source commit.");
         }
     }
+
+    private sealed record InitializationBackupExpectation(
+        CodexPersonality? RuntimePersonality);
 }

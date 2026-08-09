@@ -382,8 +382,10 @@ public sealed class ApplyTests
                 layout.CodexHome,
                 output,
                 "captured runtime\n"u8.ToArray(),
+                CodexPersonality.None,
                 Git(layout, "rev-parse", "HEAD").Output.Trim(),
-                "desired\n"u8.ToArray()));
+                "desired\n"u8.ToArray(),
+                File.ReadAllBytes(layout.ConfigSource)));
 
         Assert.Contains("changed after", exception.Message, StringComparison.Ordinal);
         Assert.Empty(output.ToString());
@@ -402,8 +404,10 @@ public sealed class ApplyTests
             layout.CodexHome,
             output,
             "captured runtime\n"u8.ToArray(),
+            CodexPersonality.None,
             Git(layout, "rev-parse", "HEAD").Output.Trim(),
-            desired);
+            desired,
+            File.ReadAllBytes(layout.ConfigSource));
 
         Assert.Equal(0, exitCode);
         Assert.Equal($"unchanged{Environment.NewLine}", output.ToString());
@@ -411,30 +415,88 @@ public sealed class ApplyTests
     }
 
     [Fact]
-    public void InitializationApplyDoesNotRequireOrCreateConfigBeforeItsCheckpoint()
+    public void InitializationApplyCompletesConfigWhenAgentsAreAlreadyApplied()
+    {
+        var desired = "desired\n"u8.ToArray();
+        using var layout = new ApplyLayout(desired, desired);
+        File.Delete(layout.RuntimeConfig);
+        var output = new StringWriter();
+
+        var exitCode = ApplyCommand.RunForInitialization(
+            layout.Repository,
+            layout.CodexHome,
+            output,
+            "captured runtime\n"u8.ToArray(),
+            expectedRuntimePersonality: null,
+            Git(layout, "rev-parse", "HEAD").Output.Trim(),
+            desired,
+            File.ReadAllBytes(layout.ConfigSource));
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"applied{Environment.NewLine}", output.ToString());
+        Assert.Equal(desired, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal("personality = \"none\"\n", File.ReadAllText(layout.RuntimeConfig));
+    }
+
+    [Fact]
+    public void AttachmentApplyRejectsPersonalityChangedAfterPreflight()
+    {
+        var desired = "desired\n"u8.ToArray();
+        using var layout = new ApplyLayout(
+            desired,
+            "captured runtime\n"u8.ToArray(),
+            canonicalConfig: "personality = \"none\"\n"u8.ToArray(),
+            runtimeConfig: "personality = \"pragmatic\"\n"u8.ToArray());
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ApplyCommand.RunForAttachment(
+                layout.Repository,
+                layout.CodexHome,
+                TextWriter.Null,
+                TextWriter.Null,
+                "captured runtime\n"u8.ToArray(),
+                CodexPersonality.Friendly,
+                Git(layout, "rev-parse", "HEAD").Output.Trim(),
+                desired,
+                File.ReadAllBytes(layout.ConfigSource)));
+
+        Assert.Contains("personality changed", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("captured runtime\n", File.ReadAllText(layout.Runtime));
+        Assert.Equal("personality = \"pragmatic\"\n", File.ReadAllText(layout.RuntimeConfig));
+    }
+
+    [Fact]
+    public void InitializationApplyCreatesMissingRuntimeConfigFromItsCheckpoint()
     {
         var desired = "desired\n"u8.ToArray();
         using var layout = new ApplyLayout(
             desired,
             "captured runtime\n"u8.ToArray(),
             commitSource: false);
-        File.Delete(layout.ConfigSource);
         File.Delete(layout.RuntimeConfig);
-        Assert.Equal(0, Git(layout, "add", "--", SourceRelativePath).ExitCode);
-        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Source only").ExitCode);
+        Assert.Equal(
+            0,
+            Git(
+                layout,
+                "add",
+                "--",
+                SourceRelativePath,
+                ConfigSourceRelativePath).ExitCode);
+        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Managed environment").ExitCode);
 
         var exitCode = ApplyCommand.RunForInitialization(
             layout.Repository,
             layout.CodexHome,
             TextWriter.Null,
             "captured runtime\n"u8.ToArray(),
+            expectedRuntimePersonality: null,
             Git(layout, "rev-parse", "HEAD").Output.Trim(),
-            desired);
+            desired,
+            File.ReadAllBytes(layout.ConfigSource));
 
         Assert.Equal(0, exitCode);
         Assert.Equal(desired, File.ReadAllBytes(layout.Runtime));
-        Assert.False(File.Exists(layout.ConfigSource));
-        Assert.False(File.Exists(layout.RuntimeConfig));
+        Assert.Equal("personality = \"none\"\n", File.ReadAllText(layout.RuntimeConfig));
     }
 
     [Fact]
@@ -450,8 +512,10 @@ public sealed class ApplyTests
                 layout.CodexHome,
                 TextWriter.Null,
                 "captured runtime\n"u8.ToArray(),
+                CodexPersonality.None,
                 new string('0', 40),
-                "desired\n"u8.ToArray()));
+                "desired\n"u8.ToArray(),
+                File.ReadAllBytes(layout.ConfigSource)));
 
         Assert.Contains("HEAD changed", exception.Message, StringComparison.Ordinal);
         Assert.Equal("captured runtime\n", File.ReadAllText(layout.Runtime));
@@ -470,8 +534,10 @@ public sealed class ApplyTests
                 layout.CodexHome,
                 TextWriter.Null,
                 "captured runtime\n"u8.ToArray(),
+                CodexPersonality.None,
                 Git(layout, "rev-parse", "HEAD").Output.Trim(),
-                "other desired\n"u8.ToArray()));
+                "other desired\n"u8.ToArray(),
+                File.ReadAllBytes(layout.ConfigSource)));
 
         Assert.Contains("expected initialization content", exception.Message, StringComparison.Ordinal);
         Assert.Equal("captured runtime\n", File.ReadAllText(layout.Runtime));
@@ -768,7 +834,7 @@ public sealed class ApplyTests
         var exitCode = AecApplication.Run(["--version"], output, error);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"0.11.3{Environment.NewLine}", output.ToString());
+        Assert.Equal($"0.11.4{Environment.NewLine}", output.ToString());
         Assert.Empty(error.ToString());
     }
 

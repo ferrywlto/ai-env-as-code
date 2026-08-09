@@ -13,7 +13,6 @@ internal static class ApplyCommand
             codexHome,
             output,
             warning,
-            manageCodexConfig: true,
             initialization: null,
             repositoryExpectation: null);
     }
@@ -23,22 +22,26 @@ internal static class ApplyCommand
         string codexHome,
         TextWriter output,
         byte[] expectedRuntime,
+        CodexPersonality? expectedRuntimePersonality,
         string expectedCommit,
-        byte[] expectedSource)
+        byte[] expectedSource,
+        byte[] expectedConfig)
     {
         ArgumentNullException.ThrowIfNull(expectedRuntime);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedCommit);
         ArgumentNullException.ThrowIfNull(expectedSource);
+        ArgumentNullException.ThrowIfNull(expectedConfig);
         return Run(
             repository,
             codexHome,
             output,
             TextWriter.Null,
-            manageCodexConfig: false,
             initialization: new InitializationExpectation(
                 expectedRuntime,
+                expectedRuntimePersonality,
                 expectedCommit,
-                expectedSource),
+                expectedSource,
+                expectedConfig),
             repositoryExpectation: null);
     }
 
@@ -46,19 +49,28 @@ internal static class ApplyCommand
         string repository,
         string codexHome,
         TextWriter output,
+        TextWriter warning,
+        byte[]? expectedRuntime,
+        CodexPersonality? expectedRuntimePersonality,
         string expectedCommit,
-        byte[] expectedSource)
+        byte[] expectedSource,
+        byte[] expectedConfig)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedCommit);
         ArgumentNullException.ThrowIfNull(expectedSource);
+        ArgumentNullException.ThrowIfNull(expectedConfig);
         return Run(
             repository,
             codexHome,
             output,
-            TextWriter.Null,
-            manageCodexConfig: false,
+            warning,
             initialization: null,
-            repositoryExpectation: new RepositoryExpectation(expectedCommit, expectedSource));
+            repositoryExpectation: new RepositoryExpectation(
+                expectedRuntime,
+                expectedRuntimePersonality,
+                expectedCommit,
+                expectedSource,
+                expectedConfig));
     }
 
     private static int Run(
@@ -66,7 +78,6 @@ internal static class ApplyCommand
         string codexHome,
         TextWriter output,
         TextWriter warning,
-        bool manageCodexConfig,
         InitializationExpectation? initialization,
         RepositoryExpectation? repositoryExpectation)
     {
@@ -112,31 +123,37 @@ internal static class ApplyCommand
                 "Run `aec init` with the selected --repo path before applying it.");
         }
 
-        byte[]? canonicalConfig = null;
-        CodexPersonality? desiredPersonality = null;
-        if (manageCodexConfig)
+        var canonicalConfig = ReadCommittedConfig(repository, commit);
+        if (initialization is not null &&
+            !canonicalConfig.AsSpan().SequenceEqual(initialization.Config))
         {
-            canonicalConfig = ReadCommittedConfig(repository, commit);
-            desiredPersonality = CodexPersonalityConfig.ReadCanonical(
-                canonicalConfig,
-                Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
+            throw new InvalidOperationException(
+                "Committed config does not match the expected initialization content.");
         }
+        if (repositoryExpectation is not null &&
+            !canonicalConfig.AsSpan().SequenceEqual(repositoryExpectation.Config))
+        {
+            throw new InvalidOperationException(
+                "Committed config changed before attachment apply.");
+        }
+
+        var desiredPersonality = CodexPersonalityConfig.ReadCanonical(
+            canonicalConfig,
+            Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
 
         var runtimePath = Path.Combine(codexHome, "AGENTS.md");
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
         var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
-        byte[]? runtimeConfig = null;
-        RuntimeConfigUpdate configUpdate = default;
-        if (manageCodexConfig)
-        {
-            runtimeConfig = AecApplication.ReadOptionalTextFile(runtimeConfigPath, "Runtime config");
-            // Build and validate the config edit before either runtime file is
-            // changed, so malformed TOML cannot cause a partial ordinary apply.
-            configUpdate = CodexPersonalityConfig.PlanRuntimeUpdate(
-                runtimeConfig,
-                runtimeConfigPath,
-                desiredPersonality!.Value);
-        }
+        var runtimeConfig = AecApplication.ReadOptionalTextFile(runtimeConfigPath, "Runtime config");
+        var runtimePersonality = runtimeConfig is null
+            ? null
+            : CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath);
+        // Build and validate the config edit before either runtime file is
+        // changed, so malformed TOML cannot cause a partial apply.
+        var configUpdate = CodexPersonalityConfig.PlanRuntimeUpdate(
+            runtimeConfig,
+            runtimeConfigPath,
+            desiredPersonality);
 
         // Revalidate provenance after observing runtime so a concurrent checkout or canonical edit stops apply.
         var currentCommit = ResolveHeadCommit(repository);
@@ -151,17 +168,14 @@ internal static class ApplyCommand
             throw new InvalidOperationException("Canonical source changed during apply.");
         }
 
-        if (manageCodexConfig)
+        var refreshedConfig = ReadCommittedConfig(repository, commit);
+        if (!refreshedConfig.AsSpan().SequenceEqual(canonicalConfig))
         {
-            var refreshedConfig = ReadCommittedConfig(repository, commit);
-            if (!refreshedConfig.AsSpan().SequenceEqual(canonicalConfig))
-            {
-                throw new InvalidOperationException("Canonical config changed during apply.");
-            }
+            throw new InvalidOperationException("Canonical config changed during apply.");
         }
 
         var agentsChanged = runtime is null || !runtime.AsSpan().SequenceEqual(source);
-        if (!agentsChanged && (!manageCodexConfig || !configUpdate.Changed))
+        if (!agentsChanged && !configUpdate.Changed)
         {
             output.WriteLine("unchanged");
             return 0;
@@ -169,13 +183,44 @@ internal static class ApplyCommand
 
         // Init may overwrite only the exact runtime bytes captured by its baseline commit.
         if (initialization is not null &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(initialization.Runtime)))
+            (runtime is null || !runtime.AsSpan().SequenceEqual(initialization.Runtime)) &&
+            (runtime is null || !runtime.AsSpan().SequenceEqual(source)))
         {
             throw new InvalidOperationException(
                 "Runtime target changed after the initialization backup; committed source was not applied.");
         }
 
-        if (manageCodexConfig && configUpdate.Changed)
+        if (initialization is not null &&
+            runtimePersonality != initialization.RuntimePersonality &&
+            runtimePersonality != desiredPersonality)
+        {
+            throw new InvalidOperationException(
+                "Runtime personality changed after the initialization backup; " +
+                "the committed environment was not applied.");
+        }
+
+        // Attachment uses the runtime snapshot taken before skill installation or
+        // a path-rebind commit. The already-desired state is also accepted so a
+        // previously interrupted apply remains safely repeatable.
+        if (repositoryExpectation is not null &&
+            !MatchesOptionalBytes(runtime, repositoryExpectation.Runtime) &&
+            (runtime is null || !runtime.AsSpan().SequenceEqual(source)))
+        {
+            throw new InvalidOperationException(
+                "Runtime target changed during AEC attachment; " +
+                "the committed environment was not applied.");
+        }
+
+        if (repositoryExpectation is not null &&
+            runtimePersonality != repositoryExpectation.RuntimePersonality &&
+            runtimePersonality != desiredPersonality)
+        {
+            throw new InvalidOperationException(
+                "Runtime personality changed during AEC attachment; " +
+                "the committed environment was not applied.");
+        }
+
+        if (configUpdate.Changed)
         {
             if (configUpdate.Inserted)
             {
@@ -268,7 +313,7 @@ internal static class ApplyCommand
             "Canonical source");
     }
 
-    private static byte[] ReadCommittedConfig(string repository, string commit)
+    internal static byte[] ReadCommittedConfig(string repository, string commit)
     {
         return ReadCommittedFile(
             repository,
@@ -442,8 +487,22 @@ internal static class ApplyCommand
 
     private sealed record InitializationExpectation(
         byte[] Runtime,
+        CodexPersonality? RuntimePersonality,
         string Commit,
-        byte[] Source);
+        byte[] Source,
+        byte[] Config);
 
-    private sealed record RepositoryExpectation(string Commit, byte[] Source);
+    private static bool MatchesOptionalBytes(byte[]? left, byte[]? right)
+    {
+        return left is null
+            ? right is null
+            : right is not null && left.AsSpan().SequenceEqual(right);
+    }
+
+    private sealed record RepositoryExpectation(
+        byte[]? Runtime,
+        CodexPersonality? RuntimePersonality,
+        string Commit,
+        byte[] Source,
+        byte[] Config);
 }
