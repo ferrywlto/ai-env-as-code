@@ -1,7 +1,7 @@
 # AI Environment as Code
 
-Version 0.11.2 applies the first managed Codex `config.toml` value from committed
-canonical data while preserving machine-owned runtime settings.
+Version 0.11.3 captures the first managed Codex `config.toml` value from runtime
+alongside instructions in one source-of-truth Git commit.
 
 ## Version history
 
@@ -19,8 +19,9 @@ canonical data while preserving machine-owned runtime settings.
 | 0.10 | Attach pulled repositories and explicitly rebind moved paths |
 | 0.11.1 | Compare managed Codex `personality` state through `status` |
 | 0.11.2 | Apply committed Codex `personality` while preserving runtime config |
+| 0.11.3 | Back up runtime Codex `personality` with runtime instructions |
 
-The project and CLI report the current release as `0.11.2`.
+The project and CLI report the current release as `0.11.3`.
 
 ## apply
 
@@ -109,34 +110,52 @@ aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 ```text
 <codex-home>/AGENTS.md
   -> <repo>/environment/providers/codex/AGENTS.md
-  -> Git commit in <repo>
+<codex-home>/config.toml personality
+  -> <repo>/environment/providers/codex/config.toml personality
+both canonical paths
+  -> one Git commit in <repo>
 ```
 
 The repository must be the exact root of a non-bare Git working tree on a symbolic
-branch. Before changing the canonical source, the command rejects staged, unstaged,
-or untracked changes anywhere else in the repository. A pending change to the
-canonical source itself is allowed: the runtime file replaces it, or an already
-equal staged copy is committed. This lets a rerun resume after a prior commit
-failure.
+branch. Before changing canonical data, the command rejects staged, unstaged, or
+untracked changes outside the two fixed managed paths. Pending changes at either
+managed path are allowed so a rerun can resume after an interrupted write or failed
+commit.
 
-When the runtime bytes differ, the canonical source is replaced through a flushed
-temporary file in the same directory and read back for verification. The command
-then stages only the fixed canonical path and creates a commit with this subject:
+Both runtime files and any existing canonical config are read and validated before
+either canonical file changes. A missing runtime `config.toml` or missing root
+`personality` prints a warning on standard error and returns exit code 1 without
+changing or staging repository data. Invalid, duplicate, ambiguous, or unsupported
+values also stop before capture.
+
+`AGENTS.md` is captured byte-for-byte. If canonical `config.toml` is absent, backup
+creates its minimal normalized managed value. Otherwise it replaces only the value
+token when its meaning differs, preserving canonical comments, spacing, line
+endings, and an optional UTF-8 byte-order mark. Unrelated runtime settings are never
+copied or changed.
+
+Each changed canonical file is replaced through its own flushed sibling temporary
+file, compare-before-replace check, and post-write verification. Two files cannot
+form one portable atomic filesystem transaction; interruption between them leaves
+only recognizable managed working changes that another `backup` can resume. The
+command stages only the two fixed canonical paths and creates one commit with this
+subject:
 
 ```text
-Backup Codex AGENTS.md
+Backup Codex environment
 ```
 
-Git filters that would change the bytes while staging are rejected before commit.
-Configured Git hooks are isolated from the backup commit so they cannot alter the
-verified bytes or fixed subject; both are checked again after the commit.
-On success, the command writes `committed <full-sha>`. When the runtime, working
-file, index, and current commit already agree, it writes `unchanged`. Both outcomes
-return exit code 0; validation and Git failures return exit code 1.
+Git filters that would change either file's bytes while staging are rejected before
+commit. Configured Git hooks are isolated from the backup commit so they cannot
+alter the verified bytes or fixed subject; both managed blobs and the subject are
+checked again after the commit. On success, the command writes
+`committed <full-sha>`. When both managed values, working files, index, and current
+commit already agree, it writes `unchanged`. Both outcomes return exit code 0;
+validation and Git failures return exit code 1.
 
 There is no separate backup directory or backup manifest. Git commit history is the
-source of truth. This increment does not push, write the runtime target, or implement
-the inverse `restore` direction.
+source of truth. `backup` does not push or write runtime state; `apply` remains the
+separate repository-to-runtime command.
 
 ## init
 
@@ -397,7 +416,7 @@ files over 1 MiB, invalid UTF-8, duplicate or ambiguous managed declarations,
 unsupported personality values, and file-system failures write a diagnostic to
 standard error and return exit code 1 without partial status output.
 
-## Planned Codex configuration ownership
+## Codex configuration ownership
 
 AEC manages selected personal Codex settings rather than copying the whole runtime
 `config.toml`. The canonical source is:
@@ -428,12 +447,11 @@ backup: existing runtime managed values -> canonical values -> Git commit
 apply:  committed canonical values -> runtime managed values
 ```
 
-`init` captures an existing supported runtime value. When the key is absent, `init`
-warns before adding `personality = "none"` and creating the canonical config.
 `apply` warns before inserting a missing runtime key and otherwise replaces only the
 managed value. `backup` remains strictly runtime-to-repository: when the key is
-absent, it warns and stops without changing either side. Configuration `backup` and
-initialization remain later v0.11 checkpoints.
+absent, it warns and stops without changing either side. The planned v0.11.4
+checkpoint will extend `init` to capture an existing supported runtime value or warn
+before adding `personality = "none"` and creating canonical config.
 
 ## Build, test, and run
 

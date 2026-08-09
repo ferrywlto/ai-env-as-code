@@ -42,6 +42,7 @@ internal static class CodexPersonalityConfig
             return CreateUpdate(
                 StrictUtf8.GetBytes($"personality = \"{ToConfigValue(desired)}\"\n"),
                 path,
+                "Runtime config",
                 inserted: true);
         }
 
@@ -68,19 +69,64 @@ internal static class CodexPersonalityConfig
                 parsed.Text.AsSpan(parsed.ValueStart + parsed.ValueLength));
         }
 
-        return CreateUpdate(Encode(updated, parsed.HasBom), path, inserted);
+        return CreateUpdate(
+            Encode(updated, parsed.HasBom),
+            path,
+            "Runtime config",
+            inserted);
+    }
+
+    internal static RuntimeConfigUpdate PlanCanonicalUpdate(
+        byte[]? content,
+        string path,
+        CodexPersonality desired)
+    {
+        if (content is null)
+        {
+            return CreateUpdate(
+                StrictUtf8.GetBytes($"personality = \"{ToConfigValue(desired)}\"\n"),
+                path,
+                "Canonical config",
+                inserted: true);
+        }
+
+        var parsed = Read(content, "Canonical config", path, canonical: true);
+        if (parsed.Personality is null)
+        {
+            throw new InvalidDataException(
+                $"Canonical config does not declare personality: {path}");
+        }
+
+        if (parsed.Personality == desired)
+        {
+            return new RuntimeConfigUpdate(content, Changed: false, Inserted: false);
+        }
+
+        // Replace only the managed TOML value so comments, spacing, line endings,
+        // and a possible UTF-8 BOM remain exactly as the user authored them.
+        var value = $"\"{ToConfigValue(desired)}\"";
+        var updated = string.Concat(
+            parsed.Text.AsSpan(0, parsed.ValueStart),
+            value,
+            parsed.Text.AsSpan(parsed.ValueStart + parsed.ValueLength));
+        return CreateUpdate(
+            Encode(updated, parsed.HasBom),
+            path,
+            "Canonical config",
+            inserted: false);
     }
 
     private static RuntimeConfigUpdate CreateUpdate(
         byte[] content,
         string path,
+        string label,
         bool inserted)
     {
-        // Validate the planned bytes before ApplyCommand can mutate either runtime file.
+        // Validate planned bytes before either command can mutate its destination.
         if (content.Length > AecApplication.MaximumTextBytes)
         {
             throw new InvalidDataException(
-                $"Runtime config would exceed 1 MiB after applying personality: {path}");
+                $"{label} would exceed 1 MiB after updating personality: {path}");
         }
 
         return new RuntimeConfigUpdate(content, Changed: true, Inserted: inserted);

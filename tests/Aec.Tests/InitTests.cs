@@ -956,15 +956,13 @@ public sealed class InitTests
         Directory.CreateDirectory(Path.GetDirectoryName(layout.Source)!);
         File.WriteAllBytes(layout.Source, File.ReadAllBytes(layout.Runtime));
 
-        var output = new StringWriter();
-        var error = new StringWriter();
-        var exitCode = AecApplication.Run(
-            ["backup", "--repo", layout.Target, "--codex-home", layout.CodexHome],
-            output,
-            error);
-
+        // Partial initialization has a deliberately legacy AGENTS-only baseline;
+        // ordinary backup now captures the complete managed environment.
+        var exitCode = BackupCommand.RunForInitialization(
+            layout.Target,
+            layout.CodexHome,
+            TextWriter.Null);
         Assert.Equal(0, exitCode);
-        Assert.Empty(error.ToString());
         return RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
     }
 

@@ -6,9 +6,198 @@ namespace Aec.Tests;
 public sealed class BackupTests
 {
     private const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
+    private const string ConfigSourceRelativePath = "environment/providers/codex/config.toml";
 
     [Fact]
-    public void FirstBackupCommitsTheRuntimeFile()
+    public void CapturesManagedEnvironmentInOneCommit()
+    {
+        const string runtimeConfig =
+            "model = \"gpt-test\"\n" +
+            "personality = 'friendly'\n" +
+            "[projects.\"/tmp/example\"]\ntrust_level = \"trusted\"\n";
+        using var layout = new BackupLayout("runtime\n", runtimeConfig);
+        var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
+        Assert.Empty(result.Error);
+        Assert.Equal("runtime\n", File.ReadAllText(layout.Source));
+        Assert.Equal("personality = \"friendly\"\n", File.ReadAllText(layout.ConfigSource));
+        Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
+        Assert.Equal(
+            "Backup Codex environment",
+            Git(layout, "log", "-1", "--format=%s").Output.Trim());
+        Assert.Equal(
+            $"{SourceRelativePath}{Environment.NewLine}{ConfigSourceRelativePath}",
+            Git(
+                layout,
+                "ls-tree",
+                "--name-only",
+                "-r",
+                "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void MissingRuntimePersonalityWarnsAndStopsWithoutRepositoryMutation()
+    {
+        using var layout = new BackupLayout("runtime\n", "model = \"gpt-test\"\n");
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
+        Assert.Contains("personality", result.Error, StringComparison.Ordinal);
+        Assert.Contains("stopped", result.Error, StringComparison.Ordinal);
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.False(File.Exists(layout.ConfigSource));
+        Assert.NotEqual(0, Git(layout, "rev-parse", "--verify", "HEAD").ExitCode);
+        Assert.Equal(string.Empty, Git(layout, "diff", "--cached", "--name-only").Output);
+    }
+
+    [Fact]
+    public void MissingRuntimeConfigWarnsAndStopsWithoutRepositoryMutation()
+    {
+        using var layout = new BackupLayout("runtime\n", runtimeConfig: null);
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
+        Assert.Contains("personality", result.Error, StringComparison.Ordinal);
+        Assert.Contains("stopped", result.Error, StringComparison.Ordinal);
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.False(File.Exists(layout.ConfigSource));
+        Assert.NotEqual(0, Git(layout, "rev-parse", "--verify", "HEAD").ExitCode);
+        Assert.Equal(string.Empty, Git(layout, "diff", "--cached", "--name-only").Output);
+    }
+
+    [Fact]
+    public void ConfigOnlyChangeCreatesACommitForOnlyCanonicalConfig()
+    {
+        using var layout = new BackupLayout("same\n");
+        Assert.Equal(0, Run(layout).ExitCode);
+        File.WriteAllText(
+            layout.RuntimeConfig,
+            "model = \"gpt-test\"\npersonality = \"friendly\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
+        Assert.Empty(result.Error);
+        Assert.Equal("same\n", File.ReadAllText(layout.Source));
+        Assert.Equal("personality = \"friendly\"\n", File.ReadAllText(layout.ConfigSource));
+        Assert.Equal(
+            ConfigSourceRelativePath,
+            Git(layout, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void ConfigUpdatePreservesCanonicalFormattingAndRuntimeBytes()
+    {
+        using var layout = new BackupLayout("same\n");
+        Assert.Equal(0, Run(layout).ExitCode);
+        byte[] canonicalBefore =
+        [
+            0xEF, 0xBB, 0xBF,
+            .. "# keep this comment\r\npersonality\t = 'none' # keep this too\r\n"u8.ToArray()
+        ];
+        var runtimeBefore =
+            "model = \"gpt-test\"\r\npersonality = 'pragmatic'\r\n"u8.ToArray();
+        File.WriteAllBytes(layout.ConfigSource, canonicalBefore);
+        File.WriteAllBytes(layout.RuntimeConfig, runtimeBefore);
+        byte[] expectedCanonical =
+        [
+            0xEF, 0xBB, 0xBF,
+            .. "# keep this comment\r\npersonality\t = \"pragmatic\" # keep this too\r\n"u8.ToArray()
+        ];
+
+        var result = Run(layout);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Error);
+        Assert.Equal(expectedCanonical, File.ReadAllBytes(layout.ConfigSource));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.RuntimeConfig));
+        Assert.Equal(
+            ConfigSourceRelativePath,
+            Git(layout, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").Output.Trim());
+    }
+
+    [Fact]
+    public void InvalidRuntimeConfigStopsBeforeCapturingAgents()
+    {
+        using var layout = new BackupLayout("first\n");
+        Assert.Equal(0, Run(layout).ExitCode);
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+        File.WriteAllText(layout.Runtime, "second\n");
+        File.WriteAllText(
+            layout.RuntimeConfig,
+            "personality = \"friendly\"\npersonality = \"pragmatic\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("more than once", result.Error, StringComparison.Ordinal);
+        Assert.Equal("first\n", File.ReadAllText(layout.Source));
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, Git(layout, "diff", "--cached", "--name-only").Output);
+    }
+
+    [Fact]
+    public void InvalidCanonicalConfigStopsBeforeCapturingAgents()
+    {
+        using var layout = new BackupLayout("first\n");
+        Assert.Equal(0, Run(layout).ExitCode);
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+        File.WriteAllText(layout.Runtime, "second\n");
+        File.WriteAllText(
+            layout.ConfigSource,
+            "personality = \"none\"\nmodel = \"must-not-be-managed\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("unmanaged setting", result.Error, StringComparison.Ordinal);
+        Assert.Equal("first\n", File.ReadAllText(layout.Source));
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, Git(layout, "diff", "--cached", "--name-only").Output);
+    }
+
+    [Fact]
+    public void GitFiltersThatChangeCanonicalConfigBytesStopBeforeCommit()
+    {
+        using var layout = new BackupLayout("same\n");
+        Assert.Equal(0, Run(layout).ExitCode);
+        File.WriteAllText(
+            Path.Combine(layout.Repository, ".gitattributes"),
+            $"{ConfigSourceRelativePath} text eol=lf\n");
+        Assert.Equal(0, Git(layout, "add", "--", ".gitattributes").ExitCode);
+        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Test attributes").ExitCode);
+        var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
+        File.WriteAllBytes(layout.ConfigSource, "personality = \"friendly\"\r\n"u8.ToArray());
+        File.WriteAllText(layout.RuntimeConfig, "personality = \"friendly\"\n");
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("filters changed", result.Error, StringComparison.Ordinal);
+        Assert.Contains("canonical config", result.Error, StringComparison.Ordinal);
+        Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(
+            ConfigSourceRelativePath,
+            Git(layout, "diff", "--cached", "--name-only").Output.Trim());
+    }
+
+    [Fact]
+    public void FirstBackupCommitsTheRuntimeManagedFiles()
     {
         using var layout = new BackupLayout("runtime\n");
 
@@ -19,18 +208,12 @@ public sealed class BackupTests
         var head = Git(layout, "rev-parse", "--verify", "HEAD").Output.Trim();
         Assert.Equal($"committed {head}{Environment.NewLine}", result.Output);
         Assert.Equal("runtime\n", File.ReadAllText(layout.Source));
-        Assert.Equal(SourceRelativePath, Git(layout, "ls-tree", "-r", "--name-only", "HEAD").Output.Trim());
-        Assert.Equal("Backup Codex AGENTS.md", Git(layout, "log", "-1", "--format=%s").Output.Trim());
+        Assert.Equal(
+            $"{SourceRelativePath}{Environment.NewLine}{ConfigSourceRelativePath}",
+            Git(layout, "ls-tree", "-r", "--name-only", "HEAD").Output.Trim());
+        Assert.Equal("Backup Codex environment", Git(layout, "log", "-1", "--format=%s").Output.Trim());
         Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
 
-        // Config management is initialized by a later v0.11 checkpoint. Seed its
-        // canonical and runtime values here so this test remains focused on backup.
-        File.WriteAllText(
-            Path.Combine(layout.Repository, AecApplication.ConfigSourceRelativePath),
-            "personality = \"none\"\n");
-        File.WriteAllText(
-            Path.Combine(layout.CodexHome, "config.toml"),
-            "personality = \"none\"\n");
         var statusOutput = new StringWriter();
         var statusError = new StringWriter();
         var statusExitCode = AecApplication.Run(
@@ -107,7 +290,9 @@ public sealed class BackupTests
         Assert.Equal(1, failed.ExitCode);
         Assert.Contains("could not commit", failed.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("pending\n", File.ReadAllText(layout.Source));
-        Assert.Equal(SourceRelativePath, Git(layout, "diff", "--cached", "--name-only").Output.Trim());
+        Assert.Equal(
+            $"{SourceRelativePath}{Environment.NewLine}{ConfigSourceRelativePath}",
+            Git(layout, "diff", "--cached", "--name-only").Output.Trim());
         Assert.NotEqual(0, Git(layout, "rev-parse", "--verify", "HEAD").ExitCode);
 
         Assert.Equal(0, Git(layout, "config", "--local", "user.name", "AEC Tests").ExitCode);
@@ -150,8 +335,88 @@ public sealed class BackupTests
         Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
         Assert.Equal("runtime\n", File.ReadAllText(layout.Source));
         Assert.Equal("runtime\n", Git(layout, "show", $"HEAD:{SourceRelativePath}").Output);
-        Assert.Equal("Backup Codex AGENTS.md", Git(layout, "log", "-1", "--format=%s").Output.Trim());
+        Assert.Equal("Backup Codex environment", Git(layout, "log", "-1", "--format=%s").Output.Trim());
         Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
+    }
+
+    [Fact]
+    public void CommitUsesStagedSnapshotInsteadOfRereadingWorkingFiles()
+    {
+        using var layout = new BackupLayout("unused\n");
+        File.WriteAllText(layout.Source, "staged\n");
+        File.WriteAllText(layout.ConfigSource, "personality = \"none\"\n");
+        Assert.Equal(
+            0,
+            Git(
+                layout,
+                "add",
+                "--",
+                SourceRelativePath,
+                ConfigSourceRelativePath).ExitCode);
+        File.WriteAllText(layout.Source, "changed after staging\n");
+
+        var stagedSource = Git(
+            layout,
+            "rev-parse",
+            $":{SourceRelativePath}").Output.Trim();
+        var stagedConfig = Git(
+            layout,
+            "rev-parse",
+            $":{ConfigSourceRelativePath}").Output.Trim();
+        BackupCommand.CommitStagedIndex(
+            layout.Repository,
+            "Pinned test commit",
+            [
+                (SourceRelativePath, stagedSource),
+                (ConfigSourceRelativePath, stagedConfig)
+            ]);
+
+        Assert.Equal("staged\n", Git(layout, "show", $"HEAD:{SourceRelativePath}").Output);
+        Assert.Equal("changed after staging\n", File.ReadAllText(layout.Source));
+        Assert.Equal(
+            "Pinned test commit",
+            Git(layout, "log", "-1", "--format=%s").Output.Trim());
+        Assert.Equal(
+            $" M {SourceRelativePath}",
+            Git(layout, "status", "--porcelain").Output.TrimEnd());
+    }
+
+    [Fact]
+    public void CommitRejectsAnUnrelatedIndexChangeAfterManagedVerification()
+    {
+        using var layout = new BackupLayout("unused\n");
+        File.WriteAllText(layout.Source, "staged\n");
+        File.WriteAllText(layout.ConfigSource, "personality = \"none\"\n");
+        Assert.Equal(
+            0,
+            Git(
+                layout,
+                "add",
+                "--",
+                SourceRelativePath,
+                ConfigSourceRelativePath).ExitCode);
+        var stagedSource = Git(
+            layout,
+            "rev-parse",
+            $":{SourceRelativePath}").Output.Trim();
+        var stagedConfig = Git(
+            layout,
+            "rev-parse",
+            $":{ConfigSourceRelativePath}").Output.Trim();
+        File.WriteAllText(Path.Combine(layout.Repository, "unrelated.txt"), "unexpected\n");
+        Assert.Equal(0, Git(layout, "add", "--", "unrelated.txt").ExitCode);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => BackupCommand.CommitStagedIndex(
+                layout.Repository,
+                "Must not commit",
+                [
+                    (SourceRelativePath, stagedSource),
+                    (ConfigSourceRelativePath, stagedConfig)
+                ]));
+
+        Assert.Contains("outside the approved", exception.Message, StringComparison.Ordinal);
+        Assert.NotEqual(0, Git(layout, "rev-parse", "--verify", "HEAD").ExitCode);
     }
 
     [Fact]
@@ -482,17 +747,25 @@ public sealed class BackupTests
 
     private sealed class BackupLayout : IDisposable
     {
-        public BackupLayout(string runtimeContent)
+        public BackupLayout(
+            string runtimeContent,
+            string? runtimeConfig = "personality = \"none\"\n")
         {
             Root = Path.Combine(RealTemporaryDirectory(), "aec-backup-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data repository");
             CodexHome = Path.Combine(Root, "codex home");
             Source = Path.Combine(Repository, SourceRelativePath);
+            ConfigSource = Path.Combine(Repository, ConfigSourceRelativePath);
             Runtime = Path.Combine(CodexHome, "AGENTS.md");
+            RuntimeConfig = Path.Combine(CodexHome, "config.toml");
 
             Directory.CreateDirectory(Root);
             Directory.CreateDirectory(CodexHome);
             File.WriteAllText(Runtime, runtimeContent);
+            if (runtimeConfig is not null)
+            {
+                File.WriteAllText(RuntimeConfig, runtimeConfig);
+            }
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
             var init = RunGit(
                 Repository,
@@ -522,7 +795,11 @@ public sealed class BackupTests
 
         public string Source { get; }
 
+        public string ConfigSource { get; }
+
         public string Runtime { get; }
+
+        public string RuntimeConfig { get; }
 
         public void Dispose()
         {

@@ -45,8 +45,9 @@
 - [x] Release the read-only status checkpoint as v0.11.1.
 - [x] Extend `apply` to update or warn before inserting managed runtime values.
 - [x] Document and release the repository-to-runtime checkpoint as v0.11.2.
-- [ ] Extend `backup` to capture existing managed values and warn and stop when
+- [x] Extend `backup` to capture existing managed values and warn and stop when
   they are missing.
+- [x] Document and release the runtime-to-repository checkpoint as v0.11.3.
 - [ ] Extend `init` to enroll existing values or warn before adding the default.
 - [ ] Update help, skill guidance, and final documentation as their checkpoints land.
 - [ ] Pass Debug, Release, and macOS ARM64 Native AOT validation.
@@ -94,5 +95,5 @@
 
 ## Immediate next work
 
-Extend only `backup` to capture an existing managed value and warn and stop when it
-is missing. Do not add initialization behavior in the same increment.
+Extend only `init` to enroll an existing managed value or warn before adding the
+`none` default. Keep ordinary `backup` and `apply` behavior unchanged.

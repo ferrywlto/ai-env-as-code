@@ -63,7 +63,7 @@ internal static class InitCommand
             AecSkillInstaller.Install(codexHome);
             InitializeRepository(directoryPath);
 
-            BackupCommand.Run(directoryPath, codexHome, TextWriter.Null);
+            BackupCommand.RunForInitialization(directoryPath, codexHome, TextWriter.Null);
             baseline = LoadBaseline(directoryPath, runtimePath);
         }
         else
