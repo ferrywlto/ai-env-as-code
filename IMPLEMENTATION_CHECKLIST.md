@@ -52,8 +52,8 @@
 - [x] Extend `init` to enroll existing values or warn before adding the default.
 - [x] Document the two-file initialization history, missing-value default, and
   legacy-history compatibility for v0.11.4.
-- [ ] Update the installed skill guidance for the completed v0.11 command set.
-- [ ] Pass Debug, Release, and macOS ARM64 Native AOT validation.
+- [x] Update the bundled skill guidance for the completed v0.11 command set.
+- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
 
 ## v0.9 — Commit-first initialization
 
@@ -98,5 +98,4 @@
 
 ## Immediate next work
 
-Reconcile the installed `$aec` skill guidance with the completed managed-config
-flows, then run the final v0.11.4 release validation.
+Review and approve the exact v0.11.4 skill-reconciliation paths for a local commit.

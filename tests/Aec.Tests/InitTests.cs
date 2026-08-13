@@ -199,8 +199,11 @@ public sealed class InitTests
         var skillRoot = Path.Combine(layout.CodexHome, "skills", "aec");
         var skill = File.ReadAllText(Path.Combine(skillRoot, "SKILL.md"));
         Assert.Contains("name: aec", skill, StringComparison.Ordinal);
-        Assert.Contains("runtime → repository", skill, StringComparison.Ordinal);
-        Assert.Contains("committed repository → runtime", skill, StringComparison.Ordinal);
+        Assert.Contains("Back up runtime to Git", skill, StringComparison.Ordinal);
+        Assert.Contains("Apply Git to runtime", skill, StringComparison.Ordinal);
+        Assert.Contains("Backup Codex environment", skill, StringComparison.Ordinal);
+        Assert.Contains("managed root `personality`", skill, StringComparison.Ordinal);
+        Assert.Contains("preserves unrelated runtime", skill, StringComparison.Ordinal);
         Assert.Contains("aec init --repo ABSOLUTE_PATH", skill, StringComparison.Ordinal);
         Assert.DoesNotContain("aec init ABSOLUTE_DIRECTORY", skill, StringComparison.Ordinal);
         var openAi = File.ReadAllText(Path.Combine(skillRoot, "agents", "openai.yaml"));
