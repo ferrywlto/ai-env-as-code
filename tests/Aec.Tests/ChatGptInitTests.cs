@@ -445,6 +445,8 @@ public sealed class ChatGptInitTests
 
         Assert.Equal(0, result.ExitCode);
         Assert.Empty(result.Error);
+        Assert.Contains("aec version", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("aec --version", result.Output, StringComparison.Ordinal);
         Assert.Contains(
             "aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]",
             result.Output,
@@ -462,7 +464,9 @@ public sealed class ChatGptInitTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
-        Assert.Contains("Use `aec help` for usage.", result.Error, StringComparison.Ordinal);
+        Assert.Equal(
+            $"error: A command is required. Use `aec help` for usage.{Environment.NewLine}",
+            result.Error);
     }
 
     [Fact]

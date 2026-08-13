@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 0.11.4 enrolls the first managed Codex `config.toml` value during `init`,
-so a new repository starts with both instructions and managed configuration in its
-source-of-truth history.
+Version 0.12.0 aligns version reporting with the command-oriented CLI grammar:
+`aec version` reports the executable version, while the removed `aec --version`
+form is rejected like any other unknown command.
 
 ## Version history
 
@@ -22,8 +22,19 @@ source-of-truth history.
 | 0.11.2 | Apply committed Codex `personality` while preserving runtime config |
 | 0.11.3 | Back up runtime Codex `personality` with runtime instructions |
 | 0.11.4 | Enroll Codex `personality` in the initial environment baseline |
+| 0.12.0 | Report the executable version through the `version` command |
 
-The project and CLI report the current release as `0.11.4`.
+The project and CLI report the current release as `0.12.0` through `aec version`.
+
+## version
+
+```text
+aec version
+```
+
+`version` reports the installed AEC executable release without reading or changing
+a data repository or runtime state. It accepts no options or operands. The former
+`aec --version` form is unsupported.
 
 ## apply
 
@@ -476,7 +487,7 @@ uses xUnit and has no coverage dependency.
 ```bash
 dotnet build src/Aec/Aec.csproj
 dotnet test tests/Aec.Tests/Aec.Tests.csproj
-dotnet run --project src/Aec/Aec.csproj -- --version
+dotnet run --project src/Aec/Aec.csproj -- version
 dotnet run --project src/Aec/Aec.csproj -- help
 dotnet run --project src/Aec/Aec.csproj -- \
   init \
@@ -562,7 +573,7 @@ rm "$HOME/.local/bin/aec"
 
 This removes only the executable. It preserves AEC data repositories, runtime
 instructions, and the installed `$aec` skill. Safe upgrades of an existing `$aec`
-skill remain deferred to the next increment. For a custom installation, remove
+skill remain deferred to a future increment. For a custom installation, remove
 `aec` from the directory passed to `--install-dir` instead.
 
 ## Current boundaries

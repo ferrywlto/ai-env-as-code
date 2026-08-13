@@ -25,14 +25,9 @@ public static class AecApplication
                 return 0;
             }
 
-            if (args.Length == 1 && args[0] == "--version")
-            {
-                WriteVersion(output);
-                return 0;
-            }
-
             return args[0] switch
             {
+                "version" => RunVersion(args, output),
                 "status" => RunStatus(ParseRepositoryArguments(args, "status"), output),
                 "backup" => RunBackup(ParseRepositoryArguments(args, "backup"), output, error),
                 "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output, error),
@@ -88,6 +83,17 @@ public static class AecApplication
         output.WriteLine($"codex/AGENTS.md   {agentsStatus}");
         output.WriteLine($"codex/config.toml {configStatus}");
         return agentsStatus == "in_sync" && configStatus == "in_sync" ? 0 : 2;
+    }
+
+    private static int RunVersion(string[] args, TextWriter output)
+    {
+        if (args.Length > 1)
+        {
+            throw new ArgumentException($"Unknown argument: {args[1]}");
+        }
+
+        WriteVersion(output);
+        return 0;
     }
 
     private static string CompareExactBytes(byte[] desired, byte[]? current)
@@ -501,7 +507,7 @@ public static class AecApplication
     {
         output.WriteLine("Usage:");
         output.WriteLine("  aec help");
-        output.WriteLine("  aec --version");
+        output.WriteLine("  aec version");
         output.WriteLine(
             "  aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]");
         output.WriteLine("  aec init --repo ABSOLUTE_PATH --provider=chatgpt");

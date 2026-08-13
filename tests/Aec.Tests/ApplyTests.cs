@@ -826,16 +826,46 @@ public sealed class ApplyTests
     }
 
     [Fact]
-    public void VersionIsReportedFromAssemblyMetadata()
+    public void VersionCommandReportsAssemblyMetadata()
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(["version"], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"0.12.0{Environment.NewLine}", output.ToString());
+        Assert.Empty(error.ToString());
+    }
+
+    [Fact]
+    public void RemovedVersionOptionIsRejected()
     {
         var output = new StringWriter();
         var error = new StringWriter();
 
         var exitCode = AecApplication.Run(["--version"], output, error);
 
-        Assert.Equal(0, exitCode);
-        Assert.Equal($"0.11.4{Environment.NewLine}", output.ToString());
-        Assert.Empty(error.ToString());
+        Assert.Equal(1, exitCode);
+        Assert.Empty(output.ToString());
+        Assert.Equal(
+            $"error: Unknown command: --version{Environment.NewLine}",
+            error.ToString());
+    }
+
+    [Fact]
+    public void VersionCommandRejectsArguments()
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = AecApplication.Run(["version", "unexpected"], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Empty(output.ToString());
+        Assert.Equal(
+            $"error: Unknown argument: unexpected{Environment.NewLine}",
+            error.ToString());
     }
 
     private static CommandResult Run(ApplyLayout layout)

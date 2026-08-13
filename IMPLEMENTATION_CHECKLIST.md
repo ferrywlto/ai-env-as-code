@@ -22,6 +22,12 @@
 - [ ] Add and dogfood `aec upgrade` for future official skill versions.
 - [ ] Complete v1.0 release validation, versioning, tagging, and publication.
 
+## v0.12 — Command-aligned version reporting
+
+- [x] Replace the exceptional `aec --version` option with the `aec version` command.
+- [x] Update release metadata, help, documentation, the bundled skill, and installer probes.
+- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
+
 ## v0.10 — Pulled-repository attachment and path routing
 
 - [x] Approve the pulled-repository flow and `--force-path-change` semantics.
@@ -98,4 +104,4 @@
 
 ## Immediate next work
 
-Review and approve the exact v0.11.4 skill-reconciliation paths for a local commit.
+Review and approve the exact v0.12.0 `aec version` paths for a local commit.

@@ -5,10 +5,10 @@ description: Operate AI Environment as Code data repositories through explicit i
 
 # AEC
 
-Always use the explicitly selected AEC data repository. If none was selected, ask
-for it. Pass its exact absolute path through `--repo`; never infer the data
-repository from the current directory, executable location, skill directory, or
-engine repository.
+For repository operations, always use the explicitly selected AEC data repository.
+If none was selected, ask for it. Pass its exact absolute path through `--repo`;
+never infer the data repository from the current directory, executable location,
+skill directory, or engine repository.
 
 Invoke `aec` directly. If it is unavailable, report that the CLI is not installed
 or not on `PATH` and stop. Do not locate, build, or run an engine checkout as a
@@ -17,6 +17,9 @@ fallback. Use only the following operations.
 ## Inspect
 
 - `aec help` lists supported command forms without changing state.
+- Run exactly `aec version` to report the installed executable version without
+  changing state. It accepts no options or repository path; do not use
+  `aec --version`.
 - `aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` compares the
   canonical and runtime environment without changing either. It compares exact
   `AGENTS.md` bytes and the managed root `personality` semantically, ignoring

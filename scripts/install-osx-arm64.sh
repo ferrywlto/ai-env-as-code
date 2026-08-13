@@ -64,9 +64,9 @@ if [ ! -f "$artifact" ] || [ ! -x "$artifact" ]; then
   exit 1
 fi
 
-# Start the artifact with its read-only version option before trusting it. ! makes
+# Start the artifact with its read-only version command before trusting it. ! makes
 # this block run only when that command fails; its normal output is discarded.
-if ! "$artifact" --version >/dev/null 2>&1; then
+if ! "$artifact" version >/dev/null 2>&1; then
   echo "Error: build artifact failed its version check: $artifact" >&2
   exit 1
 fi
@@ -120,7 +120,7 @@ trap 'cleanup; exit 1' HUP INT TERM
 cp -- "$artifact" "$temporary"
 chmod 0755 "$temporary"
 cmp -s "$artifact" "$temporary"
-"$temporary" --version >/dev/null
+"$temporary" version >/dev/null
 
 # Because the temporary and target files share a directory, mv performs the final
 # replacement as one filesystem operation. Clearing the variable prevents cleanup
