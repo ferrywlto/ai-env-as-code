@@ -78,6 +78,15 @@ if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then
   exit 1
 fi
 
+# The $aec skill invokes the executable by command name, so a custom directory
+# must be present on the PATH inherited by Codex. `||` skips its right side when
+# HOME is unavailable, avoiding an unset expansion while treating the path as custom.
+if [ -z "${HOME:-}" ] || [ "$install_dir" != "$HOME/.local/bin" ]; then
+  printf 'warning: custom AEC install directory: %s\n' "$install_dir" >&2
+  printf '%s\n' 'The $aec skill invokes `aec` through PATH.' >&2
+  printf '%s\n' 'Ensure this directory is available to Codex, restart Codex, then run `aec help`.' >&2
+fi
+
 # cmp -s compares bytes without printing them. An identical executable is already
 # installed, so return success without rewriting it or changing its timestamp.
 if [ -f "$target" ] && [ -x "$target" ] && cmp -s "$artifact" "$target"; then

@@ -14,6 +14,7 @@
 - [x] Add binary-only uninstall guidance that preserves AEC state.
 - [x] Document prerequisites, build, install, PATH, upgrade, and uninstall.
 - [x] Validate clean install, repeated install, upgrade, and uninstall.
+- [x] Warn and validate when a custom install directory must be exposed to Codex through `PATH`.
 - [x] Commit and push the exact macOS ARM64 publication paths.
 - [x] Dogfood the installed Native AOT binary against the selected AEC repository.
 - [x] Migrate the sole pre-release v0.8 skill installation to the v0.9 baseline.

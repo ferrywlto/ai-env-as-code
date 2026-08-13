@@ -194,10 +194,10 @@ different existing managed file is treated as a conflict and is never overwritte
 the command fails before creating the repository or changing runtime instructions.
 This permits multiple data repositories to share one exact skill installation.
 
-The skill invokes an installed `aec` executable directly. Version 0.10 provides the
-developer-built macOS ARM64 Native AOT workflow documented below, but `init` does
-not search for, build, or run an engine checkout as a fallback. Skill upgrades
-remain a separate future decision.
+The skill invokes `aec` by command name and stops if it is unavailable on Codex's
+`PATH`. Version 0.10 provides the developer-built macOS ARM64 Native AOT workflow
+documented below, but `init` does not search for, build, or run an engine checkout
+as a fallback. Skill upgrades remain a separate future decision.
 
 A resumable target must be a `main` repository containing one recognized root
 baseline. Current baselines use `Backup Codex environment` and contain exactly the
@@ -532,12 +532,22 @@ be selected instead:
 ./scripts/install-osx-arm64.sh --install-dir /absolute/path/to/bin
 ```
 
+When the selected directory differs from `$HOME/.local/bin`, installation continues
+but prints a warning because the `$aec` skill invokes `aec` through Codex's `PATH`.
+Make the directory available to Codex, restart Codex, and verify `aec help`.
+
 The installer never uses `sudo` or changes shell profiles or `PATH`. If
 `$HOME/.local/bin` is not already on `PATH`, configure the shell yourself, for
 example:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+After building, validate both the default and custom installation behavior with:
+
+```bash
+./tests/install-osx-arm64.sh
 ```
 
 The installed Native AOT executable does not require .NET. To upgrade it after
