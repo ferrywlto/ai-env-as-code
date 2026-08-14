@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 0.12.0 aligns version reporting with the command-oriented CLI grammar:
-`aec version` reports the executable version, while the removed `aec --version`
-form is rejected like any other unknown command.
+Version 0.13.0 adds an explicit, idempotent upgrade path for installed Codex skill
+guidance through `aec skill upgrade`. Executable installation and skill-guidance
+upgrade remain separate, ordered operations.
 
 ## Version history
 
@@ -23,8 +23,9 @@ form is rejected like any other unknown command.
 | 0.11.3 | Back up runtime Codex `personality` with runtime instructions |
 | 0.11.4 | Enroll Codex `personality` in the initial environment baseline |
 | 0.12.0 | Report the executable version through the `version` command |
+| 0.13.0 | Upgrade recognized official Codex skill guidance explicitly |
 
-The project and CLI report the current release as `0.12.0` through `aec version`.
+The project and CLI report the current release as `0.13.0` through `aec version`.
 
 ## version
 
@@ -35,6 +36,46 @@ aec version
 `version` reports the installed AEC executable release without reading or changing
 a data repository or runtime state. It accepts no options or operands. The former
 `aec --version` form is unsupported.
+
+## skill upgrade
+
+```text
+aec skill upgrade [--codex-home ABSOLUTE_PATH]
+```
+
+Executable installation and skill-guidance upgrade are deliberately separate:
+
+```mermaid
+flowchart LR
+    Pull["Pull the latest source"] --> Build["Build the newer executable"]
+    Build --> Install["Run the installer to replace the executable"]
+    Install --> Upgrade["Run aec skill upgrade"]
+    Upgrade --> Use["Use the upgraded skill normally"]
+```
+
+The newly installed executable supplies the latest bundled guidance. The user may
+run `aec skill upgrade` directly or explicitly ask Codex to run it; the command is
+never inferred merely because a newer release may exist. It updates only:
+
+```text
+<codex-home>/skills/aec/SKILL.md
+<codex-home>/skills/aec/agents/openai.yaml
+```
+
+It takes no `--repo` because it neither reads nor changes an AEC data repository.
+An explicit absolute `--codex-home` takes precedence over a non-empty `CODEX_HOME`;
+when both are absent, the command uses `~/.codex`.
+Both managed files are checked before either changes. Only exact official v0.9.0,
+v0.10.0, v0.11.4, and v0.12.0 predecessors—or the current bundle—are accepted.
+Missing, modified, unsupported, linked, or otherwise invalid managed state fails
+closed. A retry safely completes a recognized old/current mixture, unrelated files
+are preserved, and replaced files retain their existing Unix permission bits.
+
+The command writes `upgraded` when it replaces guidance or `unchanged` when both
+files are already current. It does not download, build, or install the executable;
+change Git, AEC data, runtime `AGENTS.md` or `config.toml`; or touch other skills.
+No Codex restart or new task is required. The next request that selects `$aec`
+reads the updated installed `SKILL.md` guidance.
 
 ## apply
 
@@ -206,9 +247,11 @@ the command fails before creating the repository or changing runtime instruction
 This permits multiple data repositories to share one exact skill installation.
 
 The skill invokes `aec` by command name and stops if it is unavailable on Codex's
-`PATH`. Version 0.10 provides the developer-built macOS ARM64 Native AOT workflow
-documented below, but `init` does not search for, build, or run an engine checkout
-as a fallback. Skill upgrades remain a separate future decision.
+`PATH`. The developer-built macOS ARM64 Native AOT workflow is documented below,
+but `init` does not search for, build, or run an engine checkout as a fallback. It
+still fails closed when either managed skill file differs. After installing a newer
+AEC executable, use `aec skill upgrade` to replace an exact recognized official
+predecessor; modified or unknown files are never overwritten.
 
 A resumable target must be a `main` repository containing one recognized root
 baseline. Current baselines use `Backup Codex environment` and contain exactly the
@@ -490,6 +533,9 @@ dotnet test tests/Aec.Tests/Aec.Tests.csproj
 dotnet run --project src/Aec/Aec.csproj -- version
 dotnet run --project src/Aec/Aec.csproj -- help
 dotnet run --project src/Aec/Aec.csproj -- \
+  skill upgrade \
+  --codex-home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- \
   init \
   --repo /absolute/path/to/new-data-repository \
   --codex-home /absolute/path/to/codex-home
@@ -561,9 +607,10 @@ After building, validate both the default and custom installation behavior with:
 ./tests/install-osx-arm64.sh
 ```
 
-The installed Native AOT executable does not require .NET. To upgrade it after
-updating the source checkout, rerun the build and installer scripts. Reinstalling
-identical bytes reports `unchanged` without rewriting the executable.
+The installed Native AOT executable does not require .NET. To upgrade, update the
+source checkout, rerun the build and installer scripts, then run
+`aec skill upgrade`. Reinstalling identical executable bytes reports
+`unchanged`; upgrading already-current skill guidance also reports `unchanged`.
 
 To uninstall the default executable:
 
@@ -572,15 +619,13 @@ rm "$HOME/.local/bin/aec"
 ```
 
 This removes only the executable. It preserves AEC data repositories, runtime
-instructions, and the installed `$aec` skill. Safe upgrades of an existing `$aec`
-skill remain deferred to a future increment. For a custom installation, remove
+instructions, and the installed `$aec` skill. For a custom installation, remove
 `aec` from the directory passed to `--install-dir` instead.
 
 ## Current boundaries
 
 The tool does not implement `diff`, `verify`, `restore`, rendering, manifests,
-automatic ChatGPT capture or deployment, prebuilt binary distribution, skill
-upgrades, or pushing.
+automatic ChatGPT capture or deployment, prebuilt binary distribution, or pushing.
 
 Source writes and Git commits operate only on the data repository explicitly
 selected with `--repo`; they never infer or modify the engine repository.

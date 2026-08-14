@@ -28,6 +28,7 @@ public static class AecApplication
             return args[0] switch
             {
                 "version" => RunVersion(args, output),
+                "skill" => RunSkill(args, output),
                 "status" => RunStatus(ParseRepositoryArguments(args, "status"), output),
                 "backup" => RunBackup(ParseRepositoryArguments(args, "backup"), output, error),
                 "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output, error),
@@ -93,6 +94,26 @@ public static class AecApplication
         }
 
         WriteVersion(output);
+        return 0;
+    }
+
+    private static int RunSkill(string[] args, TextWriter output)
+    {
+        if (args.Length == 1)
+        {
+            throw new ArgumentException(
+                "skill requires a subcommand. Use `aec help` for usage.");
+        }
+
+        if (args[1] != "upgrade")
+        {
+            throw new ArgumentException($"Unknown skill command: {args[1]}");
+        }
+
+        var options = ParseSkillUpgradeArguments(args);
+        var codexHome = ResolveCodexHome(options.CodexHome);
+        var changed = AecSkillInstaller.Upgrade(codexHome);
+        output.WriteLine(changed ? "upgraded" : "unchanged");
         return 0;
     }
 
@@ -312,6 +333,35 @@ public static class AecApplication
             forcePathChange);
     }
 
+    private static SkillUpgradeOptions ParseSkillUpgradeArguments(string[] args)
+    {
+        string? codexHome = null;
+
+        for (var index = 2; index < args.Length; index++)
+        {
+            var argument = args[index];
+            if (argument != "--codex-home")
+            {
+                throw new ArgumentException($"Unknown argument: {argument}");
+            }
+
+            if (codexHome is not null)
+            {
+                throw new ArgumentException("--codex-home may be specified only once.");
+            }
+
+            if (index + 1 >= args.Length ||
+                args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("--codex-home requires a value.");
+            }
+
+            codexHome = args[++index];
+        }
+
+        return new SkillUpgradeOptions(codexHome);
+    }
+
     internal static string ResolveCodexHome(string? explicitPath)
     {
         if (explicitPath is not null)
@@ -508,6 +558,7 @@ public static class AecApplication
         output.WriteLine("Usage:");
         output.WriteLine("  aec help");
         output.WriteLine("  aec version");
+        output.WriteLine("  aec skill upgrade [--codex-home ABSOLUTE_PATH]");
         output.WriteLine(
             "  aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]");
         output.WriteLine("  aec init --repo ABSOLUTE_PATH --provider=chatgpt");
@@ -524,6 +575,8 @@ public static class AecApplication
     }
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
+
+    private sealed record SkillUpgradeOptions(string? CodexHome);
 
     private sealed record InitOptions(
         string Repository,

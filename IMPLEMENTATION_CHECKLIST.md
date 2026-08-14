@@ -19,8 +19,19 @@
 - [x] Dogfood the installed Native AOT binary against the selected AEC repository.
 - [x] Migrate the sole pre-release v0.8 skill installation to the v0.9 baseline.
 - [x] Document the approved pulled-repository initialization, `apply` routing, and path-confirmation flow.
-- [ ] Add and dogfood `aec upgrade` for future official skill versions.
+- [x] Add and dogfood `aec skill upgrade` for future official skill versions.
 - [ ] Complete v1.0 release validation, versioning, tagging, and publication.
+
+## v0.13 — Explicit installed-skill upgrade
+
+- [x] Approve the separate binary-install and skill-guidance upgrade flow.
+- [x] Add focused failing CLI and fail-closed upgrade tests.
+- [x] Recognize only exact official v0.9.0 through v0.12.0 predecessors.
+- [x] Preflight both managed files, support safe retry, and remain idempotent.
+- [x] Update version metadata, help, README, and bundled `$aec` guidance.
+- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
+- [x] Reinstall the live executable and dogfood the installed-skill upgrade after
+  separate approval.
 
 ## v0.12 — Command-aligned version reporting
 
@@ -104,4 +115,4 @@
 
 ## Immediate next work
 
-Review and approve the exact v0.12.0 `aec version` paths for a local commit.
+Review and approve the exact v0.13.0 release paths for a local commit.

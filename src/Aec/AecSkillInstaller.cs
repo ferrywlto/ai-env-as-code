@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Security.Cryptography;
 
 namespace Aec;
 
@@ -10,8 +11,21 @@ internal static class AecSkillInstaller
 
     private static readonly SkillResource[] Resources =
     [
-        new(SkillFileName, "Aec.Skill.SKILL.md"),
-        new(Path.Combine(AgentsDirectoryName, OpenAiFileName), "Aec.Skill.openai.yaml")
+        // Only byte-exact released predecessors are eligible for replacement.
+        // The retired pre-release v0.8 skill is deliberately outside this boundary.
+        new(
+            SkillFileName,
+            "Aec.Skill.SKILL.md",
+            [
+                "dc5b81445caa9ea6d039504b67676d05ef2e19d2f98394eda826522056d4a6a8",
+                "728a706eadd9a802a17960a940430466d71b841d612b1b1953c99caf6df2d0ec",
+                "9cddc5727f0e491a1735e7c2d40e4cee865dc3675dfe24c4fb5842c2119b61c0",
+                "8cf1c0d8effbdf19cd44520bd96300b5201ba2a71cef69101f5490077159a3a7"
+            ]),
+        new(
+            Path.Combine(AgentsDirectoryName, OpenAiFileName),
+            "Aec.Skill.openai.yaml",
+            ["5e9636f4f9863bacde37a36a94b71c3450af1017d10e7a7115698a5a62b3ea94"])
     ];
 
     public static void Install(string codexHome)
@@ -50,6 +64,57 @@ internal static class AecSkillInstaller
         }
 
         VerifyInstallation(skillDirectory, resources);
+    }
+
+    public static bool Upgrade(string codexHome)
+    {
+        var resources = LoadResources();
+        var skillsDirectory = Path.Combine(codexHome, "skills");
+        var skillDirectory = Path.Combine(skillsDirectory, "aec");
+        var agentsDirectory = Path.Combine(skillDirectory, AgentsDirectoryName);
+
+        RequireExistingDirectory(codexHome, "Codex home");
+        RequireExistingDirectory(skillsDirectory, "Codex skills directory");
+        RequireExistingDirectory(skillDirectory, "AEC skill directory");
+        RequireExistingDirectory(agentsDirectory, "AEC skill agents directory");
+
+        var updates = new List<SkillUpdate>();
+        foreach (var resource in resources)
+        {
+            var path = Path.Combine(skillDirectory, resource.RelativePath);
+            var actual = AecApplication.ReadRequiredTextFile(path, "AEC skill file");
+            if (actual.AsSpan().SequenceEqual(resource.Content))
+            {
+                continue;
+            }
+
+            if (!IsSupportedPredecessor(actual, resource.SupportedPredecessorHashes))
+            {
+                throw new InvalidOperationException(
+                    $"Existing AEC skill is not an exact supported official bundle: {skillDirectory}");
+            }
+
+            updates.Add(new SkillUpdate(path, actual, resource.Content));
+        }
+
+        // Recheck the complete directory chain after preflight. Each subsequent
+        // replacement also compares the file bytes so a concurrent edit fails closed.
+        RequireExistingDirectory(codexHome, "Codex home");
+        RequireExistingDirectory(skillsDirectory, "Codex skills directory");
+        RequireExistingDirectory(skillDirectory, "AEC skill directory");
+        RequireExistingDirectory(agentsDirectory, "AEC skill agents directory");
+
+        foreach (var update in updates)
+        {
+            AtomicFile.ReplaceIfUnchanged(
+                update.Path,
+                update.Current,
+                update.Desired,
+                "AEC skill file");
+        }
+
+        VerifyInstallation(skillDirectory, resources);
+        return updates.Count > 0;
     }
 
     private static SkillResource[] LoadResources()
@@ -98,6 +163,20 @@ internal static class AecSkillInstaller
         }
     }
 
+    private static void RequireExistingDirectory(string path, string label)
+    {
+        AecApplication.EnsureNoLinksInExistingPath(path, $"{label} path");
+        AecApplication.EnsureRealDirectory(path, label);
+    }
+
+    private static bool IsSupportedPredecessor(
+        byte[] actual,
+        IReadOnlyCollection<string> supportedHashes)
+    {
+        var actualHash = Convert.ToHexStringLower(SHA256.HashData(actual));
+        return supportedHashes.Contains(actualHash, StringComparer.Ordinal);
+    }
+
     private static void CreateAndVerifyDirectory(string path, string label)
     {
         Directory.CreateDirectory(path);
@@ -140,11 +219,17 @@ internal static class AecSkillInstaller
     private sealed record SkillResource(
         string RelativePath,
         string ResourceName,
+        string[] SupportedPredecessorHashes,
         byte[] Content)
     {
-        public SkillResource(string relativePath, string resourceName)
-            : this(relativePath, resourceName, [])
+        public SkillResource(
+            string relativePath,
+            string resourceName,
+            string[] supportedPredecessorHashes)
+            : this(relativePath, resourceName, supportedPredecessorHashes, [])
         {
         }
     }
+
+    private sealed record SkillUpdate(string Path, byte[] Current, byte[] Desired);
 }

@@ -1,0 +1,3 @@
+skills/aec/SKILL.md text eol=lf
+skills/aec/agents/openai.yaml text eol=lf
+tests/Aec.Tests/Fixtures/Skills/*.md text eol=lf

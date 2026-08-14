@@ -834,7 +834,7 @@ public sealed class ApplyTests
         var exitCode = AecApplication.Run(["version"], output, error);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"0.12.0{Environment.NewLine}", output.ToString());
+        Assert.Equal($"0.13.0{Environment.NewLine}", output.ToString());
         Assert.Empty(error.ToString());
     }
 
