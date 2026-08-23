@@ -20,7 +20,14 @@
 - [x] Migrate the sole pre-release v0.8 skill installation to the v0.9 baseline.
 - [x] Document the approved pulled-repository initialization, `apply` routing, and path-confirmation flow.
 - [x] Add and dogfood `aec skill upgrade` for future official skill versions.
+- [x] Document and test Codex restart troubleshooting for a newly installed AEC CLI.
 - [ ] Complete v1.0 release validation, versioning, tagging, and publication.
+
+## v0.13.1 — Codex executable discovery troubleshooting
+
+- [x] Explain that a running Codex process retains the `PATH` from app startup.
+- [x] Keep the executable-discovery restart distinct from skill-only upgrade reload.
+- [x] Recognize the byte-exact v0.13.0 skill bundle as an upgrade predecessor.
 
 ## v0.13 — Explicit installed-skill upgrade
 
@@ -115,4 +122,4 @@
 
 ## Immediate next work
 
-Review and approve the exact v0.13.0 release paths for a local commit.
+Validate and review the v0.13.1 troubleshooting patch before a local commit.

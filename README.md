@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 0.13.0 adds an explicit, idempotent upgrade path for installed Codex skill
-guidance through `aec skill upgrade`. Executable installation and skill-guidance
-upgrade remain separate, ordered operations.
+Version 0.13.1 documents the restart required when a running Codex process cannot
+see a newly installed `aec` executable or a newly configured `PATH`. Executable
+installation and skill-guidance upgrade remain separate, ordered operations.
 
 ## Version history
 
@@ -24,8 +24,9 @@ upgrade remain separate, ordered operations.
 | 0.11.4 | Enroll Codex `personality` in the initial environment baseline |
 | 0.12.0 | Report the executable version through the `version` command |
 | 0.13.0 | Upgrade recognized official Codex skill guidance explicitly |
+| 0.13.1 | Diagnose a running Codex process with a stale executable `PATH` |
 
-The project and CLI report the current release as `0.13.0` through `aec version`.
+The project and CLI report the current release as `0.13.1` through `aec version`.
 
 ## version
 
@@ -66,16 +67,17 @@ It takes no `--repo` because it neither reads nor changes an AEC data repository
 An explicit absolute `--codex-home` takes precedence over a non-empty `CODEX_HOME`;
 when both are absent, the command uses `~/.codex`.
 Both managed files are checked before either changes. Only exact official v0.9.0,
-v0.10.0, v0.11.4, and v0.12.0 predecessors—or the current bundle—are accepted.
-Missing, modified, unsupported, linked, or otherwise invalid managed state fails
-closed. A retry safely completes a recognized old/current mixture, unrelated files
-are preserved, and replaced files retain their existing Unix permission bits.
+v0.10.0, v0.11.4, v0.12.0, and v0.13.0 predecessors—or the current bundle—are
+accepted. Missing, modified, unsupported, linked, or otherwise invalid managed
+state fails closed. A retry safely completes a recognized old/current mixture,
+unrelated files are preserved, and replaced files retain their existing Unix
+permission bits.
 
 The command writes `upgraded` when it replaces guidance or `unchanged` when both
 files are already current. It does not download, build, or install the executable;
 change Git, AEC data, runtime `AGENTS.md` or `config.toml`; or touch other skills.
-No Codex restart or new task is required. The next request that selects `$aec`
-reads the updated installed `SKILL.md` guidance.
+No Codex restart or new task is required for this skill-only update. The next
+request that selects `$aec` reads the updated installed `SKILL.md` guidance.
 
 ## apply
 
@@ -600,6 +602,17 @@ example:
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+### Codex cannot find a newly installed `aec`
+
+Codex inherits its `PATH` when the app starts. Therefore, if `aec` was installed
+or its directory was added to `PATH` while Codex was already running, Codex can
+report that `aec` is unavailable even though a new terminal can execute it. Fully
+quit and restart Codex, then run `aec help` again. Starting a new task is not
+enough because it stays in the existing app process.
+
+This restart is only for executable discovery. After `aec skill upgrade` replaces
+`SKILL.md`, no restart or new task is required.
 
 After building, validate both the default and custom installation behavior with:
 

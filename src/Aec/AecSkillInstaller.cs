@@ -20,7 +20,8 @@ internal static class AecSkillInstaller
                 "dc5b81445caa9ea6d039504b67676d05ef2e19d2f98394eda826522056d4a6a8",
                 "728a706eadd9a802a17960a940430466d71b841d612b1b1953c99caf6df2d0ec",
                 "9cddc5727f0e491a1735e7c2d40e4cee865dc3675dfe24c4fb5842c2119b61c0",
-                "8cf1c0d8effbdf19cd44520bd96300b5201ba2a71cef69101f5490077159a3a7"
+                "8cf1c0d8effbdf19cd44520bd96300b5201ba2a71cef69101f5490077159a3a7",
+                "1bf54d30a4237801df36dd4949d8a21e843dc6c1f98cfb092694c0999b51eacf"
             ]),
         new(
             Path.Combine(AgentsDirectoryName, OpenAiFileName),
