@@ -21,13 +21,17 @@
 - [x] Document the approved pulled-repository initialization, `apply` routing, and path-confirmation flow.
 - [x] Add and dogfood `aec skill upgrade` for future official skill versions.
 - [x] Document and test Codex restart troubleshooting for a newly installed AEC CLI.
-- [ ] Complete v1.0 release validation, versioning, tagging, and publication.
+- [x] Complete v1.0 release validation and private end-to-end dogfooding.
+- [x] Prepare the `1.0.0` release source and tag target.
+- [ ] Publish v1.0 publicly after the private dogfood period concludes.
 
 ## v0.13.1 — Codex executable discovery troubleshooting
 
 - [x] Explain that a running Codex process retains the `PATH` from app startup.
 - [x] Keep the executable-discovery restart distinct from skill-only upgrade reload.
 - [x] Recognize the byte-exact v0.13.0 skill bundle as an upgrade predecessor.
+- [x] Pass full Debug and Release test suites plus macOS ARM64 Native AOT validation.
+- [x] Dogfood bootstrap, backup, apply, attachment, and installed-skill upgrade flows.
 
 ## v0.13 — Explicit installed-skill upgrade
 
@@ -122,4 +126,4 @@
 
 ## Immediate next work
 
-Validate and review the v0.13.1 troubleshooting patch before a local commit.
+Plan the v1.1 Windows x64 build and user-local installation increment.

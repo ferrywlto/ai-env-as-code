@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 0.13.1 documents the restart required when a running Codex process cannot
-see a newly installed `aec` executable or a newly configured `PATH`. Executable
-installation and skill-guidance upgrade remain separate, ordered operations.
+Version 1.0.0 is the first stable AEC release. It provides explicit directional
+backup and apply flows, repository-aware initialization, managed Codex guidance,
+and a developer-built macOS ARM64 Native AOT installation path.
 
 ## Version history
 
@@ -25,8 +25,9 @@ installation and skill-guidance upgrade remain separate, ordered operations.
 | 0.12.0 | Report the executable version through the `version` command |
 | 0.13.0 | Upgrade recognized official Codex skill guidance explicitly |
 | 0.13.1 | Diagnose a running Codex process with a stale executable `PATH` |
+| 1.0.0 | First stable release after private end-to-end dogfooding |
 
-The project and CLI report the current release as `0.13.1` through `aec version`.
+The project and CLI report the current release as `1.0.0` through `aec version`.
 
 ## version
 

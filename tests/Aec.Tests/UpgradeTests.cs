@@ -19,12 +19,12 @@ public sealed class UpgradeTests
     }
 
     [Fact]
-    public void VersionReports0131()
+    public void VersionReports100()
     {
         var result = Run("version");
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"0.13.1{Environment.NewLine}", result.Output);
+        Assert.Equal($"1.0.0{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
     }
 
