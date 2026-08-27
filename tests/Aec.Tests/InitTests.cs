@@ -205,6 +205,7 @@ public sealed class InitTests
         Assert.Contains("managed root `personality`", skill, StringComparison.Ordinal);
         Assert.Contains("preserves unrelated runtime", skill, StringComparison.Ordinal);
         Assert.Contains("aec init --repo ABSOLUTE_PATH", skill, StringComparison.Ordinal);
+        Assert.Contains("aec uninstall [--codex-home ABSOLUTE_PATH]", skill, StringComparison.Ordinal);
         Assert.DoesNotContain("aec init ABSOLUTE_DIRECTORY", skill, StringComparison.Ordinal);
         var openAi = File.ReadAllText(Path.Combine(skillRoot, "agents", "openai.yaml"));
         Assert.Contains("display_name: \"AI Environment as Code\"", openAi, StringComparison.Ordinal);

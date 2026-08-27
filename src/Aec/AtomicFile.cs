@@ -90,6 +90,39 @@ internal static class AtomicFile
         }
     }
 
+    public static void DeleteIfUnchanged(
+        string path,
+        byte[] expectedCurrent,
+        string label)
+    {
+        UnixFileMode? expectedMode = OperatingSystem.IsWindows()
+            ? null
+            : File.GetUnixFileMode(path);
+
+        // Re-read immediately before deletion so a user edit made after preflight
+        // is rejected instead of being mistaken for the recognized managed file.
+        var current = AecApplication.ReadRequiredTextFile(path, label);
+        if (!current.AsSpan().SequenceEqual(expectedCurrent))
+        {
+            throw new IOException(
+                $"{label} changed during the operation; no data was deleted.");
+        }
+
+        if (!OperatingSystem.IsWindows() &&
+            expectedMode is not null &&
+            File.GetUnixFileMode(path) != expectedMode.Value)
+        {
+            throw new IOException(
+                $"{label} permissions changed during the operation; no data was deleted.");
+        }
+
+        File.Delete(path);
+        if (File.Exists(path) || Directory.Exists(path))
+        {
+            throw new IOException($"{label} verification failed after deletion: {path}");
+        }
+    }
+
     private static UnixFileMode? ResolveUnixMode(
         string path,
         byte[]? expectedCurrent,

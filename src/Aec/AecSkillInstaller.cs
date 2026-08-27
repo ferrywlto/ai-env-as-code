@@ -21,7 +21,8 @@ internal static class AecSkillInstaller
                 "728a706eadd9a802a17960a940430466d71b841d612b1b1953c99caf6df2d0ec",
                 "9cddc5727f0e491a1735e7c2d40e4cee865dc3675dfe24c4fb5842c2119b61c0",
                 "8cf1c0d8effbdf19cd44520bd96300b5201ba2a71cef69101f5490077159a3a7",
-                "1bf54d30a4237801df36dd4949d8a21e843dc6c1f98cfb092694c0999b51eacf"
+                "1bf54d30a4237801df36dd4949d8a21e843dc6c1f98cfb092694c0999b51eacf",
+                "60754cc941dbfaf17042c4eb4093c9706ea0054c526001f096da2fc4a795aec9"
             ]),
         new(
             Path.Combine(AgentsDirectoryName, OpenAiFileName),
@@ -116,6 +117,66 @@ internal static class AecSkillInstaller
 
         VerifyInstallation(skillDirectory, resources);
         return updates.Count > 0;
+    }
+
+    public static UninstallPlan PrepareUninstall(string codexHome)
+    {
+        var resources = LoadResources();
+        var skillsDirectory = Path.Combine(codexHome, "skills");
+        var skillDirectory = Path.Combine(skillsDirectory, "aec");
+        var agentsDirectory = Path.Combine(skillDirectory, AgentsDirectoryName);
+
+        PreflightDirectory(skillsDirectory, "Codex skills directory");
+        PreflightDirectory(skillDirectory, "AEC skill directory");
+        PreflightDirectory(agentsDirectory, "AEC skill agents directory");
+
+        var deletions = new List<SkillDeletion>();
+        foreach (var resource in resources)
+        {
+            var path = Path.Combine(skillDirectory, resource.RelativePath);
+            var actual = AecApplication.ReadOptionalTextFile(path, "AEC skill file");
+            if (actual is null)
+            {
+                continue;
+            }
+
+            if (!actual.AsSpan().SequenceEqual(resource.Content) &&
+                !IsSupportedPredecessor(actual, resource.SupportedPredecessorHashes))
+            {
+                throw new InvalidOperationException(
+                    $"Existing AEC skill is not an exact supported official bundle: {skillDirectory}");
+            }
+
+            deletions.Add(new SkillDeletion(path, actual));
+        }
+
+        return new UninstallPlan(
+            skillDirectory,
+            agentsDirectory,
+            deletions);
+    }
+
+    public static void ApplyUninstall(UninstallPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var skillsDirectory = Path.GetDirectoryName(plan.SkillDirectory)
+            ?? throw new InvalidOperationException(
+                $"AEC skill directory has no parent: {plan.SkillDirectory}");
+        PreflightDirectory(skillsDirectory, "Codex skills directory");
+        PreflightDirectory(plan.SkillDirectory, "AEC skill directory");
+        PreflightDirectory(plan.AgentsDirectory, "AEC skill agents directory");
+
+        foreach (var deletion in plan.Deletions)
+        {
+            AtomicFile.DeleteIfUnchanged(
+                deletion.Path,
+                deletion.Content,
+                "AEC skill file");
+        }
+
+        RemoveIfEmpty(plan.AgentsDirectory);
+        RemoveIfEmpty(plan.SkillDirectory);
     }
 
     private static SkillResource[] LoadResources()
@@ -217,6 +278,15 @@ internal static class AecSkillInstaller
         }
     }
 
+    private static void RemoveIfEmpty(string path)
+    {
+        if (Directory.Exists(path) &&
+            !Directory.EnumerateFileSystemEntries(path).Any())
+        {
+            Directory.Delete(path);
+        }
+    }
+
     private sealed record SkillResource(
         string RelativePath,
         string ResourceName,
@@ -233,4 +303,14 @@ internal static class AecSkillInstaller
     }
 
     private sealed record SkillUpdate(string Path, byte[] Current, byte[] Desired);
+
+    internal sealed record UninstallPlan(
+        string SkillDirectory,
+        string AgentsDirectory,
+        IReadOnlyList<SkillDeletion> Deletions)
+    {
+        public bool HasFiles => Deletions.Count > 0;
+    }
+
+    internal sealed record SkillDeletion(string Path, byte[] Content);
 }

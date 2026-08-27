@@ -1,8 +1,7 @@
 # AI Environment as Code
 
-Version 1.0.0 is the first stable AEC release. It provides explicit directional
-backup and apply flows, repository-aware initialization, managed Codex guidance,
-and a developer-built macOS ARM64 Native AOT installation path.
+Version 1.1.0 adds explicit removal of AEC's Codex runtime integration while
+preserving configuration, executable installation, and source-of-truth data.
 
 ## Version history
 
@@ -26,8 +25,9 @@ and a developer-built macOS ARM64 Native AOT installation path.
 | 0.13.0 | Upgrade recognized official Codex skill guidance explicitly |
 | 0.13.1 | Diagnose a running Codex process with a stale executable `PATH` |
 | 1.0.0 | First stable release after private end-to-end dogfooding |
+| 1.1.0 | Remove AEC runtime instructions and exact official skill files |
 
-The project and CLI report the current release as `1.0.0` through `aec version`.
+The project and CLI report the current release as `1.1.0` through `aec version`.
 
 ## version
 
@@ -68,7 +68,7 @@ It takes no `--repo` because it neither reads nor changes an AEC data repository
 An explicit absolute `--codex-home` takes precedence over a non-empty `CODEX_HOME`;
 when both are absent, the command uses `~/.codex`.
 Both managed files are checked before either changes. Only exact official v0.9.0,
-v0.10.0, v0.11.4, v0.12.0, and v0.13.0 predecessors—or the current bundle—are
+v0.10.0, v0.11.4, v0.12.0, v0.13.0, and v1.0.0 predecessors—or the current bundle—are
 accepted. Missing, modified, unsupported, linked, or otherwise invalid managed
 state fails closed. A retry safely completes a recognized old/current mixture,
 unrelated files are preserved, and replaced files retain their existing Unix
@@ -79,6 +79,32 @@ files are already current. It does not download, build, or install the executabl
 change Git, AEC data, runtime `AGENTS.md` or `config.toml`; or touch other skills.
 No Codex restart or new task is required for this skill-only update. The next
 request that selects `$aec` reads the updated installed `SKILL.md` guidance.
+
+## uninstall
+
+```text
+aec uninstall [--codex-home ABSOLUTE_PATH]
+```
+
+`uninstall` removes AEC's Codex runtime integration while the executable is still
+available to perform the cleanup. It accepts no `--repo` and never reads, changes,
+commits, or deletes an AEC data repository.
+
+After preflighting every target, the command:
+
+- removes the exact supported v3 or v4 AEC block from runtime `AGENTS.md`;
+- preserves every non-AEC instruction byte;
+- removes only exact current or recognized official predecessor copies of
+  `skills/aec/SKILL.md` and `skills/aec/agents/openai.yaml`;
+- preserves unrelated skills and extra files under the AEC skill directory; and
+- leaves runtime `config.toml`, including `personality`, byte-for-byte unchanged.
+
+An unmanaged `$aec` reference outside the managed instruction block, a customized
+managed skill file, malformed instructions, linked paths, or another invalid target
+stops the command before its first mutation. Instructions are removed before skill
+files, so a retry can finish a recognized interrupted cleanup. It writes
+`uninstalled` when anything was removed and `unchanged` when no managed integration
+remains.
 
 ## apply
 
@@ -539,6 +565,9 @@ dotnet run --project src/Aec/Aec.csproj -- \
   skill upgrade \
   --codex-home /absolute/path/to/codex-home
 dotnet run --project src/Aec/Aec.csproj -- \
+  uninstall \
+  --codex-home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- \
   init \
   --repo /absolute/path/to/new-data-repository \
   --codex-home /absolute/path/to/codex-home
@@ -626,15 +655,19 @@ source checkout, rerun the build and installer scripts, then run
 `aec skill upgrade`. Reinstalling identical executable bytes reports
 `unchanged`; upgrading already-current skill guidance also reports `unchanged`.
 
-To uninstall the default executable:
+To uninstall AEC manually in v1.1.0, first remove its Codex integration while the
+executable is still present, then remove the executable:
 
 ```bash
+aec uninstall
 rm "$HOME/.local/bin/aec"
 ```
 
-This removes only the executable. It preserves AEC data repositories, runtime
-instructions, and the installed `$aec` skill. For a custom installation, remove
-`aec` from the directory passed to `--install-dir` instead.
+This preserves every AEC data repository and all runtime `config.toml` bytes. For a
+custom installation, run the same `aec uninstall` command through the configured
+`PATH`, then remove `aec` from the directory passed to `--install-dir` instead.
+The next increment will make the installer generate a script that performs this
+ordering automatically.
 
 ## Current boundaries
 

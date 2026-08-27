@@ -1,5 +1,17 @@
 # Implementation Checklist
 
+## v1.1 — Explicit AEC runtime uninstall
+
+- [x] Define `aec uninstall [--codex-home ABSOLUTE_PATH]` without `--repo`.
+- [x] Preserve every data repository and all runtime `config.toml` bytes.
+- [x] Remove only the recognized AEC instruction block and official skill files.
+- [x] Preserve unrelated instructions, skills, and extra AEC skill-directory files.
+- [x] Fail closed for unmanaged `$aec` references and customized managed files.
+- [x] Make cleanup idempotent and resumable after instruction removal.
+- [x] Recognize the exact v1.0.0 skill as an upgrade and uninstall predecessor.
+- [x] Update version metadata, help, README, and bundled skill guidance.
+- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
+
 ## v1.0 — Publication
 
 - [x] Choose the MIT License and public attribution `@ferrywlto`.
@@ -126,4 +138,5 @@
 
 ## Immediate next work
 
-Plan the v1.1 Windows x64 build and user-local installation increment.
+Patch the macOS ARM64 installer as v1.1.1 to generate a contained uninstall script.
+After that patch, plan Windows x64 build and user-local installation as v1.2.0.

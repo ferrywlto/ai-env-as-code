@@ -139,6 +139,42 @@ public sealed class AecInstructionBlockTests
         Assert.Equal(Utf8($"prefix\n{ChatGptLatestLf}\nsuffix\n"), merged);
     }
 
+    [Fact]
+    public void RemovesAPrependedBlockAndRestoresOriginalBytes()
+    {
+        var original = new byte[] { 0xEF, 0xBB, 0xBF }
+            .Concat(Utf8("outside\r\nkeep\r\n"))
+            .ToArray();
+        var managed = AecInstructionBlock.MergeForChatGptProvider(original, Repository);
+
+        var removal = AecInstructionBlock.Remove(managed);
+
+        Assert.True(removal.Removed);
+        Assert.Equal(original, removal.Content);
+    }
+
+    [Fact]
+    public void RemovesAnInPlaceBlockWithoutLeavingAnEmptyLine()
+    {
+        var managed = Utf8($"prefix\n{CodexLatestLf}\nsuffix\n");
+
+        var removal = AecInstructionBlock.Remove(managed);
+
+        Assert.True(removal.Removed);
+        Assert.Equal(Utf8("prefix\nsuffix\n"), removal.Content);
+    }
+
+    [Fact]
+    public void MissingBlockIsReturnedUnchanged()
+    {
+        var original = Utf8("outside\n");
+
+        var removal = AecInstructionBlock.Remove(original);
+
+        Assert.False(removal.Removed);
+        Assert.Same(original, removal.Content);
+    }
+
     [Theory]
     [InlineData(false, 3)]
     [InlineData(true, 4)]

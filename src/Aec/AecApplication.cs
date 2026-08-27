@@ -29,6 +29,7 @@ public static class AecApplication
             {
                 "version" => RunVersion(args, output),
                 "skill" => RunSkill(args, output),
+                "uninstall" => RunUninstall(ParseCodexHomeArguments(args, 1), output),
                 "status" => RunStatus(ParseRepositoryArguments(args, "status"), output),
                 "backup" => RunBackup(ParseRepositoryArguments(args, "backup"), output, error),
                 "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output, error),
@@ -110,11 +111,17 @@ public static class AecApplication
             throw new ArgumentException($"Unknown skill command: {args[1]}");
         }
 
-        var options = ParseSkillUpgradeArguments(args);
+        var options = ParseCodexHomeArguments(args, 2);
         var codexHome = ResolveCodexHome(options.CodexHome);
         var changed = AecSkillInstaller.Upgrade(codexHome);
         output.WriteLine(changed ? "upgraded" : "unchanged");
         return 0;
+    }
+
+    private static int RunUninstall(CodexHomeOptions options, TextWriter output)
+    {
+        var codexHome = ResolveCodexHome(options.CodexHome);
+        return UninstallCommand.Run(codexHome, output);
     }
 
     private static string CompareExactBytes(byte[] desired, byte[]? current)
@@ -333,11 +340,11 @@ public static class AecApplication
             forcePathChange);
     }
 
-    private static SkillUpgradeOptions ParseSkillUpgradeArguments(string[] args)
+    private static CodexHomeOptions ParseCodexHomeArguments(string[] args, int startIndex)
     {
         string? codexHome = null;
 
-        for (var index = 2; index < args.Length; index++)
+        for (var index = startIndex; index < args.Length; index++)
         {
             var argument = args[index];
             if (argument != "--codex-home")
@@ -359,7 +366,7 @@ public static class AecApplication
             codexHome = args[++index];
         }
 
-        return new SkillUpgradeOptions(codexHome);
+        return new CodexHomeOptions(codexHome);
     }
 
     internal static string ResolveCodexHome(string? explicitPath)
@@ -559,6 +566,7 @@ public static class AecApplication
         output.WriteLine("  aec help");
         output.WriteLine("  aec version");
         output.WriteLine("  aec skill upgrade [--codex-home ABSOLUTE_PATH]");
+        output.WriteLine("  aec uninstall [--codex-home ABSOLUTE_PATH]");
         output.WriteLine(
             "  aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]");
         output.WriteLine("  aec init --repo ABSOLUTE_PATH --provider=chatgpt");
@@ -576,7 +584,7 @@ public static class AecApplication
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
 
-    private sealed record SkillUpgradeOptions(string? CodexHome);
+    private sealed record CodexHomeOptions(string? CodexHome);
 
     private sealed record InitOptions(
         string Repository,

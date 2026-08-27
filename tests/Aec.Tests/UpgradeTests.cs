@@ -19,12 +19,12 @@ public sealed class UpgradeTests
     }
 
     [Fact]
-    public void VersionReports100()
+    public void VersionReports110()
     {
         var result = Run("version");
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"1.0.0{Environment.NewLine}", result.Output);
+        Assert.Equal($"1.1.0{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
     }
 
@@ -34,6 +34,7 @@ public sealed class UpgradeTests
     [InlineData("0.11.4", "9cddc5727f0e491a1735e7c2d40e4cee865dc3675dfe24c4fb5842c2119b61c0")]
     [InlineData("0.12.0", "8cf1c0d8effbdf19cd44520bd96300b5201ba2a71cef69101f5490077159a3a7")]
     [InlineData("0.13.0", "1bf54d30a4237801df36dd4949d8a21e843dc6c1f98cfb092694c0999b51eacf")]
+    [InlineData("1.0.0", "60754cc941dbfaf17042c4eb4093c9706ea0054c526001f096da2fc4a795aec9")]
     public void UpgradesEachExactSupportedOfficialPredecessor(
         string version,
         string expectedHash)
