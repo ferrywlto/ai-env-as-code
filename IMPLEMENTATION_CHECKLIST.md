@@ -1,5 +1,19 @@
 # Implementation Checklist
 
+## v1.2 — Installer-generated uninstaller
+
+- [x] Generate `scripts/uninstall-aec.sh` beside the macOS ARM64 installer.
+- [x] Embed the exact latest selected executable path so cleanup does not use `PATH`.
+- [x] Run runtime `aec uninstall` before removing the executable or helper script.
+- [x] Preserve `config.toml` and every AEC data repository.
+- [x] Refuse to overwrite a non-AEC helper and preflight source-folder write access.
+- [x] Recognize the exact v1.1.0 skill as an upgrade and uninstall predecessor.
+- [x] Pass shell, skill, Debug, Release, and macOS ARM64 Native AOT validation.
+- [x] Pass an isolated generated-uninstaller install-to-uninstall cycle.
+
+Immediate next work: review the v1.2 validation results, then commit only with
+explicit approval.
+
 ## v1.1 — Explicit AEC runtime uninstall
 
 - [x] Define `aec uninstall [--codex-home ABSOLUTE_PATH]` without `--repo`.
@@ -135,8 +149,3 @@
 - [x] Pass Debug and Release verification.
 - [x] Prepare the exact engine release paths and staged secret gate.
 - [x] Complete the source-first AEC validation and canonical commit/push.
-
-## Immediate next work
-
-Patch the macOS ARM64 installer as v1.1.1 to generate a contained uninstall script.
-After that patch, plan Windows x64 build and user-local installation as v1.2.0.

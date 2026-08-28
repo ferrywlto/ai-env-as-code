@@ -1,105 +1,149 @@
 #!/bin/sh
-# This integration test runs the real macOS ARM64 installer against temporary
-# directories. It requires the Native AOT artifact produced by the build script.
+
+# This test exercises the installer from a disposable copy of the source tree.
+# The real generated uninstaller is therefore never written into this checkout.
 set -eu
 
-fail()
-{
-  printf 'test failed: %s\n' "$1" >&2
-  exit 1
+fail() {
+    printf '%s\n' "FAIL: $*" >&2
+    exit 1
 }
 
-# Resolve the repository from this test file so callers may run it from any
-# working directory. Clearing CDPATH prevents shell configuration from adding
-# output or changing how cd resolves the path.
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-installer="$repo_root/scripts/install-osx-arm64.sh"
-artifact="$repo_root/artifacts/aec-osx-arm64/aec"
+source_installer="$repo_root/scripts/install-osx-arm64.sh"
+source_artifact="$repo_root/artifacts/aec-osx-arm64/aec"
 
-if [ ! -f "$artifact" ] || [ ! -x "$artifact" ]; then
-  fail "build artifact is missing; run $repo_root/scripts/build-osx-arm64.sh first"
+[ -f "$source_installer" ] || fail "installer was not found: $source_installer"
+[ -x "$source_artifact" ] || fail "Native AOT artifact was not found: $source_artifact"
+
+# pwd normalizes a trailing slash in TMPDIR so expected paths match the installer.
+test_root=$(CDPATH= cd -- "$(mktemp -d "${TMPDIR:-/tmp}/aec-installer-tests.XXXXXX")" && pwd)
+cleanup() {
+    rm -rf -- "$test_root"
+}
+trap cleanup EXIT HUP INT TERM
+
+assert_file_equals() {
+    expected=$1
+    actual=$2
+    cmp -s "$expected" "$actual" || fail "files differ: $actual"
+}
+
+assert_output() {
+    expected=$1
+    actual=$2
+    cmp -s "$expected" "$actual" || fail "unexpected command output: $actual"
+}
+
+assert_empty() {
+    [ ! -e "$1" ] || fail "expected path to be absent: $1"
+}
+
+prepare_source() {
+    source_root=$1
+    artifact=$2
+    mkdir -p "$source_root/scripts" "$source_root/artifacts/aec-osx-arm64"
+    cp "$source_installer" "$source_root/scripts/install-osx-arm64.sh"
+    cp "$artifact" "$source_root/artifacts/aec-osx-arm64/aec"
+    chmod +x "$source_root/scripts/install-osx-arm64.sh" "$source_root/artifacts/aec-osx-arm64/aec"
+}
+
+assert_generated_uninstaller() {
+    script=$1
+    expected_binary=$2
+    [ -x "$script" ] || fail "generated uninstaller was not executable: $script"
+    grep -F "installed_aec='$expected_binary'" "$script" >/dev/null || \
+        fail "generated uninstaller did not embed the selected binary path"
+    grep -F '"$installed_aec" uninstall' "$script" >/dev/null || \
+        fail "generated uninstaller did not invoke the binary directly"
+}
+
+source_root="$test_root/source"
+prepare_source "$source_root" "$source_artifact"
+installer="$source_root/scripts/install-osx-arm64.sh"
+generated_uninstaller="$source_root/scripts/uninstall-aec.sh"
+default_target="$test_root/home/.local/bin/aec"
+default_dir=$(dirname "$default_target")
+
+"$installer" --install-dir "$default_dir" >"$test_root/initial-output"
+printf 'installed %s\ninstalled %s\n' "$default_target" "$generated_uninstaller" >"$test_root/initial-expected"
+assert_output "$test_root/initial-expected" "$test_root/initial-output"
+assert_file_equals "$source_artifact" "$default_target"
+assert_generated_uninstaller "$generated_uninstaller" "$default_target"
+
+"$installer" --install-dir "$default_dir" >"$test_root/unchanged-output"
+printf 'unchanged %s\n' "$default_target" >"$test_root/unchanged-expected"
+assert_output "$test_root/unchanged-expected" "$test_root/unchanged-output"
+
+rm -f -- "$generated_uninstaller"
+"$installer" --install-dir "$default_dir" >"$test_root/recovered-output"
+printf 'installed %s\n' "$generated_uninstaller" >"$test_root/recovered-expected"
+assert_output "$test_root/recovered-expected" "$test_root/recovered-output"
+assert_generated_uninstaller "$generated_uninstaller" "$default_target"
+
+custom_dir="$test_root/custom install/bin"
+custom_target="$custom_dir/aec"
+"$installer" --install-dir "$custom_dir" >"$test_root/custom-output" 2>"$test_root/custom-error"
+printf 'installed %s\ninstalled %s\n' "$custom_target" "$generated_uninstaller" >"$test_root/custom-expected"
+assert_output "$test_root/custom-expected" "$test_root/custom-output"
+assert_file_equals "$source_artifact" "$custom_target"
+[ -f "$default_target" ] || fail "switching install directories removed the old binary"
+grep -F "warning: custom AEC install directory: $custom_dir" "$test_root/custom-error" >/dev/null || \
+    fail "custom installation warning was missing"
+assert_generated_uninstaller "$generated_uninstaller" "$custom_target"
+
+conflict_source="$test_root/conflict-source"
+prepare_source "$conflict_source" "$source_artifact"
+printf 'personal script\n' >"$conflict_source/scripts/uninstall-aec.sh"
+if "$conflict_source/scripts/install-osx-arm64.sh" --install-dir "$test_root/conflict/bin" >"$test_root/conflict-output" 2>"$test_root/conflict-error"; then
+    fail "installer overwrote a non-AEC uninstaller"
 fi
+assert_empty "$test_root/conflict/bin/aec"
+grep -F 'Refusing to overwrite non-AEC uninstaller' "$test_root/conflict-error" >/dev/null || \
+    fail "conflict error did not explain the preserved file"
 
-# Every installation stays under one unique temporary root. The cleanup trap
-# removes that exact directory after success, failure, or interruption.
-test_root=$(mktemp -d "${TMPDIR:-/tmp}/aec-install-test.XXXXXX")
-cleanup()
-{
-  if [ -n "${test_root:-}" ] && [ -d "$test_root" ]; then
-    rm -R -- "$test_root"
-  fi
-}
-trap cleanup 0
-trap 'exit 1' HUP INT TERM
+# A small fake binary makes the generated script's all-or-nothing cleanup testable
+# without changing the actual personal Codex environment.
+fake_source="$test_root/fake-source"
+fake_artifact="$test_root/fake-aec"
+mkdir -p "$fake_source/scripts" "$fake_source/artifacts/aec-osx-arm64"
+cp "$source_installer" "$fake_source/scripts/install-osx-arm64.sh"
+printf '%s\n' '#!/bin/sh' \
+    'if [ "$1" = "version" ]; then printf "1.2.0\\n"; exit 0; fi' \
+    'if [ "$AEC_TEST_UNINSTALL_RESULT" = "fail" ]; then exit 17; fi' \
+    'printf "%s\\n" "$*" > "$AEC_TEST_ARGS_FILE"' \
+    'exit 0' >"$fake_artifact"
+cp "$fake_artifact" "$fake_source/artifacts/aec-osx-arm64/aec"
+chmod +x "$fake_source/scripts/install-osx-arm64.sh" "$fake_source/artifacts/aec-osx-arm64/aec"
 
-assert_single_line()
-{
-  expected="$1"
-  actual_file="$2"
-  expected_file="$test_root/expected-line"
-  printf '%s\n' "$expected" >"$expected_file"
-  cmp -s "$expected_file" "$actual_file" || fail "unexpected output in $actual_file"
-}
+fake_target_dir="$test_root/fake-bin"
+fake_target="$fake_target_dir/aec"
+"$fake_source/scripts/install-osx-arm64.sh" --install-dir "$fake_target_dir" >"$test_root/fake-install-output"
+fake_uninstaller="$fake_source/scripts/uninstall-aec.sh"
+fake_codex_home="$test_root/fake-codex-home"
+mkdir -p "$fake_codex_home"
+printf 'runtime config remains owned by aec\n' >"$fake_codex_home/config.toml"
+data_sentinel="$test_root/data-repository-sentinel"
+printf 'canonical data remains untouched\n' >"$data_sentinel"
 
-assert_empty()
-{
-  [ ! -s "$1" ] || fail "expected no output in $1"
-}
+if "$fake_uninstaller" --codex-home relative >"$test_root/invalid-output" 2>"$test_root/invalid-error"; then
+    fail "generated uninstaller accepted a relative --codex-home"
+fi
+[ -f "$fake_target" ] || fail "invalid arguments removed the binary"
+[ -f "$fake_uninstaller" ] || fail "invalid arguments removed the uninstaller"
 
-assert_installed_copy()
-{
-  installed="$1"
-  [ -f "$installed" ] && [ -x "$installed" ] || fail "installed executable is missing: $installed"
-  cmp -s "$artifact" "$installed" || fail "installed bytes differ from the build artifact: $installed"
-}
+if AEC_TEST_UNINSTALL_RESULT=fail AEC_TEST_ARGS_FILE="$test_root/fake-args" "$fake_uninstaller" >"$test_root/failure-output" 2>"$test_root/failure-error"; then
+    fail "generated uninstaller continued after aec uninstall failed"
+fi
+[ -f "$fake_target" ] || fail "failed aec uninstall removed the binary"
+[ -f "$fake_uninstaller" ] || fail "failed aec uninstall removed the uninstaller"
 
-assert_custom_warning()
-{
-  directory="$1"
-  actual_file="$2"
-  expected_file="$test_root/expected-warning"
-  {
-    printf 'warning: custom AEC install directory: %s\n' "$directory"
-    printf '%s\n' 'The $aec skill invokes `aec` through PATH.'
-    printf '%s\n' 'Ensure this directory is available to Codex, restart Codex, then run `aec help`.'
-  } >"$expected_file"
-  cmp -s "$expected_file" "$actual_file" || fail "unexpected custom-directory warning"
-}
+AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$fake_uninstaller" --codex-home "$fake_codex_home"
+assert_empty "$fake_target"
+assert_empty "$fake_uninstaller"
+[ -f "$fake_codex_home/config.toml" ] || fail "generated uninstaller removed config.toml"
+[ -f "$data_sentinel" ] || fail "generated uninstaller removed data repository content"
+printf 'uninstall --codex-home %s\n' "$fake_codex_home" >"$test_root/fake-args-expected"
+assert_output "$test_root/fake-args-expected" "$test_root/fake-args"
 
-# The default destination must remain quiet.
-default_home="$test_root/default home"
-stdout_file="$test_root/default.stdout"
-stderr_file="$test_root/default.stderr"
-HOME="$default_home" "$installer" >"$stdout_file" 2>"$stderr_file"
-assert_single_line "installed $default_home/.local/bin/aec" "$stdout_file"
-assert_empty "$stderr_file"
-assert_installed_copy "$default_home/.local/bin/aec"
-
-# Passing the default destination explicitly is still a default installation.
-HOME="$default_home" "$installer" --install-dir "$default_home/.local/bin" >"$stdout_file" 2>"$stderr_file"
-assert_single_line "unchanged $default_home/.local/bin/aec" "$stdout_file"
-assert_empty "$stderr_file"
-
-# A custom path, including one with spaces, warns on both install and reinstall.
-custom_dir="$test_root/custom bin"
-stdout_file="$test_root/custom.stdout"
-stderr_file="$test_root/custom.stderr"
-HOME="$default_home" "$installer" --install-dir "$custom_dir" >"$stdout_file" 2>"$stderr_file"
-assert_single_line "installed $custom_dir/aec" "$stdout_file"
-assert_custom_warning "$custom_dir" "$stderr_file"
-assert_installed_copy "$custom_dir/aec"
-
-HOME="$default_home" "$installer" --install-dir "$custom_dir" >"$stdout_file" 2>"$stderr_file"
-assert_single_line "unchanged $custom_dir/aec" "$stdout_file"
-assert_custom_warning "$custom_dir" "$stderr_file"
-
-# An explicit custom destination remains valid when HOME is unavailable.
-no_home_dir="$test_root/no-home"
-stdout_file="$test_root/no-home.stdout"
-stderr_file="$test_root/no-home.stderr"
-(unset HOME; "$installer" --install-dir "$no_home_dir") >"$stdout_file" 2>"$stderr_file"
-assert_single_line "installed $no_home_dir/aec" "$stdout_file"
-assert_custom_warning "$no_home_dir" "$stderr_file"
-assert_installed_copy "$no_home_dir/aec"
-
-printf 'installer warning tests passed\n'
+printf '%s\n' 'installer generated-uninstaller tests passed'

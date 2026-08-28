@@ -1,7 +1,8 @@
 # AI Environment as Code
 
-Version 1.1.0 adds explicit removal of AEC's Codex runtime integration while
-preserving configuration, executable installation, and source-of-truth data.
+Version 1.2.0 makes the macOS installer generate a companion uninstaller beside
+it, preserving configuration and source-of-truth data while removing the latest
+selected executable only after runtime cleanup succeeds.
 
 ## Version history
 
@@ -26,8 +27,9 @@ preserving configuration, executable installation, and source-of-truth data.
 | 0.13.1 | Diagnose a running Codex process with a stale executable `PATH` |
 | 1.0.0 | First stable release after private end-to-end dogfooding |
 | 1.1.0 | Remove AEC runtime instructions and exact official skill files |
+| 1.2.0 | Generate a contained uninstaller beside the macOS ARM64 installer |
 
-The project and CLI report the current release as `1.1.0` through `aec version`.
+The project and CLI report the current release as `1.2.0` through `aec version`.
 
 ## version
 
@@ -655,19 +657,26 @@ source checkout, rerun the build and installer scripts, then run
 `aec skill upgrade`. Reinstalling identical executable bytes reports
 `unchanged`; upgrading already-current skill guidance also reports `unchanged`.
 
-To uninstall AEC manually in v1.1.0, first remove its Codex integration while the
-executable is still present, then remove the executable:
+The macOS ARM64 installer generates `scripts/uninstall-aec.sh` in the same folder
+as `scripts/install-osx-arm64.sh`. Run it by its explicit path, so it can safely
+remove itself after the runtime cleanup succeeds:
 
 ```bash
-aec uninstall
-rm "$HOME/.local/bin/aec"
+./scripts/uninstall-aec.sh
 ```
 
-This preserves every AEC data repository and all runtime `config.toml` bytes. For a
-custom installation, run the same `aec uninstall` command through the configured
-`PATH`, then remove `aec` from the directory passed to `--install-dir` instead.
-The next increment will make the installer generate a script that performs this
-ordering automatically.
+For a non-default Codex home, pass its absolute path:
+
+```bash
+./scripts/uninstall-aec.sh --codex-home /absolute/path/to/.codex
+```
+
+The script calls the exact binary selected by the latest installation; it does not
+depend on `PATH`. It first runs `aec uninstall`, then removes that binary and the
+generated script only on success. It preserves every AEC data repository and all
+runtime `config.toml` bytes. Reinstalling at a new directory updates this generated
+script to that latest binary; an earlier binary remains untouched and can be removed
+manually if no longer wanted.
 
 ## Current boundaries
 

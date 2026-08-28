@@ -194,6 +194,27 @@ public sealed class UninstallTests
     }
 
     [Fact]
+    public void RemovesTheExactVersion110SkillPredecessor()
+    {
+        using var layout = new UninstallLayout();
+        File.WriteAllBytes(
+            layout.Skill,
+            File.ReadAllBytes(Path.Combine(
+                AppContext.BaseDirectory,
+                "Fixtures",
+                "Skills",
+                "1.1.0.md")));
+
+        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        Assert.False(File.Exists(layout.Skill));
+        Assert.False(File.Exists(layout.Metadata));
+    }
+
+    [Fact]
     public void ExplicitCodexHomeOverridesEnvironmentSelection()
     {
         using var selected = new UninstallLayout();
