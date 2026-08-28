@@ -1,6 +1,6 @@
 namespace Aec.Tests;
 
-[Collection(ProcessStateCollection.Name)]
+[Collection(ProcessStateTestGroup.Name)]
 public sealed class ChatGptInitTests
 {
     [Fact]
@@ -439,22 +439,27 @@ public sealed class ChatGptInitTests
     }
 
     [Fact]
-    public void HelpListsTheExactProviderForm()
+    public void HelpListsAllSupportedCommandsExactly()
     {
         var result = RunArguments("help");
+        const string expected = """
+            Usage:
+              aec help
+              aec version
+              aec skill upgrade [--codex-home ABSOLUTE_PATH]
+              aec uninstall [--codex-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
+              aec init --repo ABSOLUTE_PATH --provider=chatgpt
+              aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+              aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+              aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+            """;
 
         Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            expected.ReplaceLineEndings(Environment.NewLine) + Environment.NewLine,
+            result.Output);
         Assert.Empty(result.Error);
-        Assert.Contains("aec version", result.Output, StringComparison.Ordinal);
-        Assert.DoesNotContain("aec --version", result.Output, StringComparison.Ordinal);
-        Assert.Contains(
-            "aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]",
-            result.Output,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "aec init --repo ABSOLUTE_PATH --provider=chatgpt",
-            result.Output,
-            StringComparison.Ordinal);
     }
 
     [Fact]

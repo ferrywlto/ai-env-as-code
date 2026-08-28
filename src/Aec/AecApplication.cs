@@ -201,12 +201,7 @@ public static class AecApplication
                 throw new ArgumentException($"Unknown argument: {option}");
             }
 
-            if (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
-            {
-                throw new ArgumentException($"{option} requires a value.");
-            }
-
-            var value = args[++index];
+            var value = ReadRequiredOptionValue(args, ref index, option);
             if (option == "--repo")
             {
                 if (repository is not null)
@@ -253,13 +248,7 @@ public static class AecApplication
                     throw new ArgumentException("--repo may be specified only once.");
                 }
 
-                if (index + 1 >= args.Length ||
-                    args[index + 1].StartsWith("--", StringComparison.Ordinal))
-                {
-                    throw new ArgumentException("--repo requires a value.");
-                }
-
-                repository = args[++index];
+                repository = ReadRequiredOptionValue(args, ref index, argument);
                 continue;
             }
 
@@ -286,13 +275,7 @@ public static class AecApplication
                     throw new ArgumentException("--codex-home may be specified only once.");
                 }
 
-                if (index + 1 >= args.Length ||
-                    args[index + 1].StartsWith("--", StringComparison.Ordinal))
-                {
-                    throw new ArgumentException("--codex-home requires a value.");
-                }
-
-                codexHome = args[++index];
+                codexHome = ReadRequiredOptionValue(args, ref index, argument);
                 continue;
             }
 
@@ -357,16 +340,24 @@ public static class AecApplication
                 throw new ArgumentException("--codex-home may be specified only once.");
             }
 
-            if (index + 1 >= args.Length ||
-                args[index + 1].StartsWith("--", StringComparison.Ordinal))
-            {
-                throw new ArgumentException("--codex-home requires a value.");
-            }
-
-            codexHome = args[++index];
+            codexHome = ReadRequiredOptionValue(args, ref index, argument);
         }
 
         return new CodexHomeOptions(codexHome);
+    }
+
+    private static string ReadRequiredOptionValue(
+        string[] args,
+        ref int optionIndex,
+        string option)
+    {
+        if (optionIndex + 1 >= args.Length ||
+            args[optionIndex + 1].StartsWith("--", StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"{option} requires a value.");
+        }
+
+        return args[++optionIndex];
     }
 
     internal static string ResolveCodexHome(string? explicitPath)
@@ -562,17 +553,20 @@ public static class AecApplication
 
     private static void WriteUsage(TextWriter output)
     {
-        output.WriteLine("Usage:");
-        output.WriteLine("  aec help");
-        output.WriteLine("  aec version");
-        output.WriteLine("  aec skill upgrade [--codex-home ABSOLUTE_PATH]");
-        output.WriteLine("  aec uninstall [--codex-home ABSOLUTE_PATH]");
-        output.WriteLine(
-            "  aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]");
-        output.WriteLine("  aec init --repo ABSOLUTE_PATH --provider=chatgpt");
-        output.WriteLine("  aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
-        output.WriteLine("  aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
-        output.WriteLine("  aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]");
+        const string usage = """
+            Usage:
+              aec help
+              aec version
+              aec skill upgrade [--codex-home ABSOLUTE_PATH]
+              aec uninstall [--codex-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
+              aec init --repo ABSOLUTE_PATH --provider=chatgpt
+              aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+              aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+              aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+            """;
+
+        output.WriteLine(usage.ReplaceLineEndings(output.NewLine));
     }
 
     private static void WriteVersion(TextWriter output)

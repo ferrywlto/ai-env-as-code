@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace Aec.Tests;
 
-[Collection(ProcessStateCollection.Name)]
+[Collection(ProcessStateTestGroup.Name)]
 public sealed class BackupTests
 {
     private const string SourceRelativePath = "environment/providers/codex/AGENTS.md";

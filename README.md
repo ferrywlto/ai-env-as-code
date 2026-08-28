@@ -1,8 +1,7 @@
 # AI Environment as Code
 
-Version 1.2.0 makes the macOS installer generate a companion uninstaller beside
-it, preserving configuration and source-of-truth data while removing the latest
-selected executable only after runtime cleanup succeeds.
+Version 1.2.1 consolidates compiler configuration, enables the .NET 10 recommended
+Roslyn rules, and removes behavior-identical implementation and test repetition.
 
 ## Version history
 
@@ -28,8 +27,9 @@ selected executable only after runtime cleanup succeeds.
 | 1.0.0 | First stable release after private end-to-end dogfooding |
 | 1.1.0 | Remove AEC runtime instructions and exact official skill files |
 | 1.2.0 | Generate a contained uninstaller beside the macOS ARM64 installer |
+| 1.2.1 | Apply recommended Roslyn analysis and behavior-preserving cleanup |
 
-The project and CLI report the current release as `1.2.0` through `aec version`.
+The project and CLI report the current release as `1.2.1` through `aec version`.
 
 ## version
 

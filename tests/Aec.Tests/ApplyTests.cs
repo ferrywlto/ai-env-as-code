@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Aec.Tests;
 
-[Collection(ProcessStateCollection.Name)]
+[Collection(ProcessStateTestGroup.Name)]
 public sealed class ApplyTests
 {
     private const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
@@ -834,7 +834,7 @@ public sealed class ApplyTests
         var exitCode = AecApplication.Run(["version"], output, error);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"1.2.0{Environment.NewLine}", output.ToString());
+        Assert.Equal($"1.2.1{Environment.NewLine}", output.ToString());
         Assert.Empty(error.ToString());
     }
 

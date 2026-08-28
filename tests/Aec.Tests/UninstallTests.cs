@@ -1,21 +1,8 @@
 namespace Aec.Tests;
 
-[Collection(ProcessStateCollection.Name)]
+[Collection(ProcessStateTestGroup.Name)]
 public sealed class UninstallTests
 {
-    [Fact]
-    public void HelpListsTheExactUninstallForm()
-    {
-        var result = Run("help");
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Contains(
-            "aec uninstall [--codex-home ABSOLUTE_PATH]",
-            result.Output,
-            StringComparison.Ordinal);
-        Assert.Empty(result.Error);
-    }
-
     [Fact]
     public void RemovesManagedInstructionsAndSkillWhilePreservingEverythingElse()
     {

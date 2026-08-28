@@ -3,7 +3,7 @@ using System.Text;
 namespace Aec.Tests;
 
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class ProcessStateCollection : ICollectionFixture<GitTestEnvironment>
+public sealed class ProcessStateTestGroup : ICollectionFixture<GitTestEnvironment>
 {
     public const string Name = "Process state";
 }
@@ -39,7 +39,7 @@ public sealed class GitTestEnvironment : IDisposable
     }
 }
 
-[Collection(ProcessStateCollection.Name)]
+[Collection(ProcessStateTestGroup.Name)]
 public sealed class StatusTests
 {
     private const string DefaultCanonicalConfig = "personality = \"none\"\n";

@@ -1,5 +1,17 @@
 # Implementation Checklist
 
+## v1.2.1 — Behavior-preserving cleanup
+
+- [x] Consolidate shared compiler settings in `Directory.Build.props`.
+- [x] Enable the pinned .NET 10 recommended Roslyn rules and build-time code style.
+- [x] Replace repetitive help writes with one newline-safe raw string literal.
+- [x] Extract repeated required-option value parsing without changing diagnostics.
+- [x] Fix every compiler and analyzer diagnostic without suppression.
+- [x] Remove tests only after an exact public-path contract supersedes them.
+- [x] Pass focused, full, formatting, shell, skill, and Native AOT validation.
+
+Immediate next work: review the completed v1.2.1 cleanup before any commit.
+
 ## v1.2 — Installer-generated uninstaller
 
 - [x] Generate `scripts/uninstall-aec.sh` beside the macOS ARM64 installer.

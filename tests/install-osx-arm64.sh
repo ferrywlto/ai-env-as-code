@@ -109,7 +109,7 @@ fake_artifact="$test_root/fake-aec"
 mkdir -p "$fake_source/scripts" "$fake_source/artifacts/aec-osx-arm64"
 cp "$source_installer" "$fake_source/scripts/install-osx-arm64.sh"
 printf '%s\n' '#!/bin/sh' \
-    'if [ "$1" = "version" ]; then printf "1.2.0\\n"; exit 0; fi' \
+    'if [ "$1" = "version" ]; then printf "1.2.1\\n"; exit 0; fi' \
     'if [ "$AEC_TEST_UNINSTALL_RESULT" = "fail" ]; then exit 17; fi' \
     'printf "%s\\n" "$*" > "$AEC_TEST_ARGS_FILE"' \
     'exit 0' >"$fake_artifact"

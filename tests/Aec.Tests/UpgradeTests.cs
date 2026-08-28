@@ -2,32 +2,9 @@ using System.Security.Cryptography;
 
 namespace Aec.Tests;
 
-[Collection(ProcessStateCollection.Name)]
+[Collection(ProcessStateTestGroup.Name)]
 public sealed class UpgradeTests
 {
-    [Fact]
-    public void HelpListsTheExactSkillUpgradeForm()
-    {
-        var result = Run("help");
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Contains(
-            "aec skill upgrade [--codex-home ABSOLUTE_PATH]",
-            result.Output,
-            StringComparison.Ordinal);
-        Assert.Empty(result.Error);
-    }
-
-    [Fact]
-    public void VersionReports120()
-    {
-        var result = Run("version");
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"1.2.0{Environment.NewLine}", result.Output);
-        Assert.Empty(result.Error);
-    }
-
     [Theory]
     [InlineData("0.9.0", "dc5b81445caa9ea6d039504b67676d05ef2e19d2f98394eda826522056d4a6a8")]
     [InlineData("0.10.0", "728a706eadd9a802a17960a940430466d71b841d612b1b1953c99caf6df2d0ec")]

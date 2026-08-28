@@ -1,9 +1,10 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 
 namespace Aec.Tests;
 
-[Collection(ProcessStateCollection.Name)]
+[Collection(ProcessStateTestGroup.Name)]
 public sealed class InitTests
 {
     [Fact]
@@ -349,7 +350,7 @@ public sealed class InitTests
             "Rebind AEC repository path",
             RunGit(movedRepository, "log", "-1", "--format=%s").Output.Trim());
         Assert.Equal(
-            expectedCommitCount.ToString(),
+            expectedCommitCount.ToString(CultureInfo.InvariantCulture),
             RunGit(movedRepository, "rev-list", "--count", "HEAD").Output.Trim());
         Assert.Equal(
             AecApplication.SourceRelativePath,
@@ -1686,9 +1687,19 @@ public sealed class InitTests
     }
 }
 
-[Collection(ProcessStateCollection.Name)]
+[Collection(ProcessStateTestGroup.Name)]
 public sealed class InitProcessStateTests
 {
+    private static readonly string[] GitIdentityVariableNames =
+    [
+        "GIT_CONFIG_GLOBAL",
+        "GIT_CONFIG_NOSYSTEM",
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL"
+    ];
+
     [Fact]
     public void InitRequiresRepoFlagInsteadOfDefaultingToTheCurrentDirectory()
     {
@@ -1928,15 +1939,7 @@ public sealed class InitProcessStateTests
                 "user.email",
                 "local@example.invalid").ExitCode);
         var previousDirectory = Environment.CurrentDirectory;
-        var variables = new[]
-        {
-            "GIT_CONFIG_GLOBAL",
-            "GIT_CONFIG_NOSYSTEM",
-            "GIT_AUTHOR_NAME",
-            "GIT_AUTHOR_EMAIL",
-            "GIT_COMMITTER_NAME",
-            "GIT_COMMITTER_EMAIL"
-        }.ToDictionary(
+        var variables = GitIdentityVariableNames.ToDictionary(
             name => name,
             Environment.GetEnvironmentVariable,
             StringComparer.Ordinal);
@@ -2007,15 +2010,7 @@ public sealed class InitProcessStateTests
             [includeIf "gitdir:{gitDirectoryPattern}"]
                 path = "{includedConfigPath}"
             """);
-        var variables = new[]
-        {
-            "GIT_CONFIG_GLOBAL",
-            "GIT_CONFIG_NOSYSTEM",
-            "GIT_AUTHOR_NAME",
-            "GIT_AUTHOR_EMAIL",
-            "GIT_COMMITTER_NAME",
-            "GIT_COMMITTER_EMAIL"
-        }.ToDictionary(
+        var variables = GitIdentityVariableNames.ToDictionary(
             name => name,
             Environment.GetEnvironmentVariable,
             StringComparer.Ordinal);
