@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 
 namespace Aec.Tests;
@@ -834,7 +833,7 @@ public sealed class ApplyTests
         var exitCode = AecApplication.Run(["version"], output, error);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"1.2.1{Environment.NewLine}", output.ToString());
+        Assert.Equal($"1.2.2{Environment.NewLine}", output.ToString());
         Assert.Empty(error.ToString());
     }
 
@@ -870,13 +869,12 @@ public sealed class ApplyTests
 
     private static CommandResult Run(ApplyLayout layout)
     {
-        var output = new StringWriter();
-        var error = new StringWriter();
-        var exitCode = AecApplication.Run(
-            ["apply", "--repo", layout.Repository, "--codex-home", layout.CodexHome],
-            output,
-            error);
-        return new CommandResult(exitCode, output.ToString(), error.ToString());
+        return TestApplication.Run(
+            "apply",
+            "--repo",
+            layout.Repository,
+            "--codex-home",
+            layout.CodexHome);
     }
 
     private static void AssertNoTemporaryFiles(ApplyLayout layout)
@@ -888,54 +886,8 @@ public sealed class ApplyTests
 
     private static GitResult Git(ApplyLayout layout, params string[] arguments)
     {
-        return RunGit(layout.Repository, arguments);
+        return TestGit.Run(layout.Repository, arguments);
     }
-
-    private static GitResult RunGit(string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-
-        foreach (var variable in new[]
-                 {
-                     "GIT_DIR",
-                     "GIT_WORK_TREE",
-                     "GIT_COMMON_DIR",
-                     "GIT_OBJECT_DIRECTORY",
-                     "GIT_INDEX_FILE",
-                     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-                     "GIT_TEMPLATE_DIR",
-                     "GIT_CONFIG_PARAMETERS",
-                     "GIT_CONFIG_COUNT"
-                 })
-        {
-            startInfo.Environment.Remove(variable);
-        }
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(startInfo)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return new GitResult(
-            process.ExitCode,
-            output.GetAwaiter().GetResult(),
-            error.GetAwaiter().GetResult());
-    }
-
-    private sealed record CommandResult(int ExitCode, string Output, string Error);
-
-    private sealed record GitResult(int ExitCode, string Output, string Error);
 
     private sealed class ApplyLayout : IDisposable
     {
@@ -1022,7 +974,7 @@ public sealed class ApplyTests
 
         private static void RequireGit(string workingDirectory, params string[] arguments)
         {
-            var result = RunGit(workingDirectory, arguments);
+            var result = TestGit.Run(workingDirectory, arguments);
             if (result.ExitCode != 0)
             {
                 throw new InvalidOperationException(result.Error);

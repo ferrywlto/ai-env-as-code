@@ -37,7 +37,7 @@ public sealed class ChatGptInitTests
     {
         using var layout = new ChatGptLayout();
 
-        var result = RunArguments(
+        var result = TestApplication.Run(
             "init",
             "--provider=chatgpt",
             "--repo",
@@ -58,7 +58,7 @@ public sealed class ChatGptInitTests
         {
             Environment.CurrentDirectory = layout.Repository;
 
-            var result = RunArguments("init", "--provider=chatgpt");
+            var result = TestApplication.Run("init", "--provider=chatgpt");
 
             Assert.Equal(1, result.ExitCode);
             Assert.Contains("init requires --repo", result.Error, StringComparison.Ordinal);
@@ -143,7 +143,7 @@ public sealed class ChatGptInitTests
     {
         using var layout = new ChatGptLayout();
 
-        var result = RunArguments(
+        var result = TestApplication.Run(
             "init",
             "--repo",
             layout.Repository,
@@ -441,7 +441,7 @@ public sealed class ChatGptInitTests
     [Fact]
     public void HelpListsAllSupportedCommandsExactly()
     {
-        var result = RunArguments("help");
+        var result = TestApplication.Run("help");
         const string expected = """
             Usage:
               aec help
@@ -465,7 +465,7 @@ public sealed class ChatGptInitTests
     [Fact]
     public void NoCommandSuggestsTheDocumentedHelpCommand()
     {
-        var result = RunArguments();
+        var result = TestApplication.Run();
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -522,18 +522,8 @@ public sealed class ChatGptInitTests
             repository,
             "--provider=chatgpt"
         }.Concat(extraArguments).ToArray();
-        return RunArguments(arguments);
+        return TestApplication.Run(arguments);
     }
-
-    private static CommandResult RunArguments(params string[] arguments)
-    {
-        var output = new StringWriter();
-        var error = new StringWriter();
-        var exitCode = AecApplication.Run(arguments, output, error);
-        return new CommandResult(exitCode, output.ToString(), error.ToString());
-    }
-
-    private sealed record CommandResult(int ExitCode, string Output, string Error);
 
     private sealed class ChatGptLayout : IDisposable
     {

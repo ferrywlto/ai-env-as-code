@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
@@ -685,65 +683,18 @@ public sealed class BackupTests
 
     private static CommandResult Run(BackupLayout layout)
     {
-        var output = new StringWriter();
-        var error = new StringWriter();
-        var exitCode = AecApplication.Run(
-            ["backup", "--repo", layout.Repository, "--codex-home", layout.CodexHome],
-            output,
-            error);
-        return new CommandResult(exitCode, output.ToString(), error.ToString());
+        return TestApplication.Run(
+            "backup",
+            "--repo",
+            layout.Repository,
+            "--codex-home",
+            layout.CodexHome);
     }
 
     private static GitResult Git(BackupLayout layout, params string[] arguments)
     {
-        return RunGit(layout.Repository, arguments);
+        return TestGit.Run(layout.Repository, arguments);
     }
-
-    private static GitResult RunGit(string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-
-        foreach (var variable in new[]
-                 {
-                     "GIT_DIR",
-                     "GIT_WORK_TREE",
-                     "GIT_COMMON_DIR",
-                     "GIT_OBJECT_DIRECTORY",
-                     "GIT_INDEX_FILE",
-                     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-                     "GIT_TEMPLATE_DIR",
-                     "GIT_CONFIG_PARAMETERS",
-                     "GIT_CONFIG_COUNT"
-                 })
-        {
-            startInfo.Environment.Remove(variable);
-        }
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(startInfo)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return new GitResult(
-            process.ExitCode,
-            output.GetAwaiter().GetResult(),
-            error.GetAwaiter().GetResult());
-    }
-
-    private sealed record CommandResult(int ExitCode, string Output, string Error);
-
-    private sealed record GitResult(int ExitCode, string Output, string Error);
 
     private sealed class BackupLayout : IDisposable
     {
@@ -767,7 +718,7 @@ public sealed class BackupTests
                 File.WriteAllText(RuntimeConfig, runtimeConfig);
             }
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
-            var init = RunGit(
+            var init = TestGit.Run(
                 Repository,
                 "init",
                 "--quiet",
@@ -811,7 +762,7 @@ public sealed class BackupTests
 
         private void ConfigureGit(string key, string value)
         {
-            var result = RunGit(Repository, "config", "--local", key, value);
+            var result = TestGit.Run(Repository, "config", "--local", key, value);
             if (result.ExitCode != 0)
             {
                 throw new InvalidOperationException(result.Error);

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
@@ -24,11 +23,11 @@ public sealed class InitTests
         Assert.Equal(
             $"Backup Codex environment{Environment.NewLine}" +
             $"Initialize AEC instructions{Environment.NewLine}",
-            RunGit(layout.Target, "log", "--reverse", "--format=%s").Output);
+            TestGit.Run(layout.Target, "log", "--reverse", "--format=%s").Output);
         Assert.Equal(
             $"{AecApplication.SourceRelativePath}{Environment.NewLine}" +
             AecApplication.ConfigSourceRelativePath,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "ls-tree",
                 "-r",
@@ -36,14 +35,14 @@ public sealed class InitTests
                 "HEAD~1").Output.Trim());
         Assert.Equal(
             "personality = \"friendly\"\n",
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "show",
                 $"HEAD~1:{AecApplication.ConfigSourceRelativePath}").Output);
         Assert.Equal(runtimeConfig, File.ReadAllText(layout.RuntimeConfig));
         Assert.Equal(
             AecApplication.SourceRelativePath,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "diff-tree",
                 "--no-commit-id",
@@ -67,7 +66,7 @@ public sealed class InitTests
         Assert.Contains("none", result.Error, StringComparison.Ordinal);
         Assert.Equal(
             "personality = \"none\"\n",
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "show",
                 $"HEAD~1:{AecApplication.ConfigSourceRelativePath}").Output);
@@ -76,8 +75,8 @@ public sealed class InitTests
             File.ReadAllText(layout.RuntimeConfig));
         Assert.Equal(
             "2",
-            RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
-        Assert.Equal(string.Empty, RunGit(layout.Target, "status", "--porcelain").Output);
+            TestGit.Run(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -92,7 +91,7 @@ public sealed class InitTests
         Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
         Assert.Equal(
             "personality = \"none\"\n",
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "show",
                 $"HEAD~1:{AecApplication.ConfigSourceRelativePath}").Output);
@@ -120,10 +119,10 @@ public sealed class InitTests
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("newer unsupported", result.Error, StringComparison.Ordinal);
         Assert.Equal(runtimeConfig, File.ReadAllText(layout.RuntimeConfig));
-        Assert.Equal("1", RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
+        Assert.Equal("1", TestGit.Run(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
         Assert.Equal(
             "personality = \"none\"\n",
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "show",
                 $"HEAD:{AecApplication.ConfigSourceRelativePath}").Output);
@@ -240,7 +239,7 @@ public sealed class InitTests
     {
         using var layout = new InitLayout();
         Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
-        var headBefore = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var headBefore = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var sourceBefore = File.ReadAllBytes(layout.Source);
         File.Delete(layout.Runtime);
         File.Delete(layout.RuntimeConfig);
@@ -262,8 +261,8 @@ public sealed class InitTests
                 File.GetUnixFileMode(layout.RuntimeConfig));
         }
         Assert.True(File.Exists(Path.Combine(layout.CodexHome, "skills", "aec", "SKILL.md")));
-        Assert.Equal(headBefore, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
-        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+        Assert.Equal(headBefore, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -275,7 +274,7 @@ public sealed class InitTests
         var movedRepository = Path.Combine(layout.Root, "pulled data repository");
         Directory.Move(oldRepository, movedRepository);
         var movedSource = Path.Combine(movedRepository, AecApplication.SourceRelativePath);
-        var headBefore = RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim();
+        var headBefore = TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim();
         var sourceBefore = File.ReadAllBytes(movedSource);
         File.Delete(layout.Runtime);
         Directory.Delete(Path.Combine(layout.CodexHome, "skills"), recursive: true);
@@ -290,8 +289,8 @@ public sealed class InitTests
         Assert.False(File.Exists(layout.Runtime));
         Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills")));
         Assert.Equal(sourceBefore, File.ReadAllBytes(movedSource));
-        Assert.Equal(headBefore, RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim());
-        Assert.Empty(RunGit(movedRepository, "status", "--porcelain").Output);
+        Assert.Equal(headBefore, TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(TestGit.Run(movedRepository, "status", "--porcelain").Output);
     }
 
     [Theory]
@@ -312,10 +311,10 @@ public sealed class InitTests
                 AecInstructionBlock.MergeForChatGptProvider(current, layout.Target));
             Assert.Equal(
                 0,
-                RunGit(layout.Target, "add", "--", AecApplication.SourceRelativePath).ExitCode);
+                TestGit.Run(layout.Target, "add", "--", AecApplication.SourceRelativePath).ExitCode);
             Assert.Equal(
                 0,
-                RunGit(layout.Target, "commit", "--quiet", "--message", "Enable ChatGPT provider").ExitCode);
+                TestGit.Run(layout.Target, "commit", "--quiet", "--message", "Enable ChatGPT provider").ExitCode);
         }
 
         var movedRepository = Path.Combine(layout.Root, "pulled data repository");
@@ -348,26 +347,26 @@ public sealed class InitTests
             File.ReadAllText(layout.RuntimeConfig));
         Assert.Equal(
             "Rebind AEC repository path",
-            RunGit(movedRepository, "log", "-1", "--format=%s").Output.Trim());
+            TestGit.Run(movedRepository, "log", "-1", "--format=%s").Output.Trim());
         Assert.Equal(
             expectedCommitCount.ToString(CultureInfo.InvariantCulture),
-            RunGit(movedRepository, "rev-list", "--count", "HEAD").Output.Trim());
+            TestGit.Run(movedRepository, "rev-list", "--count", "HEAD").Output.Trim());
         Assert.Equal(
             AecApplication.SourceRelativePath,
-            RunGit(
+            TestGit.Run(
                 movedRepository,
                 "diff-tree",
                 "--no-commit-id",
                 "--name-only",
                 "-r",
                 "HEAD").Output.Trim());
-        Assert.Empty(RunGit(movedRepository, "status", "--porcelain").Output);
+        Assert.Empty(TestGit.Run(movedRepository, "status", "--porcelain").Output);
 
-        var head = RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim();
+        var head = TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim();
         var repeated = Run(movedRepository, layout.CodexHome, forcePathChange: true);
 
         Assert.Equal(0, repeated.ExitCode);
-        Assert.Equal(head, RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(head, TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(source, File.ReadAllBytes(layout.Runtime));
     }
 
@@ -383,7 +382,7 @@ public sealed class InitTests
             new string('a', AecApplication.MaximumTextBytes - 2) +
             "\n";
         File.WriteAllText(layout.RuntimeConfig, runtimeConfig);
-        var expectedHead = RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim();
+        var expectedHead = TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim();
         var sourcePath = Path.Combine(movedRepository, AecApplication.SourceRelativePath);
         var sourceBefore = File.ReadAllBytes(sourcePath);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
@@ -392,12 +391,12 @@ public sealed class InitTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("would exceed 1 MiB", result.Error, StringComparison.Ordinal);
-        Assert.Equal(expectedHead, RunGit(movedRepository, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(expectedHead, TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(sourceBefore, File.ReadAllBytes(sourcePath));
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(runtimeConfig, File.ReadAllText(layout.RuntimeConfig));
         Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
-        Assert.Empty(RunGit(movedRepository, "status", "--porcelain").Output);
+        Assert.Empty(TestGit.Run(movedRepository, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -427,7 +426,7 @@ public sealed class InitTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("partial baseline", result.Error, StringComparison.Ordinal);
-        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
         Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills")));
@@ -648,7 +647,7 @@ public sealed class InitTests
         var source = Path.Combine(layout.Target, "environment", "providers", "codex", "AGENTS.md");
         var gitHead = Path.Combine(layout.Target, ".git", "HEAD");
         var headBefore = File.ReadAllBytes(gitHead);
-        var commitBefore = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var commitBefore = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var sourceBefore = File.ReadAllBytes(source);
         File.WriteAllText(layout.Runtime, "divergent live instruction\n");
         File.WriteAllText(
@@ -666,8 +665,8 @@ public sealed class InitTests
             "model = \"gpt-test\"\npersonality = \"none\"\n",
             File.ReadAllText(layout.RuntimeConfig));
         Assert.Equal(headBefore, File.ReadAllBytes(gitHead));
-        Assert.Equal(commitBefore, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
-        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+        Assert.Equal(commitBefore, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     [Theory]
@@ -685,12 +684,12 @@ public sealed class InitTests
         AssertInitialized(layout, result, managedEnvironmentBaseline);
         Assert.Equal(
             baseline,
-            RunGit(layout.Target, "rev-parse", "HEAD~1").Output.Trim());
+            TestGit.Run(layout.Target, "rev-parse", "HEAD~1").Output.Trim());
 
-        var initializedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var initializedHead = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var attached = Run(layout.Target, layout.CodexHome);
         Assert.Equal(0, attached.ExitCode);
-        Assert.Equal(initializedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(initializedHead, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
     }
 
     [Fact]
@@ -704,20 +703,20 @@ public sealed class InitTests
         File.WriteAllText(configSource, "personality = \"friendly\"\n");
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "add",
                 "--",
                 AecApplication.ConfigSourceRelativePath).ExitCode);
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "commit",
                 "--amend",
                 "--quiet",
                 "--no-edit").ExitCode);
-        var expectedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var expectedHead = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
         var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
 
@@ -725,10 +724,10 @@ public sealed class InitTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("changed the baseline canonical config", result.Error, StringComparison.Ordinal);
-        Assert.Equal(expectedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(expectedHead, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
-        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -736,16 +735,16 @@ public sealed class InitTests
     {
         using var layout = new InitLayout();
         Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
-        var baseline = RunGit(layout.Target, "rev-parse", "HEAD~1").Output.Trim();
-        var previousHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
-        var tree = RunGit(layout.Target, "rev-parse", "HEAD^{tree}").Output.Trim();
-        var side = RunGit(
+        var baseline = TestGit.Run(layout.Target, "rev-parse", "HEAD~1").Output.Trim();
+        var previousHead = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var tree = TestGit.Run(layout.Target, "rev-parse", "HEAD^{tree}").Output.Trim();
+        var side = TestGit.Run(
             layout.Target,
             "commit-tree",
             tree,
             "-m",
             "Unrelated root").Output.Trim();
-        var merge = RunGit(
+        var merge = TestGit.Run(
             layout.Target,
             "commit-tree",
             tree,
@@ -759,7 +758,7 @@ public sealed class InitTests
         Assert.NotEmpty(merge);
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "update-ref",
                 "refs/heads/main",
@@ -770,8 +769,8 @@ public sealed class InitTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("exactly one parent", result.Error, StringComparison.Ordinal);
-        Assert.Equal(merge, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
-        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+        Assert.Equal(merge, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -782,25 +781,25 @@ public sealed class InitTests
         File.AppendAllText(layout.Source, "tampered unrelated instruction\n");
         Assert.Equal(
             0,
-            RunGit(layout.Target, "add", "--", AecApplication.SourceRelativePath).ExitCode);
+            TestGit.Run(layout.Target, "add", "--", AecApplication.SourceRelativePath).ExitCode);
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "commit",
                 "--amend",
                 "--quiet",
                 "--no-edit").ExitCode);
-        var expectedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var expectedHead = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
 
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("unmanaged instruction", result.Error, StringComparison.Ordinal);
-        Assert.Equal(expectedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(expectedHead, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
-        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -814,29 +813,29 @@ public sealed class InitTests
         File.WriteAllText(configSource, "personality = \"none\"\n");
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "add",
                 "--",
                 AecApplication.ConfigSourceRelativePath).ExitCode);
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "commit",
                 "--quiet",
                 "--message",
                 "Add canonical config").ExitCode);
-        var expectedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var expectedHead = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
 
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
-        Assert.Equal(expectedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(expectedHead, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(File.ReadAllBytes(layout.Source), File.ReadAllBytes(layout.Runtime));
-        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -844,7 +843,7 @@ public sealed class InitTests
     {
         using var layout = new InitLayout();
         CreateLegacyCompletedInitialization(layout);
-        var expectedHead = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var expectedHead = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
         var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
 
@@ -853,11 +852,11 @@ public sealed class InitTests
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
         Assert.Contains("Canonical config", result.Error, StringComparison.Ordinal);
-        Assert.Equal(expectedHead, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(expectedHead, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
         Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
-        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -875,7 +874,7 @@ public sealed class InitTests
         Assert.Contains("baseline", result.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("newer runtime instruction\n", File.ReadAllText(layout.Runtime));
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
-        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
     }
 
     [Fact]
@@ -895,7 +894,7 @@ public sealed class InitTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("personality", result.Error, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
         Assert.Equal(configBefore, File.ReadAllBytes(configSource));
         Assert.Equal("personality = \"friendly\"\n", File.ReadAllText(layout.RuntimeConfig));
@@ -917,7 +916,7 @@ public sealed class InitTests
             case "wrong-subject":
                 Assert.Equal(
                     0,
-                    RunGit(
+                    TestGit.Run(
                         layout.Target,
                         "commit",
                         "--amend",
@@ -926,7 +925,7 @@ public sealed class InitTests
                         "Different subject").ExitCode);
                 break;
             case "wrong-branch":
-                Assert.Equal(0, RunGit(layout.Target, "branch", "--move", "other").ExitCode);
+                Assert.Equal(0, TestGit.Run(layout.Target, "branch", "--move", "other").ExitCode);
                 break;
             case "extra-entry":
                 File.WriteAllText(Path.Combine(layout.Target, "extra.txt"), "preserve\n");
@@ -938,16 +937,16 @@ public sealed class InitTests
                 throw new InvalidOperationException($"Unknown test variation: {variation}");
         }
 
-        var headBefore = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
-        var statusBefore = RunGit(layout.Target, "status", "--porcelain=v1").Output;
+        var headBefore = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var statusBefore = TestGit.Run(layout.Target, "status", "--porcelain=v1").Output;
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
 
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("not a resumable baseline-only", result.Error, StringComparison.Ordinal);
-        Assert.Equal(headBefore, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
-        Assert.Equal(statusBefore, RunGit(layout.Target, "status", "--porcelain=v1").Output);
+        Assert.Equal(headBefore, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(statusBefore, TestGit.Run(layout.Target, "status", "--porcelain=v1").Output);
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
         Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
     }
@@ -959,21 +958,21 @@ public sealed class InitTests
         CreateBaselineOnlyInitialization(layout);
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "commit",
                 "--allow-empty",
                 "--quiet",
                 "--message",
                 "Backup Codex AGENTS.md").ExitCode);
-        var head = RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var head = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
         File.WriteAllText(Path.Combine(layout.Target, ".git", "shallow"), $"{head}\n");
 
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("root commit", result.Error, StringComparison.Ordinal);
-        Assert.Equal(head, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(head, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.False(Directory.Exists(Path.Combine(layout.CodexHome, "skills", "aec")));
     }
 
@@ -1014,13 +1013,13 @@ public sealed class InitTests
             managedEnvironmentBaseline);
         Assert.Equal(
             0,
-            RunGit(layout.Target, "config", "--local", "commit.gpgSign", "true").ExitCode);
+            TestGit.Run(layout.Target, "config", "--local", "commit.gpgSign", "true").ExitCode);
         Assert.Equal(
             0,
-            RunGit(layout.Target, "config", "--local", "gpg.format", "openpgp").ExitCode);
+            TestGit.Run(layout.Target, "config", "--local", "gpg.format", "openpgp").ExitCode);
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "config",
                 "--local",
@@ -1033,13 +1032,13 @@ public sealed class InitTests
 
         Assert.Equal(1, failed.ExitCode);
         Assert.Contains("commit", failed.Error, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
 
         Assert.Equal(
             0,
-            RunGit(layout.Target, "config", "--local", "commit.gpgSign", "false").ExitCode);
+            TestGit.Run(layout.Target, "config", "--local", "commit.gpgSign", "false").ExitCode);
         var resumed = Run(layout.Target, layout.CodexHome);
 
         AssertInitialized(layout, resumed, managedEnvironmentBaseline);
@@ -1081,7 +1080,7 @@ public sealed class InitTests
                 allowEmpty: true));
 
         Assert.Contains("changed before", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(runtime, File.ReadAllBytes(layout.Runtime));
     }
 
@@ -1103,7 +1102,7 @@ public sealed class InitTests
                 allowEmpty: true));
 
         Assert.Contains("changed before", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(baseline, RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(runtime, File.ReadAllBytes(layout.Runtime));
     }
 
@@ -1182,7 +1181,7 @@ public sealed class InitTests
         Assert.Equal(expected, File.ReadAllBytes(layout.Source));
         Assert.Equal(0, expected.AsSpan().IndexOf("<!-- AEC:BEGIN version=3 -->"u8));
         Assert.True(expected.AsSpan().EndsWith(original));
-        var baselineObject = RunGit(
+        var baselineObject = TestGit.Run(
             layout.Target,
             "rev-parse",
             $"HEAD~1:{AecApplication.SourceRelativePath}").Output.Trim();
@@ -1301,13 +1300,13 @@ public sealed class InitTests
         var result = Run(layout.Target, layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal("2", RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
+        Assert.Equal("2", TestGit.Run(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
         Assert.Equal(
             $"Backup Codex environment{Environment.NewLine}" +
             $"Initialize AEC instructions{Environment.NewLine}",
-            RunGit(layout.Target, "log", "--reverse", "--format=%s").Output);
+            TestGit.Run(layout.Target, "log", "--reverse", "--format=%s").Output);
         Assert.Empty(
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "diff-tree",
                 "--no-commit-id",
@@ -1381,8 +1380,6 @@ public sealed class InitTests
         string codexHome,
         bool forcePathChange = false)
     {
-        var output = new StringWriter();
-        var error = new StringWriter();
         var arguments = new List<string>
         {
             "init",
@@ -1396,11 +1393,7 @@ public sealed class InitTests
             arguments.Add("--force-path-change");
         }
 
-        var exitCode = AecApplication.Run(
-            [.. arguments],
-            output,
-            error);
-        return new CommandResult(exitCode, output.ToString(), error.ToString());
+        return TestApplication.Run([.. arguments]);
     }
 
     private static string CreateBaselineOnlyInitialization(
@@ -1410,7 +1403,7 @@ public sealed class InitTests
         Directory.CreateDirectory(layout.Target);
         Assert.Equal(
             0,
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "init",
                 "--quiet",
@@ -1418,7 +1411,7 @@ public sealed class InitTests
                 "--initial-branch=main").ExitCode);
         Assert.Equal(
             0,
-            RunGit(layout.Target, "config", "--local", "core.autocrlf", "false").ExitCode);
+            TestGit.Run(layout.Target, "config", "--local", "core.autocrlf", "false").ExitCode);
         Directory.CreateDirectory(Path.GetDirectoryName(layout.Source)!);
         File.WriteAllBytes(layout.Source, File.ReadAllBytes(layout.Runtime));
 
@@ -1430,12 +1423,12 @@ public sealed class InitTests
                 TextWriter.Null)
             : CreateLegacyBaselineCommit(layout);
         Assert.Equal(0, exitCode);
-        return RunGit(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        return TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
     }
 
     private static int CreateLegacyBaselineCommit(InitLayout layout)
     {
-        var add = RunGit(
+        var add = TestGit.Run(
             layout.Target,
             "add",
             "--",
@@ -1445,7 +1438,7 @@ public sealed class InitTests
             return add.ExitCode;
         }
 
-        return RunGit(
+        return TestGit.Run(
             layout.Target,
             "commit",
             "--quiet",
@@ -1471,23 +1464,23 @@ public sealed class InitTests
     private static void AssertBaselineOnly(InitLayout layout, byte[] expected)
     {
         Assert.True(Directory.Exists(layout.Target));
-        Assert.Equal("1", RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
+        Assert.Equal("1", TestGit.Run(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
         Assert.Equal(
             "Backup Codex environment",
-            RunGit(layout.Target, "log", "-1", "--format=%s").Output.Trim());
+            TestGit.Run(layout.Target, "log", "-1", "--format=%s").Output.Trim());
         Assert.Equal(
             expected,
-            Encoding.UTF8.GetBytes(RunGit(
+            Encoding.UTF8.GetBytes(TestGit.Run(
                 layout.Target,
                 "show",
                 $"HEAD:{AecApplication.SourceRelativePath}").Output));
         Assert.Equal(
             "personality = \"none\"\n",
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "show",
                 $"HEAD:{AecApplication.ConfigSourceRelativePath}").Output);
-        Assert.Empty(RunGit(layout.Target, "status", "--porcelain").Output);
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
     }
 
     private static void AssertInitialized(
@@ -1506,25 +1499,25 @@ public sealed class InitTests
         Assert.Contains("Existing instruction.", File.ReadAllText(source), StringComparison.Ordinal);
         Assert.True(Directory.Exists(Path.Combine(layout.Target, ".git")));
 
-        var prefix = RunGit(layout.Target, "rev-parse", "--show-prefix");
+        var prefix = TestGit.Run(layout.Target, "rev-parse", "--show-prefix");
         Assert.Equal(0, prefix.ExitCode);
         Assert.Equal(string.Empty, prefix.Output.Trim());
 
-        var branch = RunGit(layout.Target, "symbolic-ref", "--short", "HEAD");
+        var branch = TestGit.Run(layout.Target, "symbolic-ref", "--short", "HEAD");
         Assert.Equal(0, branch.ExitCode);
         Assert.Equal("main", branch.Output.Trim());
 
-        var staged = RunGit(layout.Target, "diff", "--cached", "--name-only");
+        var staged = TestGit.Run(layout.Target, "diff", "--cached", "--name-only");
         Assert.Equal(0, staged.ExitCode);
         Assert.Equal(string.Empty, staged.Output.Trim());
         Assert.Equal(
             "false",
-            RunGit(layout.Target, "config", "--local", "--get", "core.autocrlf").Output.Trim());
+            TestGit.Run(layout.Target, "config", "--local", "--get", "core.autocrlf").Output.Trim());
 
-        var head = RunGit(layout.Target, "rev-parse", "--verify", "HEAD");
+        var head = TestGit.Run(layout.Target, "rev-parse", "--verify", "HEAD");
         Assert.Equal(0, head.ExitCode);
-        Assert.Equal("2", RunGit(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
-        var baselineSubject = RunGit(
+        Assert.Equal("2", TestGit.Run(layout.Target, "rev-list", "--count", "HEAD").Output.Trim());
+        var baselineSubject = TestGit.Run(
             layout.Target,
             "log",
             "-1",
@@ -1538,14 +1531,14 @@ public sealed class InitTests
         Assert.Equal(
             $"{baselineSubject}{Environment.NewLine}" +
             $"Initialize AEC instructions{Environment.NewLine}",
-            RunGit(layout.Target, "log", "--reverse", "--format=%s").Output);
+            TestGit.Run(layout.Target, "log", "--reverse", "--format=%s").Output);
         Assert.Equal(
             "Existing instruction.\n",
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "show",
                 $"HEAD~1:{AecApplication.SourceRelativePath}").Output);
-        var baselineConfig = RunGit(
+        var baselineConfig = TestGit.Run(
             layout.Target,
             "show",
             $"HEAD~1:{AecApplication.ConfigSourceRelativePath}");
@@ -1560,11 +1553,11 @@ public sealed class InitTests
         }
         Assert.Equal(
             File.ReadAllText(layout.Source),
-            RunGit(
+            TestGit.Run(
                 layout.Target,
                 "show",
                 $"HEAD:{AecApplication.SourceRelativePath}").Output);
-        var initializedPaths = RunGit(
+        var initializedPaths = TestGit.Run(
                 layout.Target,
                 "diff-tree",
                 "--no-commit-id",
@@ -1600,49 +1593,6 @@ public sealed class InitTests
             statusOutput.ToString());
         Assert.Empty(statusError.ToString());
     }
-
-    private static GitResult RunGit(string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-
-        foreach (var variable in new[]
-                 {
-                     "GIT_DIR",
-                     "GIT_WORK_TREE",
-                     "GIT_COMMON_DIR",
-                     "GIT_OBJECT_DIRECTORY",
-                     "GIT_INDEX_FILE",
-                     "GIT_ALTERNATE_OBJECT_DIRECTORIES"
-                 })
-        {
-            startInfo.Environment.Remove(variable);
-        }
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(startInfo)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return new GitResult(
-            process.ExitCode,
-            output.GetAwaiter().GetResult(),
-            error.GetAwaiter().GetResult());
-    }
-
-    private sealed record CommandResult(int ExitCode, string Output, string Error);
-
-    private sealed record GitResult(int ExitCode, string Output, string Error);
 
     private sealed class InitLayout : IDisposable
     {

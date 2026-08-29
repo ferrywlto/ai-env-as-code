@@ -22,7 +22,7 @@ public sealed class UninstallTests
         File.WriteAllText(notes, "personal skill notes\n");
         File.WriteAllText(otherSkill, "another skill\n");
 
-        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
@@ -44,9 +44,9 @@ public sealed class UninstallTests
             layout.Agents,
             AecInstructionBlock.Merge("outside\n"u8.ToArray(), layout.Repository));
 
-        var first = Run("uninstall", "--codex-home", layout.CodexHome);
+        var first = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
         var agentsAfterFirst = File.ReadAllBytes(layout.Agents);
-        var second = Run("uninstall", "--codex-home", layout.CodexHome);
+        var second = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(0, first.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", first.Output);
@@ -67,7 +67,7 @@ public sealed class UninstallTests
         var skill = File.ReadAllBytes(layout.Skill);
         var metadata = File.ReadAllBytes(layout.Metadata);
 
-        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -88,7 +88,7 @@ public sealed class UninstallTests
         File.AppendAllText(layout.Skill, "# local customization\n");
         var modifiedSkill = File.ReadAllBytes(layout.Skill);
 
-        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -116,7 +116,7 @@ public sealed class UninstallTests
         File.Delete(layout.Metadata);
         File.CreateSymbolicLink(layout.Metadata, referent);
 
-        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -134,7 +134,7 @@ public sealed class UninstallTests
         File.WriteAllBytes(layout.Agents, instructions);
         var skill = File.ReadAllBytes(layout.Skill);
 
-        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -150,7 +150,7 @@ public sealed class UninstallTests
         File.WriteAllText(layout.Agents, "outside\n");
         File.Delete(layout.Skill);
 
-        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
@@ -171,7 +171,7 @@ public sealed class UninstallTests
                 "Skills",
                 "1.0.0.md")));
 
-        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
@@ -192,7 +192,7 @@ public sealed class UninstallTests
                 "Skills",
                 "1.1.0.md")));
 
-        var result = Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
@@ -218,7 +218,7 @@ public sealed class UninstallTests
         try
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", poison.CodexHome);
-            var result = Run("uninstall", "--codex-home", selected.CodexHome);
+            var result = TestApplication.Run("uninstall", "--codex-home", selected.CodexHome);
 
             Assert.Equal(0, result.ExitCode);
             Assert.Equal("selected\n", File.ReadAllText(selected.Agents));
@@ -236,7 +236,7 @@ public sealed class UninstallTests
     [MemberData(nameof(InvalidArguments))]
     public void RejectsInvalidArguments(string[] arguments, string message)
     {
-        var result = Run(arguments);
+        var result = TestApplication.Run(arguments);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -256,16 +256,6 @@ public sealed class UninstallTests
         { ["uninstall", "unexpected"], "Unknown argument: unexpected" },
         { ["uninstall", "--codex-home=/tmp/codex"], "Unknown argument: --codex-home=/tmp/codex" }
     };
-
-    private static CommandResult Run(params string[] arguments)
-    {
-        var output = new StringWriter();
-        var error = new StringWriter();
-        var exitCode = AecApplication.Run(arguments, output, error);
-        return new CommandResult(exitCode, output.ToString(), error.ToString());
-    }
-
-    private sealed record CommandResult(int ExitCode, string Output, string Error);
 
     private sealed class UninstallLayout : IDisposable
     {

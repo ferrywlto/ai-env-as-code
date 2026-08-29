@@ -703,17 +703,13 @@ public sealed class StatusTests
 
     private static CommandResult Run(TemporaryLayout layout)
     {
-        var output = new StringWriter();
-        var error = new StringWriter();
-        var exitCode = AecApplication.Run(
-            ["status", "--repo", layout.Repository, "--codex-home", layout.CodexHome],
-            output,
-            error);
-
-        return new CommandResult(exitCode, output.ToString(), error.ToString());
+        return TestApplication.Run(
+            "status",
+            "--repo",
+            layout.Repository,
+            "--codex-home",
+            layout.CodexHome);
     }
-
-    private sealed record CommandResult(int ExitCode, string Output, string Error);
 
     private sealed class TemporaryLayout : IDisposable
     {

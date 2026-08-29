@@ -1,7 +1,7 @@
 # AI Environment as Code
 
-Version 1.2.1 consolidates compiler configuration, enables the .NET 10 recommended
-Roslyn rules, and removes behavior-identical implementation and test repetition.
+Version 1.2.2 centralizes test command execution and Git isolation so test setup
+cannot drift between feature suites.
 
 ## Version history
 
@@ -28,8 +28,9 @@ Roslyn rules, and removes behavior-identical implementation and test repetition.
 | 1.1.0 | Remove AEC runtime instructions and exact official skill files |
 | 1.2.0 | Generate a contained uninstaller beside the macOS ARM64 installer |
 | 1.2.1 | Apply recommended Roslyn analysis and behavior-preserving cleanup |
+| 1.2.2 | Centralize test application execution and Git environment isolation |
 
-The project and CLI report the current release as `1.2.1` through `aec version`.
+The project and CLI report the current release as `1.2.2` through `aec version`.
 
 ## version
 

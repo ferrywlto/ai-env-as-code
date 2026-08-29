@@ -1,5 +1,17 @@
 # Implementation Checklist
 
+## v1.2.2 — Shared test infrastructure
+
+- [x] Centralize `AecApplication.Run` output capture and its result model.
+- [x] Centralize Git-backed test setup through the production isolation boundary.
+- [x] Remove duplicated test process launchers and result records.
+- [x] Preserve every test and assertion.
+- [x] Pass analyzer, Debug, Release, shell, skill, and Native AOT validation.
+- [ ] Re-run formatting validation after the Roslyn MSBuild host named-pipe timeout.
+
+Immediate next work: decide whether to retry the isolated formatting check, then
+review v1.2.2 before any commit.
+
 ## v1.2.1 — Behavior-preserving cleanup
 
 - [x] Consolidate shared compiler settings in `Directory.Build.props`.
@@ -9,8 +21,6 @@
 - [x] Fix every compiler and analyzer diagnostic without suppression.
 - [x] Remove tests only after an exact public-path contract supersedes them.
 - [x] Pass focused, full, formatting, shell, skill, and Native AOT validation.
-
-Immediate next work: review the completed v1.2.1 cleanup before any commit.
 
 ## v1.2 — Installer-generated uninstaller
 
@@ -22,9 +32,6 @@ Immediate next work: review the completed v1.2.1 cleanup before any commit.
 - [x] Recognize the exact v1.1.0 skill as an upgrade and uninstall predecessor.
 - [x] Pass shell, skill, Debug, Release, and macOS ARM64 Native AOT validation.
 - [x] Pass an isolated generated-uninstaller install-to-uninstall cycle.
-
-Immediate next work: review the v1.2 validation results, then commit only with
-explicit approval.
 
 ## v1.1 — Explicit AEC runtime uninstall
 
