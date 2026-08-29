@@ -769,6 +769,12 @@ selected with `--repo`; they never infer or modify the engine repository.
 
 This project is available under the [MIT License](LICENSE).
 
+## Landing page
+
+The dependency-free GitHub Pages landing page is in [docs/index.html](docs/index.html).
+It is ready to publish from the `docs/` directory when GitHub Pages is explicitly
+enabled for the repository.
+
 If you find it useful, please consider citing the original work by
 [@ferrywlto](https://github.com/ferrywlto) or
 [buying me a coffee](https://www.paypal.com/paypalme/ferrywlto). ☕️

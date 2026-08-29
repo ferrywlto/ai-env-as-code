@@ -1,5 +1,16 @@
 # Implementation Checklist
 
+## GitHub Pages landing page
+
+- [x] Create a dependency-free, responsive landing page under `docs/`.
+- [x] Explain AEC directionality, source-of-truth model, current platform, and installation.
+- [x] Add the public roadmap for platform and provider support.
+- [x] Add GitHub, MIT licence, citation, and PayPal coffee links.
+- [ ] Explicitly enable GitHub Pages and verify its deployed public URL.
+
+Immediate next work: review the local landing page, then decide whether to enable
+GitHub Pages as a separate external change.
+
 ## v1.2.3 — Security containment
 
 - [x] **P1:** Reject linked path ancestors and repository-contained Codex runtime paths in `status` and `backup`.
