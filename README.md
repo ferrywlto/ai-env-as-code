@@ -1,7 +1,7 @@
 # AI Environment as Code
 
-Version 1.2.2 centralizes test command execution and Git isolation so test setup
-cannot drift between feature suites.
+Version 1.2.3 hardens repository and runtime path containment and disables Git
+replacement objects during backup validation and commit operations.
 
 ## Version history
 
@@ -29,8 +29,9 @@ cannot drift between feature suites.
 | 1.2.0 | Generate a contained uninstaller beside the macOS ARM64 installer |
 | 1.2.1 | Apply recommended Roslyn analysis and behavior-preserving cleanup |
 | 1.2.2 | Centralize test application execution and Git environment isolation |
+| 1.2.3 | Harden backup path containment and Git object verification |
 
-The project and CLI report the current release as `1.2.2` through `aec version`.
+The project and CLI report the current release as `1.2.3` through `aec version`.
 
 ## version
 
@@ -203,10 +204,11 @@ both canonical paths
 ```
 
 The repository must be the exact root of a non-bare Git working tree on a symbolic
-branch. Before changing canonical data, the command rejects staged, unstaged, or
-untracked changes outside the two fixed managed paths. Pending changes at either
-managed path are allowed so a rerun can resume after an interrupted write or failed
-commit.
+branch. Repository and runtime paths must not contain symbolic-link or reparse-point
+ancestors, and the runtime must remain outside the data repository. Before changing
+canonical data, the command rejects staged, unstaged, or untracked changes outside
+the two fixed managed paths. Pending changes at either managed path are allowed so a
+rerun can resume after an interrupted write or failed commit.
 
 Both runtime files and any existing canonical config are read and validated before
 either canonical file changes. A missing runtime `config.toml` or missing root
@@ -232,9 +234,11 @@ Backup Codex environment
 ```
 
 Git filters that would change either file's bytes while staging are rejected before
-commit. Configured Git hooks are isolated from the backup commit so they cannot
-alter the verified bytes or fixed subject; both managed blobs and the subject are
-checked again after the commit. On success, the command writes
+commit. Git replacement objects are disabled throughout backup inspection, commit,
+and verification so validation always observes the raw repository objects.
+Configured Git hooks are isolated from the backup commit so they cannot alter the
+verified bytes or fixed subject; both managed blobs and the subject are checked
+again after the commit. On success, the command writes
 `committed <full-sha>`. When both managed values, working files, index, and current
 commit already agree, it writes `unchanged`. Both outcomes return exit code 0;
 validation and Git failures return exit code 1.
@@ -487,7 +491,9 @@ aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 non-empty `CODEX_HOME` environment variable and then falls back to `~/.codex`. It
 observes `<codex-home>/AGENTS.md` and `<codex-home>/config.toml`. Explicit paths and
 `CODEX_HOME` must be absolute; neither the executable nor current working directory
-is treated as the data repository.
+is treated as the data repository. Repository and runtime paths must not contain
+symbolic-link or reparse-point ancestors, and the runtime must remain outside the
+data repository.
 
 The command compares exact `AGENTS.md` bytes. For `config.toml`, it compares only
 the root `personality` value and ignores formatting, comments, unrelated root
@@ -554,14 +560,86 @@ supported runtime value in the root environment commit. When it is absent, `init
 warns, records `none` in that commit, and adds `personality = "none"` to runtime only
 after both initialization commits succeed.
 
+### Why `MEMORY.md` is not managed
+
+AEC intentionally does not capture Codex's `MEMORY.md` or its memory directory.
+Codex creates and maintains memory as derived runtime state from prior work; it is
+not stable, user-authored environment configuration. Memory may also contain
+summarized project history or other sensitive context, so committing it would
+increase its retention and distribution.
+
+The memory format and lifecycle belong to Codex and may change between application
+versions or machines. Restoring an old snapshot could therefore reintroduce stale
+context or conflict with Codex's current memory. AEC instead versions user-owned
+inputs: `AGENTS.md` and explicitly selected stable `config.toml` settings. Durable
+guidance should be recorded in those canonical instructions or in project
+documentation, not copied from Codex's generated memory.
+
 ## Build, test, and run
 
 The production project uses only the .NET 10 Base Class Library. The test project
 uses xUnit and has no coverage dependency.
 
+### Test strategy and expected duration
+
+```mermaid
+flowchart LR
+    Change["Every change"] --> Unit["Fast unit scope"]
+    Unit --> Focused["Affected command scope"]
+    Focused --> Push["Before push"]
+    Push --> Full["Full Debug regression"]
+    Full --> Release["Full Release regression<br/>before release"]
+```
+
+The complete suite currently contains unit, Git integration, and filesystem-safety
+tests in one xUnit project. A full Debug run of 315 tests takes about five minutes on
+an ARM64 Mac even when the project is already built. VSTest may print nothing during
+most of that time; wait for its final summary rather than treating a quiet console
+as a hang.
+
+| Cost | What happens |
+|---|---|
+| Process-state isolation | Command suites run sequentially because they safely change environment variables and the current directory. |
+| Real Git integration | Tests repeatedly create repositories and start `git` for inspection, hashing, staging, commits, and verification. |
+| Filesystem safety | Each case creates isolated paths and exercises links, FIFOs, permissions, atomic replacement, and durable flushes. |
+
+During development, run the smallest relevant scope. These filters work today:
+
+```bash
+# Fast instruction-block unit tests
+dotnet test tests/Aec.Tests/Aec.Tests.csproj \
+  --filter "FullyQualifiedName~AecInstructionBlockTests"
+
+# One affected command suite; replace BackupTests as needed
+dotnet test tests/Aec.Tests/Aec.Tests.csproj \
+  --filter "FullyQualifiedName~BackupTests"
+```
+
+Run the complete regression suite before pushing and again in Release configuration
+before publishing a release. The hang guard terminates and identifies an individual
+test that stops making progress for 30 seconds:
+
+```bash
+# Before push
+dotnet test tests/Aec.Tests/Aec.Tests.csproj \
+  --blame-hang \
+  --blame-hang-timeout 30s \
+  --blame-hang-dump-type none
+
+# Before release
+dotnet test tests/Aec.Tests/Aec.Tests.csproj \
+  --configuration Release \
+  --blame-hang \
+  --blame-hang-timeout 30s \
+  --blame-hang-dump-type none
+```
+
+The roadmap is to classify stable test scopes explicitly. Until that work is
+complete, class-name filters are the supported focused workflow; the full suite
+remains the regression gate rather than the default command after every edit.
+
 ```bash
 dotnet build src/Aec/Aec.csproj
-dotnet test tests/Aec.Tests/Aec.Tests.csproj
 dotnet run --project src/Aec/Aec.csproj -- version
 dotnet run --project src/Aec/Aec.csproj -- help
 dotnet run --project src/Aec/Aec.csproj -- \

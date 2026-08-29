@@ -12,7 +12,8 @@ public sealed class FifoProbeTests
             return;
         }
 
-        var root = Path.Combine(Path.GetTempPath(), "aec-fifo-test", Guid.NewGuid().ToString("N"));
+        var temporaryDirectory = OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath();
+        var root = Path.Combine(temporaryDirectory, "aec-fifo-test", Guid.NewGuid().ToString("N"));
         var repository = Path.Combine(root, "data");
         var codexHome = Path.Combine(root, "codex-home");
         var source = Path.Combine(repository, "environment", "providers", "codex", "AGENTS.md");

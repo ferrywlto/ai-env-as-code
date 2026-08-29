@@ -1,5 +1,43 @@
 # Implementation Checklist
 
+## v1.2.3 — Security containment
+
+- [x] **P1:** Reject linked path ancestors and repository-contained Codex runtime paths in `status` and `backup`.
+- [x] **P1:** Disable Git replacement objects throughout `BackupCommand` validation and commit operations.
+- [x] Add focused regression tests for both P1 boundaries.
+- [x] Pass build, focused tests, the full Debug suite, and diff validation.
+- [ ] Pass formatting after resetting the stale .NET build servers.
+
+Immediate next work: decide whether to reset the stale .NET build servers and retry
+formatting; do not begin P2 work.
+
+## Test scope isolation roadmap
+
+- [x] Document the current five-minute full-suite expectation and quiet VSTest output.
+- [x] Make focused class-filtered tests the normal per-change workflow.
+- [x] Reserve the full Debug and Release suites for pre-push and pre-release regression gates.
+- [ ] Classify tests as unit, command integration, filesystem safety, or end-to-end.
+- [ ] Add stable xUnit traits or separate test projects for those scopes.
+- [ ] Measure test durations and prioritize proven bottlenecks before optimization.
+- [ ] Remove process-state serialization only where isolated execution is demonstrated.
+- [ ] Preserve full-suite regression coverage while making focused feedback faster.
+
+## Security review implementation backlog
+
+- [ ] **P2:** Stage verified blobs without executing configured clean filters or optional Git integrations.
+- [ ] **P2:** Reject linked worktrees and Git metadata outside the selected data repository.
+- [ ] **P2:** Prevent fresh-init identity cleanup from deleting concurrently created repository state.
+- [ ] **P2:** Close or explicitly constrain pathname-based file validation and mutation races.
+- [ ] **P3:** Verify the installed executable digest before generated-uninstaller execution and deletion.
+- [ ] **P3:** Create a missing runtime `AGENTS.md` with user-only permissions.
+
+## Documentation and architecture/security review
+
+- [x] Explain why generated Codex `MEMORY.md` is outside AEC ownership.
+- [x] Complete a read-only architecture review.
+- [x] Complete a read-only security review.
+- [x] Report actionable findings without bundling unapproved fixes.
+
 ## v1.2.2 — Shared test infrastructure
 
 - [x] Centralize `AecApplication.Run` output capture and its result model.
@@ -8,9 +46,6 @@
 - [x] Preserve every test and assertion.
 - [x] Pass analyzer, Debug, Release, shell, skill, and Native AOT validation.
 - [ ] Re-run formatting validation after the Roslyn MSBuild host named-pipe timeout.
-
-Immediate next work: decide whether to retry the isolated formatting check, then
-review v1.2.2 before any commit.
 
 ## v1.2.1 — Behavior-preserving cleanup
 

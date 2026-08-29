@@ -274,6 +274,69 @@ public sealed class StatusTests
     }
 
     [Theory]
+    [InlineData("repository")]
+    [InlineData("codex-home")]
+    public void RejectsSymbolicLinkAncestorForRepositoryOrCodexHome(string linkedTarget)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var layout = new TemporaryLayout("same\n", "same\n");
+        var alias = Path.Combine(layout.Root, $"{linkedTarget}-alias");
+        var repository = layout.Repository;
+        var codexHome = layout.CodexHome;
+        if (linkedTarget == "repository")
+        {
+            Directory.CreateSymbolicLink(alias, layout.Repository);
+            repository = alias;
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(alias, layout.Root);
+            codexHome = Path.Combine(alias, "codex-home");
+        }
+
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        var targetBefore = File.ReadAllBytes(layout.Target);
+        var canonicalConfigBefore = File.ReadAllBytes(layout.CanonicalConfig);
+        var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
+        try
+        {
+            var result = Run(repository, codexHome);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Empty(result.Output);
+            Assert.Contains("must not contain a symbolic link", result.Error, StringComparison.Ordinal);
+            Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+            Assert.Equal(targetBefore, File.ReadAllBytes(layout.Target));
+            Assert.Equal(canonicalConfigBefore, File.ReadAllBytes(layout.CanonicalConfig));
+            Assert.Equal(runtimeConfigBefore, File.ReadAllBytes(layout.RuntimeConfig));
+        }
+        finally
+        {
+            Directory.Delete(alias);
+        }
+    }
+
+    [Fact]
+    public void RejectsCodexHomeInsideSelectedRepository()
+    {
+        using var layout = new TemporaryLayout("same\n", "same\n");
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        var canonicalConfigBefore = File.ReadAllBytes(layout.CanonicalConfig);
+
+        var result = Run(layout.Repository, layout.Repository);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("outside the data repository", result.Error, StringComparison.Ordinal);
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.Equal(canonicalConfigBefore, File.ReadAllBytes(layout.CanonicalConfig));
+    }
+
+    [Theory]
     [InlineData("none")]
     [InlineData("friendly")]
     [InlineData("pragmatic")]
@@ -703,12 +766,17 @@ public sealed class StatusTests
 
     private static CommandResult Run(TemporaryLayout layout)
     {
+        return Run(layout.Repository, layout.CodexHome);
+    }
+
+    private static CommandResult Run(string repository, string codexHome)
+    {
         return TestApplication.Run(
             "status",
             "--repo",
-            layout.Repository,
+            repository,
             "--codex-home",
-            layout.CodexHome);
+            codexHome);
     }
 
     private sealed class TemporaryLayout : IDisposable
@@ -719,7 +787,7 @@ public sealed class StatusTests
             string? canonicalConfig = DefaultCanonicalConfig,
             string? runtimeConfig = DefaultRuntimeConfig)
         {
-            Root = Path.Combine(Path.GetTempPath(), "aec-tests", Guid.NewGuid().ToString("N"));
+            Root = Path.Combine(RealTemporaryDirectory(), "aec-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
             CodexHome = Path.Combine(Root, "codex-home");
             Source = Path.Combine(Repository, "environment", "providers", "codex", "AGENTS.md");
@@ -776,6 +844,11 @@ public sealed class StatusTests
             {
                 Directory.Delete(Root, true);
             }
+        }
+
+        private static string RealTemporaryDirectory()
+        {
+            return OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath();
         }
     }
 }

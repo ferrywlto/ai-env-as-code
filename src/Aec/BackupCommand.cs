@@ -180,7 +180,7 @@ internal static class BackupCommand
             expectedParent);
 
         var head = ResolveHead(repository);
-        var actualParent = GitProcess.RunRequired(
+        var actualParent = RunRequired(
             repository,
             "Git could not verify the initialization commit parent",
             "rev-parse",
@@ -275,7 +275,7 @@ internal static class BackupCommand
 
     internal static void ValidateRepository(string repository)
     {
-        var insideWorkTree = GitProcess.RunRequired(
+        var insideWorkTree = RunRequired(
             repository,
             "Repository is not a Git work tree",
             "rev-parse",
@@ -285,7 +285,7 @@ internal static class BackupCommand
             throw new InvalidOperationException($"Repository is not a Git work tree: {repository}");
         }
 
-        var bare = GitProcess.RunRequired(
+        var bare = RunRequired(
             repository,
             "Git could not inspect the repository",
             "rev-parse",
@@ -295,7 +295,7 @@ internal static class BackupCommand
             throw new InvalidOperationException($"Repository must not be bare: {repository}");
         }
 
-        var prefix = GitProcess.RunRequired(
+        var prefix = RunRequired(
             repository,
             "Git could not locate the repository root",
             "rev-parse",
@@ -305,7 +305,7 @@ internal static class BackupCommand
             throw new InvalidOperationException($"--repo must identify the Git repository root: {repository}");
         }
 
-        var branch = GitProcess.Run(repository, "symbolic-ref", "--quiet", "HEAD");
+        var branch = Run(repository, "symbolic-ref", "--quiet", "HEAD");
         if (branch.ExitCode == 1)
         {
             throw new InvalidOperationException("Backup requires a symbolic Git branch; detached HEAD is not supported.");
@@ -323,7 +323,7 @@ internal static class BackupCommand
                 "Backup requires HEAD to reference a local Git branch under refs/heads/.");
         }
 
-        var unmerged = GitProcess.RunRequired(
+        var unmerged = RunRequired(
             repository,
             "Git could not inspect unmerged files",
             "ls-files",
@@ -345,7 +345,7 @@ internal static class BackupCommand
                      "sequencer"
                  })
         {
-            var gitPath = GitProcess.RunRequired(
+            var gitPath = RunRequired(
                 repository,
                 $"Git could not inspect operation {operation}",
                 "rev-parse",
@@ -369,7 +369,7 @@ internal static class BackupCommand
 
     internal static void EnsureNoChangesOutsideSource(string repository)
     {
-        var status = GitProcess.RunRequired(
+        var status = RunRequired(
             repository,
             "Git could not inspect repository changes",
             "status",
@@ -389,7 +389,7 @@ internal static class BackupCommand
 
     internal static void EnsureNoChangesOutsideManagedSources(string repository)
     {
-        var status = GitProcess.RunRequired(
+        var status = RunRequired(
             repository,
             "Git could not inspect repository changes",
             "status",
@@ -410,14 +410,14 @@ internal static class BackupCommand
 
     private static string EnsureStagedBytesMatchSource(string repository)
     {
-        var sourceHash = GitProcess.RunRequired(
+        var sourceHash = RunRequired(
             repository,
             "Git could not hash the canonical source",
             "hash-object",
             "--no-filters",
             "--",
             AecApplication.SourceRelativePath).Output.Trim();
-        var stagedHash = GitProcess.RunRequired(
+        var stagedHash = RunRequired(
             repository,
             "Git could not inspect the staged canonical source",
             "rev-parse",
@@ -437,14 +437,14 @@ internal static class BackupCommand
         string relativePath,
         string label)
     {
-        var sourceHash = GitProcess.RunRequired(
+        var sourceHash = RunRequired(
             repository,
             $"Git could not hash the {label}",
             "hash-object",
             "--no-filters",
             "--",
             relativePath).Output.Trim();
-        var stagedHash = GitProcess.RunRequired(
+        var stagedHash = RunRequired(
             repository,
             $"Git could not inspect the staged {label}",
             "rev-parse",
@@ -461,7 +461,7 @@ internal static class BackupCommand
 
     private static void StageCanonicalSource(string repository)
     {
-        GitProcess.RunRequired(
+        RunRequired(
             repository,
             "Git could not stage the canonical source",
             "add",
@@ -472,7 +472,7 @@ internal static class BackupCommand
 
     private static void StageManagedSources(string repository)
     {
-        GitProcess.RunRequired(
+        RunRequired(
             repository,
             "Git could not stage the managed Codex environment files",
             "add",
@@ -526,7 +526,7 @@ internal static class BackupCommand
         byte[] expected,
         string label)
     {
-        var staged = GitProcess.RunRequiredBytes(
+        var staged = RunRequiredBytes(
             repository,
             $"Git could not read the staged {label}",
             "cat-file",
@@ -541,7 +541,7 @@ internal static class BackupCommand
 
     private static void VerifyCommitParent(string repository, string expectedParent)
     {
-        var actualParent = GitProcess.RunRequired(
+        var actualParent = RunRequired(
             repository,
             "Git could not verify the initialization commit parent",
             "rev-parse",
@@ -583,7 +583,7 @@ internal static class BackupCommand
 
         EnsureBranchMatches(repository, expectedBranch);
         EnsureParentMatches(repository, expectedParent);
-        var expectedTree = GitProcess.RunRequired(
+        var expectedTree = RunRequired(
             repository,
             "Git could not pin the verified canonical index",
             "write-tree").Output.Trim();
@@ -606,7 +606,7 @@ internal static class BackupCommand
 
         // commit-tree records the already-verified index tree. Unlike
         // `git commit --only`, it cannot reread a concurrently changed working file.
-        var commit = GitProcess.RunRequired(
+        var commit = RunRequired(
             repository,
             "Git could not commit the canonical source",
             [.. arguments]).Output.Trim();
@@ -621,7 +621,7 @@ internal static class BackupCommand
         // update-ref compares the old value before moving the branch, so a
         // concurrent commit cannot be silently replaced by this backup.
         var expectedOld = expectedParent ?? new string('0', commit.Length);
-        GitProcess.RunRequired(
+        RunRequired(
             repository,
             "Git could not publish the canonical source commit",
             "update-ref",
@@ -648,7 +648,7 @@ internal static class BackupCommand
         }
 
         var changedPaths = parent is null
-            ? GitProcess.RunRequired(
+            ? RunRequired(
                 repository,
                 "Git could not inspect the pinned initial tree",
                 "ls-tree",
@@ -656,7 +656,7 @@ internal static class BackupCommand
                 "-r",
                 "-z",
                 tree).Output
-            : GitProcess.RunRequired(
+            : RunRequired(
                 repository,
                 "Git could not inspect the pinned canonical tree",
                 "diff-tree",
@@ -679,7 +679,7 @@ internal static class BackupCommand
 
         foreach (var expected in expectedFiles)
         {
-            var actualBlob = GitProcess.RunRequired(
+            var actualBlob = RunRequired(
                 repository,
                 $"Git could not inspect pinned canonical path {expected.RelativePath}",
                 "rev-parse",
@@ -694,7 +694,7 @@ internal static class BackupCommand
 
     private static bool ShouldSignCommit(string repository)
     {
-        var result = GitProcess.Run(
+        var result = Run(
             repository,
             "config",
             "--bool",
@@ -725,7 +725,7 @@ internal static class BackupCommand
         string expectedBlob,
         string expectedSubject)
     {
-        var committedBlob = GitProcess.RunRequired(
+        var committedBlob = RunRequired(
             repository,
             "Git could not inspect the committed canonical source",
             "rev-parse",
@@ -736,7 +736,7 @@ internal static class BackupCommand
                 "Committed canonical source bytes do not match the expected source.");
         }
 
-        var subject = GitProcess.RunRequired(
+        var subject = RunRequired(
             repository,
             "Git could not inspect the canonical source commit message",
             "log",
@@ -748,7 +748,7 @@ internal static class BackupCommand
                 "Canonical source commit subject does not match the required message.");
         }
 
-        var sourceStatus = GitProcess.RunRequired(
+        var sourceStatus = RunRequired(
             repository,
             "Git could not verify the canonical source after commit",
             "status",
@@ -781,7 +781,7 @@ internal static class BackupCommand
             expectedConfigBlob,
             "canonical config");
 
-        var subject = GitProcess.RunRequired(
+        var subject = RunRequired(
             repository,
             "Git could not inspect the managed environment commit message",
             "log",
@@ -793,7 +793,7 @@ internal static class BackupCommand
                 "Managed environment commit subject does not match the required message.");
         }
 
-        var status = GitProcess.RunRequired(
+        var status = RunRequired(
             repository,
             "Git could not verify the managed environment after commit",
             "status",
@@ -816,7 +816,7 @@ internal static class BackupCommand
         string expectedBlob,
         string label)
     {
-        var committedBlob = GitProcess.RunRequired(
+        var committedBlob = RunRequired(
             repository,
             $"Git could not inspect the committed {label}",
             "rev-parse",
@@ -830,7 +830,7 @@ internal static class BackupCommand
 
     private static bool HasHead(string repository)
     {
-        var result = GitProcess.Run(repository, "rev-parse", "--verify", "--quiet", "HEAD");
+        var result = Run(repository, "rev-parse", "--verify", "--quiet", "HEAD");
         return result.ExitCode switch
         {
             0 => true,
@@ -842,7 +842,7 @@ internal static class BackupCommand
 
     private static bool HasStagedSourceChange(string repository)
     {
-        var result = GitProcess.Run(
+        var result = Run(
             repository,
             "diff",
             "--cached",
@@ -862,7 +862,7 @@ internal static class BackupCommand
 
     private static bool HasStagedManagedChange(string repository)
     {
-        var result = GitProcess.Run(
+        var result = Run(
             repository,
             "diff",
             "--cached",
@@ -883,7 +883,7 @@ internal static class BackupCommand
 
     private static string ResolveHead(string repository)
     {
-        var head = GitProcess.RunRequired(
+        var head = RunRequired(
             repository,
             "Git could not resolve the new commit",
             "rev-parse",
@@ -922,7 +922,7 @@ internal static class BackupCommand
 
     private static string ResolveBranch(string repository)
     {
-        var branch = GitProcess.RunRequired(
+        var branch = RunRequired(
             repository,
             "Git could not resolve the branch for the canonical commit",
             "symbolic-ref",
@@ -935,7 +935,7 @@ internal static class BackupCommand
 
     private static void EnsureBranchMatches(string repository, string expected)
     {
-        var actual = GitProcess.RunRequired(
+        var actual = RunRequired(
             repository,
             "Git could not verify the canonical source commit branch",
             "symbolic-ref",
@@ -946,6 +946,33 @@ internal static class BackupCommand
             throw new InvalidOperationException(
                 "Repository branch changed during the canonical source commit.");
         }
+    }
+
+    private static GitResult Run(string repository, params string[] arguments)
+    {
+        return GitProcess.Run(repository, ["--no-replace-objects", .. arguments]);
+    }
+
+    private static GitResult RunRequired(
+        string repository,
+        string failureMessage,
+        params string[] arguments)
+    {
+        return GitProcess.RunRequired(
+            repository,
+            failureMessage,
+            ["--no-replace-objects", .. arguments]);
+    }
+
+    private static byte[] RunRequiredBytes(
+        string repository,
+        string failureMessage,
+        params string[] arguments)
+    {
+        return GitProcess.RunRequiredBytes(
+            repository,
+            failureMessage,
+            ["--no-replace-objects", .. arguments]);
     }
 
     private sealed record InitializationBackupExpectation(

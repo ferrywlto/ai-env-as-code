@@ -49,6 +49,8 @@ public static class AecApplication
         var repository = RequireAbsolutePath(options.Repository, "--repo");
         var codexHome = ResolveCodexHome(options.CodexHome);
 
+        EnsureNoLinksInManagedRoots(repository, codexHome);
+        ApplyCommand.EnsureRuntimeOutsideRepository(repository, codexHome);
         EnsureRealDirectory(repository, "Repository");
         EnsureSourceDirectories(repository);
         EnsureRealDirectory(codexHome, "Codex home");
@@ -142,6 +144,8 @@ public static class AecApplication
         var repository = RequireAbsolutePath(options.Repository, "--repo");
         var codexHome = ResolveCodexHome(options.CodexHome);
 
+        EnsureNoLinksInManagedRoots(repository, codexHome);
+        ApplyCommand.EnsureRuntimeOutsideRepository(repository, codexHome);
         EnsureRealDirectory(repository, "Repository");
         EnsureSourceDirectories(repository);
         EnsureRealDirectory(codexHome, "Codex home");
@@ -179,8 +183,7 @@ public static class AecApplication
         var repository = RequireAbsolutePath(options.Repository, "--repo");
         var codexHome = ResolveCodexHome(options.CodexHome);
 
-        EnsureNoLinksInExistingPath(repository, "Repository path");
-        EnsureNoLinksInExistingPath(codexHome, "Codex home path");
+        EnsureNoLinksInManagedRoots(repository, codexHome);
         EnsureRealDirectory(repository, "Repository");
         EnsureSourceDirectories(repository);
         EnsureRealDirectory(codexHome, "Codex home");
@@ -395,6 +398,12 @@ public static class AecApplication
         }
 
         return Path.GetFullPath(path);
+    }
+
+    private static void EnsureNoLinksInManagedRoots(string repository, string codexHome)
+    {
+        EnsureNoLinksInExistingPath(repository, "Repository path");
+        EnsureNoLinksInExistingPath(codexHome, "Codex home path");
     }
 
     internal static void EnsureSourceDirectories(string repository)

@@ -418,6 +418,67 @@ public sealed class BackupTests
     }
 
     [Fact]
+    public void CommitRejectsAnUnrelatedIndexChangeHiddenByAReplacementTree()
+    {
+        using var layout = new BackupLayout("unused\n");
+        File.WriteAllText(layout.Source, "staged\n");
+        File.WriteAllText(layout.ConfigSource, "personality = \"none\"\n");
+        Assert.Equal(
+            0,
+            Git(
+                layout,
+                "add",
+                "--",
+                SourceRelativePath,
+                ConfigSourceRelativePath).ExitCode);
+        var stagedSource = Git(layout, "rev-parse", $":{SourceRelativePath}").Output.Trim();
+        var stagedConfig = Git(layout, "rev-parse", $":{ConfigSourceRelativePath}").Output.Trim();
+        var approvedTree = Git(layout, "write-tree").Output.Trim();
+
+        File.WriteAllText(Path.Combine(layout.Repository, "unrelated.txt"), "unexpected\n");
+        Assert.Equal(0, Git(layout, "add", "--", "unrelated.txt").ExitCode);
+        var poisonedTree = Git(layout, "write-tree").Output.Trim();
+        Assert.NotEqual(approvedTree, poisonedTree);
+        Assert.Equal(
+            0,
+            Git(
+                layout,
+                "update-ref",
+                $"refs/replace/{poisonedTree}",
+                approvedTree).ExitCode);
+
+        // Prove the fixture hides the unrelated path unless replacement objects are disabled.
+        Assert.DoesNotContain(
+            "unrelated.txt",
+            Git(layout, "ls-tree", "-r", "--name-only", poisonedTree).Output,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "unrelated.txt",
+            Git(
+                layout,
+                "--no-replace-objects",
+                "ls-tree",
+                "-r",
+                "--name-only",
+                poisonedTree).Output,
+            StringComparison.Ordinal);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => BackupCommand.CommitStagedIndex(
+                layout.Repository,
+                "Must not commit",
+                [
+                    (SourceRelativePath, stagedSource),
+                    (ConfigSourceRelativePath, stagedConfig)
+                ]));
+
+        Assert.Contains("outside the approved", exception.Message, StringComparison.Ordinal);
+        Assert.NotEqual(
+            0,
+            Git(layout, "--no-replace-objects", "rev-parse", "--verify", "HEAD").ExitCode);
+    }
+
+    [Fact]
     public void RejectsAnUntrackedFileOutsideTheCanonicalSourceBeforeWriting()
     {
         using var layout = new BackupLayout("runtime\n");
@@ -541,6 +602,71 @@ public sealed class BackupTests
         Assert.Contains("Runtime target must not be a symbolic link", result.Error, StringComparison.Ordinal);
         Assert.Empty(File.ReadAllBytes(layout.Source));
         Assert.Equal("external\n", File.ReadAllText(referent));
+    }
+
+    [Theory]
+    [InlineData("repository")]
+    [InlineData("codex-home")]
+    public void RejectsSymbolicLinkAncestorForRepositoryOrCodexHome(string linkedTarget)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var layout = new BackupLayout("runtime\n");
+        var alias = Path.Combine(layout.Root, $"{linkedTarget}-alias");
+        var repository = layout.Repository;
+        var codexHome = layout.CodexHome;
+        if (linkedTarget == "repository")
+        {
+            Directory.CreateSymbolicLink(alias, layout.Repository);
+            repository = alias;
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(alias, layout.Root);
+            codexHome = Path.Combine(alias, "codex home");
+        }
+
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        var statusBefore = Git(layout, "status", "--porcelain=v1", "-z").Output;
+        var indexBefore = Git(layout, "diff", "--cached", "--binary").Output;
+        try
+        {
+            var result = Run(repository, codexHome);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Empty(result.Output);
+            Assert.Contains("must not contain a symbolic link", result.Error, StringComparison.Ordinal);
+            Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+            Assert.False(File.Exists(layout.ConfigSource));
+            Assert.Equal(statusBefore, Git(layout, "status", "--porcelain=v1", "-z").Output);
+            Assert.Equal(indexBefore, Git(layout, "diff", "--cached", "--binary").Output);
+        }
+        finally
+        {
+            Directory.Delete(alias);
+        }
+    }
+
+    [Fact]
+    public void RejectsCodexHomeInsideSelectedRepository()
+    {
+        using var layout = new BackupLayout("runtime\n");
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        var statusBefore = Git(layout, "status", "--porcelain=v1", "-z").Output;
+        var indexBefore = Git(layout, "diff", "--cached", "--binary").Output;
+
+        var result = Run(layout.Repository, layout.Repository);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("outside the data repository", result.Error, StringComparison.Ordinal);
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
+        Assert.False(File.Exists(layout.ConfigSource));
+        Assert.Equal(statusBefore, Git(layout, "status", "--porcelain=v1", "-z").Output);
+        Assert.Equal(indexBefore, Git(layout, "diff", "--cached", "--binary").Output);
     }
 
     [Fact]
@@ -683,12 +809,17 @@ public sealed class BackupTests
 
     private static CommandResult Run(BackupLayout layout)
     {
+        return Run(layout.Repository, layout.CodexHome);
+    }
+
+    private static CommandResult Run(string repository, string codexHome)
+    {
         return TestApplication.Run(
             "backup",
             "--repo",
-            layout.Repository,
+            repository,
             "--codex-home",
-            layout.CodexHome);
+            codexHome);
     }
 
     private static GitResult Git(BackupLayout layout, params string[] arguments)
