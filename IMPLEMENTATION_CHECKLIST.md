@@ -6,7 +6,7 @@
 - [x] Explain AEC directionality, source-of-truth model, current platform, and installation.
 - [x] Add the public roadmap for platform and provider support.
 - [x] Add GitHub, MIT licence, citation, and PayPal coffee links.
-- [ ] Explicitly enable GitHub Pages and verify its deployed public URL.
+- [x] Explicitly enable GitHub Pages and verify its deployed public URL.
 
 Immediate next work: review the local landing page, then decide whether to enable
 GitHub Pages as a separate external change.
@@ -17,7 +17,7 @@ GitHub Pages as a separate external change.
 - [x] **P1:** Disable Git replacement objects throughout `BackupCommand` validation and commit operations.
 - [x] Add focused regression tests for both P1 boundaries.
 - [x] Pass build, focused tests, the full Debug suite, and diff validation.
-- [ ] Pass formatting after resetting the stale .NET build servers.
+- [x] Pass formatting after resetting the stale .NET build servers.
 
 Immediate next work: decide whether to reset the stale .NET build servers and retry
 formatting; do not begin P2 work.
@@ -27,20 +27,20 @@ formatting; do not begin P2 work.
 - [x] Document the current five-minute full-suite expectation and quiet VSTest output.
 - [x] Make focused class-filtered tests the normal per-change workflow.
 - [x] Reserve the full Debug and Release suites for pre-push and pre-release regression gates.
-- [ ] Classify tests as unit, command integration, filesystem safety, or end-to-end.
-- [ ] Add stable xUnit traits or separate test projects for those scopes.
-- [ ] Measure test durations and prioritize proven bottlenecks before optimization.
-- [ ] Remove process-state serialization only where isolated execution is demonstrated.
-- [ ] Preserve full-suite regression coverage while making focused feedback faster.
+- [x] Classify tests as unit, command integration, filesystem safety, or end-to-end.
+- [x] Add stable xUnit traits or separate test projects for those scopes.
+- [x] Measure test durations and prioritize proven bottlenecks before optimization.
+- [x] Remove process-state serialization only where isolated execution is demonstrated.
+- [x] Preserve full-suite regression coverage while making focused feedback faster.
 
 ## Security review implementation backlog
 
-- [ ] **P2:** Stage verified blobs without executing configured clean filters or optional Git integrations.
-- [ ] **P2:** Reject linked worktrees and Git metadata outside the selected data repository.
-- [ ] **P2:** Prevent fresh-init identity cleanup from deleting concurrently created repository state.
-- [ ] **P2:** Close or explicitly constrain pathname-based file validation and mutation races.
-- [ ] **P3:** Verify the installed executable digest before generated-uninstaller execution and deletion.
-- [ ] **P3:** Create a missing runtime `AGENTS.md` with user-only permissions.
+- [x] **P2:** Stage verified blobs without executing configured clean filters or optional Git integrations.
+- [x] **P2:** Reject linked worktrees and Git metadata outside the selected data repository.
+- [x] **P2:** Prevent fresh-init identity cleanup from deleting concurrently created repository state.
+- [x] **P2:** Close or explicitly constrain pathname-based file validation and mutation races.
+- [x] **P3:** Verify the installed executable digest before generated-uninstaller execution and deletion.
+- [x] **P3:** Create a missing runtime `AGENTS.md` with user-only permissions.
 
 ## Documentation and architecture/security review
 
@@ -114,7 +114,7 @@ formatting; do not begin P2 work.
 - [x] Document and test Codex restart troubleshooting for a newly installed AEC CLI.
 - [x] Complete v1.0 release validation and private end-to-end dogfooding.
 - [x] Prepare the `1.0.0` release source and tag target.
-- [ ] Publish v1.0 publicly after the private dogfood period concludes.
+- [x] Publish v1.0 publicly after the private dogfood period concludes.
 
 ## v0.13.1 — Codex executable discovery troubleshooting
 
