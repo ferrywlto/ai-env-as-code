@@ -449,6 +449,29 @@ Existing manual backups are retained byte-for-byte. The command also upgrades an
 earlier managed block—including the released provider-aware version 2 or any
 supported version 3 through v5—to the current provider-aware version 6:
 
+### Upgrading an older managed instruction block
+
+`aec skill upgrade` updates only Codex's installed `$aec` skill files. It does
+not update the canonical instructions in the data repository or the runtime.
+When a newer AEC release introduces an incompatible managed-block version, use
+the provider initialization command as the explicit canonical migration:
+
+```mermaid
+flowchart LR
+    Install[Install newer AEC executable] --> Skill[Run aec skill upgrade]
+    Skill --> Migrate[Run aec init --repo PATH --provider=chatgpt]
+    Migrate --> Review[Review canonical AGENTS.md]
+    Review --> Commit[Commit the canonical change]
+    Commit --> Apply[Run aec apply --repo PATH]
+    Apply --> Verify[Run aec status --repo PATH]
+```
+
+The migration changes only the canonical AEC block and creates any missing
+ChatGPT backup files; it never overwrites an existing manual backup. Review and
+commit the canonical `AGENTS.md` before `apply`, so Git history remains the
+source of truth. This is the path used to upgrade provider-aware v4 instructions
+to v6.
+
 ```markdown
 <!-- AEC:BEGIN version=6 -->
 ## AI Environment as Code
