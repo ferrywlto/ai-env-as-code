@@ -20,7 +20,7 @@ public sealed class ChatGptInitTests
         Assert.Empty(File.ReadAllBytes(layout.ProjectBaseline));
         Assert.Empty(File.ReadAllBytes(layout.GptBaseline));
         Assert.Contains(
-            "<!-- AEC:BEGIN version=4 -->",
+            "<!-- AEC:BEGIN version=6 -->",
             File.ReadAllText(layout.CanonicalAgents),
             StringComparison.Ordinal);
         Assert.Contains(
@@ -244,7 +244,7 @@ public sealed class ChatGptInitTests
     {
         using var layout = new ChatGptLayout();
         var future = """
-            <!-- AEC:BEGIN version=5 -->
+            <!-- AEC:BEGIN version=7 -->
             Future body
             <!-- AEC:END -->
             """u8.ToArray();

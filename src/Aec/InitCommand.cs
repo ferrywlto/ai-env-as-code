@@ -468,11 +468,10 @@ internal static class InitCommand
                 "AEC initialization commit does not contain a supported initialized block.");
         }
 
-        var expectedInitializedContent = binding.Version == 3
-            ? AecInstructionBlock.Merge(baselineContent, binding.Repository)
-            : AecInstructionBlock.MergeForChatGptProvider(
-                baselineContent,
-                binding.Repository);
+        var expectedInitializedContent = AecInstructionBlock.MergeForVersion(
+            baselineContent,
+            binding.Repository,
+            binding.Version);
         if (!initializedContent.AsSpan().SequenceEqual(expectedInitializedContent))
         {
             throw new InvalidOperationException(

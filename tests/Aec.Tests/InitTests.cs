@@ -294,8 +294,8 @@ public sealed class InitTests
     }
 
     [Theory]
-    [InlineData(false, 3, 3)]
-    [InlineData(true, 4, 4)]
+    [InlineData(false, 5, 3)]
+    [InlineData(true, 6, 4)]
     public void ConfirmedPathChangeRebindsCommitsAndAppliesIdempotently(
         bool includeChatGptProvider,
         int expectedBlockVersion,
@@ -602,7 +602,7 @@ public sealed class InitTests
 
         Assert.Equal(0, result.ExitCode);
         Assert.Contains(
-            "<!-- AEC:BEGIN version=3 -->",
+            "<!-- AEC:BEGIN version=5 -->",
             File.ReadAllText(layout.Source),
             StringComparison.Ordinal);
         Assert.DoesNotContain(
@@ -1179,7 +1179,7 @@ public sealed class InitTests
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(expected, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(expected, File.ReadAllBytes(layout.Source));
-        Assert.Equal(0, expected.AsSpan().IndexOf("<!-- AEC:BEGIN version=3 -->"u8));
+        Assert.Equal(0, expected.AsSpan().IndexOf("<!-- AEC:BEGIN version=5 -->"u8));
         Assert.True(expected.AsSpan().EndsWith(original));
         var baselineObject = TestGit.Run(
             layout.Target,
@@ -1222,7 +1222,7 @@ public sealed class InitTests
     {
         using var layout = new InitLayout();
         var current = """
-            <!-- AEC:BEGIN version=3 -->
+            <!-- AEC:BEGIN version=5 -->
             current custom body
             <!-- AEC:END -->
             Other instructions.
@@ -1260,7 +1260,7 @@ public sealed class InitTests
     {
         using var layout = new InitLayout();
         var runtime = """
-            <!-- AEC:BEGIN version=4 -->
+            <!-- AEC:BEGIN version=7 -->
             future
             <!-- AEC:END -->
             """u8.ToArray();
@@ -1495,7 +1495,7 @@ public sealed class InitTests
         var source = Path.Combine(layout.Target, "environment", "providers", "codex", "AGENTS.md");
         Assert.True(File.Exists(source));
         Assert.Equal(File.ReadAllBytes(layout.Runtime), File.ReadAllBytes(source));
-        Assert.Contains("<!-- AEC:BEGIN version=3 -->", File.ReadAllText(source), StringComparison.Ordinal);
+        Assert.Contains("<!-- AEC:BEGIN version=5 -->", File.ReadAllText(source), StringComparison.Ordinal);
         Assert.Contains("Existing instruction.", File.ReadAllText(source), StringComparison.Ordinal);
         Assert.True(Directory.Exists(Path.Combine(layout.Target, ".git")));
 

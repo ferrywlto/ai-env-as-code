@@ -20,12 +20,16 @@ internal static class AecInstructionBlock
         throwOnInvalidBytes: true);
 
     public static byte[] Merge(byte[] content, string repository) =>
-        Merge(content, CodexBlockLines(NormalizeRepository(repository)), "3"u8);
+        Merge(
+            content,
+            CodexBlockLines(NormalizeRepository(repository)),
+            "5"u8,
+            protectedOlderVersion: "4"u8);
 
     public static byte[] MergeForChatGptProvider(byte[] content, string repository)
     {
         var normalizedRepository = NormalizeRepository(repository);
-        return Merge(content, ChatGptBlockLines(normalizedRepository), "4"u8);
+        return Merge(content, ChatGptBlockLines(normalizedRepository), "6"u8);
     }
 
     internal static RepositoryBinding? ReadRepositoryBinding(
@@ -120,7 +124,14 @@ internal static class AecInstructionBlock
             begin.FirstIndex,
             suffixOffset - begin.FirstIndex);
         var lines = blockText.Split(newLine, StringSplitOptions.None);
-        var expectedLineCount = version == 3 ? 8 : 12;
+        var expectedLineCount = version switch
+        {
+            3 => 8,
+            4 => 12,
+            5 => 14,
+            6 => 18,
+            _ => throw UnsupportedInitializedBlock()
+        };
         if (lines.Length != expectedLineCount)
         {
             throw UnsupportedInitializedBlock();
@@ -128,7 +139,7 @@ internal static class AecInstructionBlock
 
         const string repositoryPrefix = "The AEC data repository selected by `--repo` is `";
         const string repositorySuffix = "`.";
-        var repositoryLine = lines[3];
+        var repositoryLine = lines[version <= 4 ? 3 : 5];
         if (!repositoryLine.StartsWith(repositoryPrefix, StringComparison.Ordinal) ||
             !repositoryLine.EndsWith(repositorySuffix, StringComparison.Ordinal))
         {
@@ -149,9 +160,14 @@ internal static class AecInstructionBlock
 
         // Re-rendering makes recognition strict: only blocks emitted by a supported AEC
         // version can authorize applying or rebinding a pulled repository.
-        var expectedLines = version == 3
-            ? CodexBlockLines(normalizedRepository)
-            : ChatGptBlockLines(normalizedRepository);
+        var expectedLines = version switch
+        {
+            3 => LegacyCodexBlockLines(normalizedRepository),
+            4 => LegacyChatGptBlockLines(normalizedRepository),
+            5 => CodexBlockLines(normalizedRepository),
+            6 => ChatGptBlockLines(normalizedRepository),
+            _ => throw UnsupportedInitializedBlock()
+        };
         var expectedBlock = RenderCurrentBlock(newLine, expectedLines);
         if (!content.AsSpan(begin.FirstIndex, suffixOffset - begin.FirstIndex)
                 .SequenceEqual(expectedBlock))
@@ -172,9 +188,22 @@ internal static class AecInstructionBlock
             ?? throw UnsupportedInitializedBlock();
         var normalizedRepository = NormalizeRepository(repository);
 
-        return binding.Version == 3
-            ? Merge(content, CodexBlockLines(normalizedRepository), "3"u8)
-            : Merge(content, ChatGptBlockLines(normalizedRepository), "4"u8);
+        return binding.Version is 3 or 5
+            ? Merge(content, CodexBlockLines(normalizedRepository), "5"u8)
+            : Merge(content, ChatGptBlockLines(normalizedRepository), "6"u8);
+    }
+
+    internal static byte[] MergeForVersion(byte[] content, string repository, int version)
+    {
+        var normalizedRepository = NormalizeRepository(repository);
+        return version switch
+        {
+            3 => Merge(content, LegacyCodexBlockLines(normalizedRepository), "3"u8),
+            4 => Merge(content, LegacyChatGptBlockLines(normalizedRepository), "4"u8),
+            5 => Merge(content, CodexBlockLines(normalizedRepository), "5"u8),
+            6 => Merge(content, ChatGptBlockLines(normalizedRepository), "6"u8),
+            _ => throw UnsupportedInitializedBlock()
+        };
     }
 
     internal static bool RepositoryPathsEqual(string left, string right)
@@ -190,19 +219,74 @@ internal static class AecInstructionBlock
             comparison);
     }
 
-    private static string[] CodexBlockLines(string repository) =>
+    private static string[] CodexBlockLines(string normalizedRepository)
+    {
+        var repository = normalizedRepository;
+        var canonicalInstructions = Path.Combine(
+            repository,
+            "environment",
+            "providers",
+            "codex",
+            "AGENTS.md");
+
+        return
+        [
+            "<!-- AEC:BEGIN version=5 -->",
+            "## AI Environment as Code",
+            string.Empty,
+            "Use the `$aec` skill for changes to managed personal Codex instructions or configuration.",
+            string.Empty,
+            $"The AEC data repository selected by `--repo` is `{repository}`.",
+            "Treat its Git commit history as the source of truth.",
+            $"The canonical Codex instructions are `{canonicalInstructions}`.",
+            "Preserve instructions outside this managed block; do not edit the runtime `AGENTS.md` as the source of truth.",
+            string.Empty,
+            "For repository-to-runtime changes, edit and commit the canonical source, run `aec apply`, then verify with `aec status`.",
+            "Use `aec backup` only for an explicitly authorized runtime-to-repository capture.",
+            "If AEC is unavailable or validation fails, stop without changing managed runtime state.",
+            EndMarkerText
+        ];
+    }
+
+    private static string[] LegacyCodexBlockLines(string normalizedRepository) =>
     [
         "<!-- AEC:BEGIN version=3 -->",
         "## AI Environment as Code",
         string.Empty,
-        $"The AEC data repository selected by `--repo` is `{repository}`.",
+        $"The AEC data repository selected by `--repo` is `{normalizedRepository}`.",
         "Treat that repository's Git commit history as the source of truth.",
         "Preserve instructions outside this managed block.",
         "Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.",
         EndMarkerText
     ];
 
-    private static string[] ChatGptBlockLines(string repository)
+    private static string[] ChatGptBlockLines(string normalizedRepository)
+    {
+        var repository = normalizedRepository;
+        return
+        [
+            "<!-- AEC:BEGIN version=6 -->",
+            .. CodexBlockLines(repository)[1..^1],
+            string.Empty,
+            .. ChatGptGuidanceLines(repository),
+            EndMarkerText
+        ];
+    }
+
+    private static string[] LegacyChatGptBlockLines(string normalizedRepository)
+    {
+        var repository = normalizedRepository;
+        return
+        [
+            "<!-- AEC:BEGIN version=4 -->",
+            .. LegacyCodexBlockLines(repository)[1..^1],
+            string.Empty,
+            .. ChatGptGuidanceLines(repository),
+            EndMarkerText
+        ];
+    }
+
+    private static string[] ChatGptGuidanceLines(string repository)
     {
         var providerDirectory = Path.Combine(
             repository,
@@ -216,18 +300,9 @@ internal static class AecInstructionBlock
 
         return
         [
-            "<!-- AEC:BEGIN version=4 -->",
-            "## AI Environment as Code",
-            string.Empty,
-            $"The AEC data repository selected by `--repo` is `{repository}`.",
-            "Treat that repository's Git commit history as the source of truth.",
-            "Preserve instructions outside this managed block.",
-            "Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.",
-            string.Empty,
             $"Manual ChatGPT instruction backups live under `{providerDirectory}`.",
             "If you detect uncommitted changes there, say that a manual backup is pending and ask before running AEC validation, exact-path staging, commit, and push.",
-            "Never automatically capture from or deploy to ChatGPT, and never claim account-side runtime verification.",
-            EndMarkerText
+            "Never automatically capture from or deploy to ChatGPT, and never claim account-side runtime verification."
         ];
     }
 
@@ -253,7 +328,8 @@ internal static class AecInstructionBlock
     private static byte[] Merge(
         byte[] content,
         string[] currentBlockLines,
-        ReadOnlySpan<byte> currentVersion)
+        ReadOnlySpan<byte> currentVersion,
+        ReadOnlySpan<byte> protectedOlderVersion = default)
     {
         ArgumentNullException.ThrowIfNull(content);
         ValidateText(content);
@@ -291,6 +367,13 @@ internal static class AecInstructionBlock
         {
             throw new InvalidDataException(
                 "Instructions contain a newer unsupported AEC block version.");
+        }
+
+        var existingVersion = beginLine.Content[BeginPrefix.Length..^MarkerSuffix.Length];
+        if (!protectedOlderVersion.IsEmpty && existingVersion.SequenceEqual(protectedOlderVersion))
+        {
+            throw new InvalidDataException(
+                "Instructions contain a provider-aware AEC block that ordinary initialization must preserve.");
         }
 
         var newLine = beginLine.NewLine ?? DetectNewLine(content.AsSpan(bodyOffset));
@@ -503,7 +586,7 @@ internal static class AecInstructionBlock
 
         if (relativeToVersionThree == VersionKind.Older)
         {
-            // Provider initialization owns the existing v0-v2 migration to v4.
+            // Provider initialization owns the existing v0-v2 migration to v6.
             return allowLegacyProviderUpgrade ? null : throw UnsupportedInitializedBlock();
         }
 
@@ -513,10 +596,9 @@ internal static class AecInstructionBlock
         }
 
         var version = beginLine[BeginPrefix.Length..^MarkerSuffix.Length];
-        if (version.SequenceEqual("4"u8))
-        {
-            return 4;
-        }
+        if (version.SequenceEqual("4"u8)) return 4;
+        if (version.SequenceEqual("5"u8)) return 5;
+        if (version.SequenceEqual("6"u8)) return 6;
 
         throw UnsupportedInitializedBlock();
     }

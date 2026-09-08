@@ -1,7 +1,7 @@
 # AI Environment as Code
 
-Version 1.2.3 hardens repository and runtime path containment and disables Git
-replacement objects during backup validation and commit operations.
+Version 1.3.0 routes managed Codex changes through the bundled `$aec` skill and
+updates the generated managed instruction block.
 
 ## Version history
 
@@ -30,8 +30,9 @@ replacement objects during backup validation and commit operations.
 | 1.2.1 | Apply recommended Roslyn analysis and behavior-preserving cleanup |
 | 1.2.2 | Centralize test application execution and Git environment isolation |
 | 1.2.3 | Harden backup path containment and Git object verification |
+| 1.3.0 | Route managed Codex changes through the bundled `$aec` skill |
 
-The project and CLI report the current release as `1.2.3` through `aec version`.
+The project and CLI report the current release as `1.3.0` through `aec version`.
 
 ## version
 
@@ -72,7 +73,7 @@ It takes no `--repo` because it neither reads nor changes an AEC data repository
 An explicit absolute `--codex-home` takes precedence over a non-empty `CODEX_HOME`;
 when both are absent, the command uses `~/.codex`.
 Both managed files are checked before either changes. Only exact official v0.9.0,
-v0.10.0, v0.11.4, v0.12.0, v0.13.0, and v1.0.0 predecessors—or the current bundle—are
+v0.10.0, v0.11.4, v0.12.0, v0.13.0, v1.0.0, v1.1.0, and v1.2.3 predecessors—or the current bundle—are
 accepted. Missing, modified, unsupported, linked, or otherwise invalid managed
 state fails closed. A retry safely completes a recognized old/current mixture,
 unrelated files are preserved, and replaced files retain their existing Unix
@@ -96,7 +97,7 @@ commits, or deletes an AEC data repository.
 
 After preflighting every target, the command:
 
-- removes the exact supported v3 or v4 AEC block from runtime `AGENTS.md`;
+- removes the exact supported v3 through v6 AEC block from runtime `AGENTS.md`;
 - preserves every non-AEC instruction byte;
 - removes only exact current or recognized official predecessor copies of
   `skills/aec/SKILL.md` and `skills/aec/agents/openai.yaml`;
@@ -132,7 +133,7 @@ changes, and their raw working bytes must exactly match their committed blobs. T
 rejects line-ending, clean/smudge, and other Git filters that could make visibly
 different bytes appear clean. Unrelated repository changes are ignored and untouched.
 
-When the committed canonical source contains a supported v3 or v4 AEC block,
+When the committed canonical source contains a supported v3 through v6 AEC block,
 `apply` checks its recorded repository path before reading runtime state. A path
 mismatch displays both paths, returns an error without mutation, and directs the
 caller to ordinary `aec init`. Malformed or unsupported AEC markers also fail
@@ -302,7 +303,7 @@ A completed repository must retain the recognizable two-commit initialization
 ancestry, use symbolic branch `main`, contain a real `.git` directory whose metadata
 remains inside the selected root, and have a clean index and work tree. Both current
 canonical files must exactly match committed `HEAD`; instructions must contain a
-supported v3 or v4 AEC block and config must contain one supported managed value.
+supported v3 through v6 AEC block and config must contain one supported managed value.
 Legacy histories remain attachable after canonical config was added in a later
 commit. A truly pre-config completed `HEAD` fails closed instead of inventing state.
 Later commits and committed provider files are allowed.
@@ -310,13 +311,19 @@ Later commits and committed provider files are allowed.
 The AEC-managed instruction block is delimited and versioned explicitly:
 
 ```markdown
-<!-- AEC:BEGIN version=3 -->
+<!-- AEC:BEGIN version=5 -->
 ## AI Environment as Code
 
+Use the `$aec` skill for changes to managed personal Codex instructions or configuration.
+
 The AEC data repository selected by `--repo` is `/absolute/path/to/data-repository`.
-Treat that repository's Git commit history as the source of truth.
-Preserve instructions outside this managed block.
-Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.
+Treat its Git commit history as the source of truth.
+The canonical Codex instructions are `/absolute/path/to/data-repository/environment/providers/codex/AGENTS.md`.
+Preserve instructions outside this managed block; do not edit the runtime `AGENTS.md` as the source of truth.
+
+For repository-to-runtime changes, edit and commit the canonical source, run `aec apply`, then verify with `aec status`.
+Use `aec backup` only for an explicitly authorized runtime-to-repository capture.
+If AEC is unavailable or validation fails, stop without changing managed runtime state.
 <!-- AEC:END -->
 ```
 
@@ -389,7 +396,7 @@ flowchart TD
     Confirm -->|"No"| Unchanged["Leave repository and runtime unchanged"]
     Confirm -->|"Yes"| Rerun["Run aec init with<br/>--force-path-change"]
     Rerun --> RebindSkill["Install the bundled $aec skill"]
-    RebindSkill --> Rebind["Update the existing v3 or v4 block in place<br/>Never create a duplicate block"]
+    RebindSkill --> Rebind["Update the existing v3 through v6 block in place<br/>Never create a duplicate block"]
     Rebind --> PathCommit["Commit the confirmed repository path change"]
     PathCommit --> Apply
 
@@ -406,8 +413,8 @@ flowchart TD
 Path mismatch detection is read-only. The command is deliberately non-interactive:
 it displays the recorded and selected paths and stops. The caller must obtain user
 confirmation before rerunning with `--force-path-change`. A confirmed rebind
-preserves every non-AEC byte and the existing v3 provider-neutral or v4
-ChatGPT-aware block type, commits only the canonical source as
+preserves every non-AEC byte and the existing provider-neutral or ChatGPT-aware
+block type, emits the current v5 or v6 form, and commits only the canonical source as
 `Rebind AEC repository path`, and does not push. A machine using the previous path
 may subsequently require its own confirmed rebind.
 
@@ -438,17 +445,23 @@ environment/providers/chatgpt/gpt-baseline.md
 ```
 
 Existing manual backups are retained byte-for-byte. The command also upgrades an
-earlier managed block—including the released provider-aware version 2 or the
-provider-neutral version 3—to this provider-aware version 4:
+earlier managed block—including the released provider-aware version 2 or any
+supported version 3 through v5—to the current provider-aware version 6:
 
 ```markdown
-<!-- AEC:BEGIN version=4 -->
+<!-- AEC:BEGIN version=6 -->
 ## AI Environment as Code
 
+Use the `$aec` skill for changes to managed personal Codex instructions or configuration.
+
 The AEC data repository selected by `--repo` is `/absolute/path/to/data-repository`.
-Treat that repository's Git commit history as the source of truth.
-Preserve instructions outside this managed block.
-Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.
+Treat its Git commit history as the source of truth.
+The canonical Codex instructions are `/absolute/path/to/data-repository/environment/providers/codex/AGENTS.md`.
+Preserve instructions outside this managed block; do not edit the runtime `AGENTS.md` as the source of truth.
+
+For repository-to-runtime changes, edit and commit the canonical source, run `aec apply`, then verify with `aec status`.
+Use `aec backup` only for an explicitly authorized runtime-to-repository capture.
+If AEC is unavailable or validation fails, stop without changing managed runtime state.
 
 Manual ChatGPT instruction backups live under `/absolute/path/to/data-repository/environment/providers/chatgpt/`.
 If you detect uncommitted changes there, say that a manual backup is pending and ask before running AEC validation, exact-path staging, commit, and push.

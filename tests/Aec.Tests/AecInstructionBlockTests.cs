@@ -10,24 +10,36 @@ public sealed class AecInstructionBlockTests
         "data repository");
 
     private static string CodexLatestLf => $"""
-        <!-- AEC:BEGIN version=3 -->
+        <!-- AEC:BEGIN version=5 -->
         ## AI Environment as Code
 
+        Use the `$aec` skill for changes to managed personal Codex instructions or configuration.
+
         The AEC data repository selected by `--repo` is `{Repository}`.
-        Treat that repository's Git commit history as the source of truth.
-        Preserve instructions outside this managed block.
-        Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.
+        Treat its Git commit history as the source of truth.
+        The canonical Codex instructions are `{Path.Combine(Repository, "environment", "providers", "codex", "AGENTS.md")}`.
+        Preserve instructions outside this managed block; do not edit the runtime `AGENTS.md` as the source of truth.
+
+        For repository-to-runtime changes, edit and commit the canonical source, run `aec apply`, then verify with `aec status`.
+        Use `aec backup` only for an explicitly authorized runtime-to-repository capture.
+        If AEC is unavailable or validation fails, stop without changing managed runtime state.
         <!-- AEC:END -->
         """;
 
     private static string ChatGptLatestLf => $"""
-        <!-- AEC:BEGIN version=4 -->
+        <!-- AEC:BEGIN version=6 -->
         ## AI Environment as Code
 
+        Use the `$aec` skill for changes to managed personal Codex instructions or configuration.
+
         The AEC data repository selected by `--repo` is `{Repository}`.
-        Treat that repository's Git commit history as the source of truth.
-        Preserve instructions outside this managed block.
-        Use `aec status` to inspect drift and `aec backup` to record approved runtime changes.
+        Treat its Git commit history as the source of truth.
+        The canonical Codex instructions are `{Path.Combine(Repository, "environment", "providers", "codex", "AGENTS.md")}`.
+        Preserve instructions outside this managed block; do not edit the runtime `AGENTS.md` as the source of truth.
+
+        For repository-to-runtime changes, edit and commit the canonical source, run `aec apply`, then verify with `aec status`.
+        Use `aec backup` only for an explicitly authorized runtime-to-repository capture.
+        If AEC is unavailable or validation fails, stop without changing managed runtime state.
 
         Manual ChatGPT instruction backups live under `{Path.Combine(Repository, "environment", "providers", "chatgpt")}{Path.DirectorySeparatorChar}`.
         If you detect uncommitted changes there, say that a manual backup is pending and ask before running AEC validation, exact-path staging, commit, and push.
@@ -105,11 +117,14 @@ public sealed class AecInstructionBlockTests
         Assert.Equal(Utf8($"prefix\r\n{expectedBlock}\r\nsuffix\r\n"), merged);
     }
 
-    [Fact]
-    public void ChatGptProviderUpgradesTheCodexBlockToVersionFour()
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void ChatGptProviderUpgradesTheCodexBlockToVersionSix(int version)
     {
         var original = Utf8(
-            "prefix\n<!-- AEC:BEGIN version=3 -->\ncustom body\n<!-- AEC:END -->\nsuffix\n");
+            $"prefix\n<!-- AEC:BEGIN version={version} -->\ncustom body\n<!-- AEC:END -->\nsuffix\n");
 
         var merged = AecInstructionBlock.MergeForChatGptProvider(original, Repository);
 
@@ -176,8 +191,8 @@ public sealed class AecInstructionBlockTests
     }
 
     [Theory]
-    [InlineData(false, 3)]
-    [InlineData(true, 4)]
+    [InlineData(false, 5)]
+    [InlineData(true, 6)]
     public void ReadsAndRebindsARecognizedRepositoryBlock(
         bool includeChatGptProvider,
         int expectedVersion)
@@ -204,6 +219,38 @@ public sealed class AecInstructionBlockTests
             "prefix\r\nsuffix\r\n",
             Encoding.UTF8.GetString(rebound),
             StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(3, 5)]
+    [InlineData(4, 6)]
+    public void ReadsAndRebindsHistoricalManagedBlock(int historicalVersion, int currentVersion)
+    {
+        var oldRepository = Path.Combine(Path.GetTempPath(), "historical data repository");
+        var original = AecInstructionBlock.MergeForVersion(
+            Utf8("prefix\nsuffix\n"),
+            oldRepository,
+            historicalVersion);
+
+        var binding = AecInstructionBlock.ReadRepositoryBinding(original);
+        var rebound = AecInstructionBlock.RebindRepository(original, Repository);
+
+        Assert.NotNull(binding);
+        Assert.Equal(historicalVersion, binding.Version);
+        Assert.Equal(currentVersion, AecInstructionBlock.ReadRepositoryBinding(rebound)?.Version);
+        Assert.EndsWith("prefix\nsuffix\n", Encoding.UTF8.GetString(rebound), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OrdinaryMergeDoesNotRemoveHistoricalChatGptGuidance()
+    {
+        var providerBlock = AecInstructionBlock.MergeForVersion(
+            Utf8("instructions\n"),
+            Repository,
+            4);
+
+        Assert.Throws<InvalidDataException>(() =>
+            AecInstructionBlock.Merge(providerBlock, Repository));
     }
 
     [Fact]
@@ -233,7 +280,7 @@ public sealed class AecInstructionBlockTests
         var changed = replacement == "relative-path"
             ? valid.Replace(Repository, replacement, StringComparison.Ordinal)
             : valid.Replace(
-                "Treat that repository's Git commit history as the source of truth.",
+                "Treat its Git commit history as the source of truth.",
                 replacement,
                 StringComparison.Ordinal);
 

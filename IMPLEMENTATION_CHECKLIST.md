@@ -1,5 +1,17 @@
 # Implementation Checklist
 
+## v1.3.0 — Managed AEC workflow guidance
+
+- [x] Add compact provider-neutral v5 and provider-aware v6 managed blocks.
+- [x] Preserve and recognize released v3/v4 blocks while migrating to v5/v6.
+- [x] Preserve non-AEC bytes and existing provider-specific guidance.
+- [x] Update README, bundled skill guidance, version metadata, and skill-upgrade predecessor support.
+- [x] Pass focused managed-block and initialization validation.
+- [ ] Run the deferred two-machine Git round-trip rehearsal.
+
+Immediate next work: rehearse push/pull through a disposable local bare Git remote,
+then document the cross-machine workflow before adding remote convenience commands.
+
 ## GitHub Pages landing page
 
 - [x] Create a dependency-free, responsive landing page under `docs/`.
@@ -7,9 +19,6 @@
 - [x] Add the public roadmap for platform and provider support.
 - [x] Add GitHub, MIT licence, citation, and PayPal coffee links.
 - [x] Explicitly enable GitHub Pages and verify its deployed public URL.
-
-Immediate next work: review the local landing page, then decide whether to enable
-GitHub Pages as a separate external change.
 
 ## v1.2.3 — Security containment
 
