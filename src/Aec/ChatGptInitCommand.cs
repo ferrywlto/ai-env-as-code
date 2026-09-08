@@ -2,7 +2,9 @@ namespace Aec;
 
 internal static class ChatGptInitCommand
 {
-    private static readonly string[] ScaffoldFileNames =
+    // The completed-repository validator shares this exact allowlist so a
+    // provider scaffold created here remains attachable on another machine.
+    internal static readonly string[] ScaffoldFileNames =
     [
         "custom-instructions.md",
         "project-baseline.md",

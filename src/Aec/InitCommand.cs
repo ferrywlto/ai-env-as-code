@@ -1030,7 +1030,19 @@ internal static class InitCommand
 
         EnsureOnlyEntries(repository, ".git", "environment");
         EnsureOnlyEntries(Path.Combine(repository, "environment"), "providers");
-        EnsureOnlyEntries(Path.Combine(repository, "environment", "providers"), "codex");
+        var providersDirectory = Path.Combine(repository, "environment", "providers");
+        var providerEntries = Directory
+            .EnumerateFileSystemEntries(providersDirectory)
+            .Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (!providerEntries.SequenceEqual(["codex"], StringComparer.Ordinal) &&
+            !providerEntries.SequenceEqual(["chatgpt", "codex"], StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Initialization baseline has unexpected entries under: {providersDirectory}");
+        }
+
         var codexDirectory = Path.Combine(repository, "environment", "providers", "codex");
         var codexEntries = Directory
             .EnumerateFileSystemEntries(codexDirectory)
@@ -1045,6 +1057,19 @@ internal static class InitCommand
             throw new InvalidOperationException(
                 $"Initialization baseline has unexpected entries under: {codexDirectory}");
         }
+
+        if (providerEntries.Length == 2)
+        {
+            var chatGptDirectory = Path.Combine(providersDirectory, "chatgpt");
+            EnsureOnlyEntries(chatGptDirectory, ChatGptInitCommand.ScaffoldFileNames);
+            foreach (var fileName in ChatGptInitCommand.ScaffoldFileNames)
+            {
+                _ = AecApplication.ReadRequiredTextFile(
+                    Path.Combine(chatGptDirectory, fileName),
+                    "ChatGPT instruction file");
+            }
+        }
+
         EnsureContainedGitMetadata(repository, gitDirectory);
     }
 

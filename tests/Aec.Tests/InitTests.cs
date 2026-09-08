@@ -266,6 +266,47 @@ public sealed class InitTests
     }
 
     [Fact]
+    public void CompletedRepositoryWithChatGptScaffoldAttachesToAMissingRuntime()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        Assert.Equal(
+            0,
+            TestApplication.Run(
+                ["init", "--repo", layout.Target, "--provider=chatgpt"]).ExitCode);
+        Assert.Equal(
+            0,
+            TestGit.Run(
+                layout.Target,
+                "add",
+                "--",
+                AecApplication.SourceRelativePath,
+                "environment/providers/chatgpt").ExitCode);
+        Assert.Equal(
+            0,
+            TestGit.Run(
+                layout.Target,
+                "commit",
+                "--quiet",
+                "--message",
+                "Enable ChatGPT provider").ExitCode);
+        var headBefore = TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim();
+        var sourceBefore = File.ReadAllBytes(layout.Source);
+        File.Delete(layout.Runtime);
+        File.Delete(layout.RuntimeConfig);
+        Directory.Delete(Path.Combine(layout.CodexHome, "skills"), recursive: true);
+
+        var result = Run(layout.Target, layout.CodexHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", result.Output);
+        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Runtime));
+        Assert.Contains("<!-- AEC:BEGIN version=6 -->", File.ReadAllText(layout.Source));
+        Assert.Equal(headBefore, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
+        Assert.Empty(TestGit.Run(layout.Target, "status", "--porcelain").Output);
+    }
+
+    [Fact]
     public void MovedCompletedRepositoryRequiresPathChangeConfirmationWithoutMutation()
     {
         using var layout = new InitLayout();

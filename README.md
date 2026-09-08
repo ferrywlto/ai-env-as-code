@@ -1,7 +1,7 @@
 # AI Environment as Code
 
-Version 1.3.0 routes managed Codex changes through the bundled `$aec` skill and
-updates the generated managed instruction block.
+Version 1.3.1 keeps a ChatGPT provider scaffold created by AEC attachable through
+ordinary `aec init`, including after the data repository is restored on another machine.
 
 ## Version history
 
@@ -31,8 +31,9 @@ updates the generated managed instruction block.
 | 1.2.2 | Centralize test application execution and Git environment isolation |
 | 1.2.3 | Harden backup path containment and Git object verification |
 | 1.3.0 | Route managed Codex changes through the bundled `$aec` skill |
+| 1.3.1 | Attach completed repositories that include the AEC ChatGPT scaffold |
 
-The project and CLI report the current release as `1.3.0` through `aec version`.
+The project and CLI report the current release as `1.3.1` through `aec version`.
 
 ## version
 
