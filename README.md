@@ -804,7 +804,7 @@ selected with `--repo`; they never infer or modify the engine repository.
 
 ## License
 
-This project is available under the [MIT License](LICENSE).
+This project is available under the [GNU Affero General Public License v3.0](LICENSE).
 
 ## Landing page
 
