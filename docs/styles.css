@@ -155,6 +155,7 @@ code { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, m
 .card-grid p, .install > p { color: var(--muted); margin-bottom: 0; }
 
 .install, .roadmap { padding: clamp(1.5rem, 4vw, 3rem); }
+.install { margin-bottom: 5.5rem; }
 .install .section-heading, .roadmap .section-heading { margin-bottom: 1.25rem; }
 pre { background: #050c16; border: 1px solid var(--line); border-radius: .55rem; margin: 1.6rem 0; overflow-x: auto; padding: 1rem; }
 pre code { color: #d7e5f8; font-size: .85rem; }
