@@ -1,0 +1,40 @@
+name: Windows x64 smoke
+
+# Keep cloud execution explicit while Windows support is still experimental.
+"on": workflow_dispatch
+
+permissions: {}
+
+jobs:
+  build-and-smoke:
+    runs-on: windows-2022
+    steps:
+      # The engine repository is public. Fetch only the requested commit with
+      # the runner's built-in Git; no token or third-party action is needed.
+      - name: Check out requested commit
+        shell: pwsh
+        run: |
+          git init --quiet .
+          if ($LASTEXITCODE -ne 0) { throw 'git init failed.' }
+          git remote add origin "https://github.com/$env:GITHUB_REPOSITORY.git"
+          if ($LASTEXITCODE -ne 0) { throw 'git remote add failed.' }
+          git fetch --depth 1 origin $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'git fetch failed.' }
+          git checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'git checkout failed.' }
+      - name: Build Native AOT executable
+        shell: pwsh
+        run: ./scripts/build-win-x64.ps1
+      - name: Smoke-test command dispatch
+        shell: pwsh
+        run: |
+          $version = & ./artifacts/aec-win-x64/aec.exe version
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
+            throw 'aec version failed or returned no version.'
+          }
+          Write-Output $version
+          $help = & ./artifacts/aec-win-x64/aec.exe help
+          if ($LASTEXITCODE -ne 0 -or -not (($help -join "`n") -match 'aec init')) {
+            throw 'aec help failed or omitted command usage.'
+          }
+          Write-Output $help

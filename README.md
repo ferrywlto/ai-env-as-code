@@ -35,6 +35,27 @@ ordinary `aec init`, including after the data repository is restored on another 
 
 The project and CLI report the current release as `1.3.1` through `aec version`.
 
+## Approved development decisions
+
+- AEC supports local harness configurations. Cloud-hosted use is outside the
+  current scope.
+- Releases remain alpha/beta until they have been exercised with the actual
+  target harness; a version number alone is not a claim of harness validation.
+- The platform/provider roadmap starts with Codex on Windows and Linux, then
+  Copilot, Claude, and Gemini on macOS, Windows, and Linux.
+- GitHub Actions is manual-only through `workflow_dispatch`. After explicit
+  authorization, a run may be started with `gh workflow run`; pushes do not
+  start CI automatically.
+- `act` can provide local feedback for suitable Linux-container jobs, but it
+  does not validate the Windows x64 environment from an ARM Mac.
+- CI uses isolated fixtures and never reads or writes the personal AEC data
+  repository.
+
+The first Windows implementation slice is limited to producing the Windows
+x64 executable and smoke-testing `aec.exe version` and `aec.exe help`.
+Installer work and validation with a real Windows Codex harness are later
+increments.
+
 ## version
 
 ```text
@@ -706,6 +727,22 @@ dotnet run --project src/Aec/Aec.csproj -- \
   --repo /absolute/path/to/data-repository \
   --codex-home /absolute/path/to/codex-home
 ```
+
+### Experimental Native AOT build on Windows x64
+
+This build path is not yet validated on a Windows runner or with Windows Codex.
+On x64 Windows, install the .NET 10 SDK and Visual Studio 2022 or later with
+the Desktop development with C++ workload, then run in PowerShell:
+
+```powershell
+./scripts/build-win-x64.ps1
+```
+
+The script works from any caller directory and writes the ignored
+`artifacts/aec-win-x64/aec.exe`. The manual-only
+`.github/workflows/windows-smoke.yml` workflow will build it on a Windows x64
+runner and check `aec.exe version` and `aec.exe help`. This slice does not
+provide a Windows installer or validate Codex integration.
 
 ### Native AOT on Apple-silicon macOS
 
