@@ -28,6 +28,7 @@ project.lock.json
 project.fragment.lock.json
 artifacts/
 scripts/uninstall-aec.sh
+scripts/uninstall-aec-win-x64.ps1
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt

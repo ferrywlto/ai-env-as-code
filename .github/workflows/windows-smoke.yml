@@ -38,3 +38,6 @@ jobs:
             throw 'aec help failed or omitted command usage.'
           }
           Write-Output $help
+      - name: Test isolated install and uninstall
+        shell: pwsh
+        run: ./tests/install-win-x64.ps1

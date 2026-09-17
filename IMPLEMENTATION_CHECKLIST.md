@@ -1,6 +1,6 @@
 # Implementation Checklist
 
-## Approved cross-platform decisions and first Windows slice
+## Approved cross-platform decisions and Windows installer slice
 
 - [x] Record the local-harness-only configuration scope; cloud-hosted use is
   outside the current scope.
@@ -16,11 +16,23 @@
   for `aec.exe version` and `aec.exe help` smoke checks.
 - [x] Run the workflow on a Windows runner: build, `version`, and `help` passed
   in [run 35171142521](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35171142521).
-- [ ] Later: add installer work and validate against a real Windows Codex
+- [x] Add `scripts/install-win-x64.ps1` to consume
+  `artifacts/aec-win-x64/aec.exe`, default to the per-user
+  `$env:LOCALAPPDATA\Programs\AEC` directory, and accept an absolute
+  `-InstallDir` override.
+- [x] Keep installation free of `PATH` and PowerShell execution-policy
+  mutation; explain effective Codex `PATH` and the required Codex restart.
+- [x] Generate `scripts/uninstall-aec-win-x64.ps1` beside the installer. It
+  must run the exact installed binary's `aec uninstall` first, then remove the
+  binary and helper script, with optional `-CodexHome`, while preserving the
+  data repository and `config.toml`.
+- [x] Add an isolated Windows runner test for install, reinstall, and uninstall.
+- [ ] Run the Windows installer lifecycle test and record its result.
+- [ ] Later: validate the installed executable against a real Windows Codex
   harness.
 
-Immediate next work: plan the Windows installer separately; real Windows Codex
-harness validation remains pending.
+Immediate next work: review this slice, then separately authorize the push and
+manual Windows CI run. Real Windows Codex harness validation remains pending.
 
 ## v1.3.1 — ChatGPT provider attachment
 

@@ -51,10 +51,9 @@ The project and CLI report the current release as `1.3.1` through `aec version`.
 - CI uses isolated fixtures and never reads or writes the personal AEC data
   repository.
 
-The first Windows implementation slice is limited to producing the Windows
-x64 executable and smoke-testing `aec.exe version` and `aec.exe help`.
-Installer work and validation with a real Windows Codex harness are later
-increments.
+The Windows x64 installer and real Windows Codex harness remain experimental;
+the practical details are documented beside the Windows build instructions
+below.
 
 ## version
 
@@ -742,9 +741,40 @@ the Desktop development with C++ workload, then run in PowerShell:
 
 The script works from any caller directory and writes the ignored
 `artifacts/aec-win-x64/aec.exe`. The manual-only
-`.github/workflows/windows-smoke.yml` workflow will build it on a Windows x64
-runner and check `aec.exe version` and `aec.exe help`. This slice does not
-provide a Windows installer or validate Codex integration.
+`.github/workflows/windows-smoke.yml` workflow builds it on a Windows x64
+runner and checks `aec.exe version` and `aec.exe help`.
+
+The installer consumes that artifact and installs per-user by default at
+`$env:LOCALAPPDATA\Programs\AEC\aec.exe`:
+
+```powershell
+.\scripts\install-win-x64.ps1
+```
+
+To choose another location, pass an absolute local-drive `-InstallDir`:
+
+```powershell
+.\scripts\install-win-x64.ps1 -InstallDir 'C:\Users\me\Tools\AEC'
+```
+
+Installation is idempotent, does not modify `PATH` or PowerShell execution
+policy, and generates `scripts/uninstall-aec-win-x64.ps1` beside the installer.
+If you change install directories, the old binary stays in place; the helper
+tracks only the latest installation, so remove an unused older copy yourself.
+If the selected directory is not already effective for Codex, expose it to
+Codex yourself and restart Codex before it tries to discover `aec.exe`.
+
+Run the generated helper by its explicit path:
+
+```powershell
+.\scripts\uninstall-aec-win-x64.ps1
+.\scripts\uninstall-aec-win-x64.ps1 -CodexHome 'C:\Users\me\.codex'
+```
+
+It uses the exact installed binary to run `aec uninstall` before removing the
+binary and helper script. The runtime cleanup preserves the AEC data repository
+and `config.toml`. The isolated Windows install/reinstall/uninstall CI test has
+not yet been run, and Windows Codex harness validation remains unverified.
 
 ### Native AOT on Apple-silicon macOS
 
