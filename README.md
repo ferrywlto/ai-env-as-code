@@ -55,6 +55,19 @@ The Windows x64 installer and real Windows Codex harness remain experimental;
 the practical details are documented beside the Windows build instructions
 below.
 
+## Local harness verification
+
+| Harness | macOS ARM64 | Windows x64 | Linux ARM64 |
+|---|---|---|---|
+| Codex | ✓ Verified | ⚠ Not verified | ⚠ Not verified |
+| GitHub Copilot | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
+| Claude | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
+| Gemini | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
+
+✓ means AEC has been exercised with the actual local harness on that platform.
+⚠ means it has not. The passing Windows build and isolated installer CI test do
+not verify AEC against a real Windows Codex harness.
+
 ## version
 
 ```text

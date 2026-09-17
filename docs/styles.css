@@ -160,6 +160,13 @@ code { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, m
 pre { background: #050c16; border: 1px solid var(--line); border-radius: .55rem; margin: 1.6rem 0; overflow-x: auto; padding: 1rem; }
 pre code { color: #d7e5f8; font-size: .85rem; }
 
+.support-table-wrap { overflow-x: auto; }
+.support-table { border-collapse: collapse; min-width: 38rem; text-align: left; width: 100%; }
+.support-table caption { color: var(--muted); font-weight: 650; padding-bottom: .5rem; text-align: left; }
+.support-table th, .support-table td { border-bottom: 1px solid var(--line); padding: .65rem .75rem; }
+.support-table th:first-child, .support-table td:first-child { padding-left: 0; }
+.support-table th:last-child, .support-table td:last-child { padding-right: 0; }
+.verification-note { color: var(--muted); font-size: .9rem; margin: .8rem 0 0; }
 .roadmap ul { counter-reset: roadmap; list-style: none; margin: 1.75rem 0 0; padding: 0; }
 .roadmap li { border-top: 1px solid var(--line); display: grid; gap: 1rem; grid-template-columns: 2.5rem 1fr; padding: 1rem 0; }
 .roadmap li:last-child { border-bottom: 1px solid var(--line); }

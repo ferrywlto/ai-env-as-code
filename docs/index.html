@@ -103,6 +103,29 @@ aec init --repo /absolute/path/to/aec-data</code></pre>
           <p class="eyebrow">Roadmap</p>
           <h2 id="roadmap-title">More environments, same explicit model.</h2>
         </div>
+        <div class="support-table-wrap">
+          <table class="support-table">
+            <caption>Local harness verification</caption>
+            <thead>
+              <tr>
+                <th scope="col">Harness</th>
+                <th scope="col">macOS ARM64</th>
+                <th scope="col">Windows x64</th>
+                <th scope="col">Linux ARM64</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">Codex</th><td>✓ Verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
+              <tr><th scope="row">GitHub Copilot</th><td>⚠ Not verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
+              <tr><th scope="row">Claude</th><td>⚠ Not verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
+              <tr><th scope="row">Gemini</th><td>⚠ Not verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="verification-note">
+          ✓ means tested with the actual local harness. ⚠ means not yet verified.
+          Passing Windows build and installer CI checks does not verify Codex on Windows.
+        </p>
         <ul>
           <li><span>01</span> Windows and Linux support for Codex</li>
           <li><span>02</span> GitHub Copilot support</li>
