@@ -12,10 +12,10 @@ if ($args.Count -ne 0) {
 
 # Native AOT needs the target operating system's native linker. Refuse to
 # produce a misleading artifact on another host or CPU architecture.
-$isWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+$runningOnWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
     [System.Runtime.InteropServices.OSPlatform]::Windows)
 $isX64 = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::X64
-if (-not $isWindows -or -not $isX64) {
+if (-not $runningOnWindows -or -not $isX64) {
     throw 'This build script supports only Windows on x64.'
 }
 
