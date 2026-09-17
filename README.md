@@ -742,7 +742,8 @@ the Desktop development with C++ workload, then run in PowerShell:
 The script works from any caller directory and writes the ignored
 `artifacts/aec-win-x64/aec.exe`. The manual-only
 `.github/workflows/windows-smoke.yml` workflow builds it on a Windows x64
-runner and checks `aec.exe version` and `aec.exe help`.
+runner, checks `aec.exe version` and `aec.exe help`, and tests the isolated
+installer lifecycle.
 
 The installer consumes that artifact and installs per-user by default at
 `$env:LOCALAPPDATA\Programs\AEC\aec.exe`:
@@ -773,8 +774,9 @@ Run the generated helper by its explicit path:
 
 It uses the exact installed binary to run `aec uninstall` before removing the
 binary and helper script. The runtime cleanup preserves the AEC data repository
-and `config.toml`. The isolated Windows install/reinstall/uninstall CI test has
-not yet been run, and Windows Codex harness validation remains unverified.
+and `config.toml`. The isolated Windows install/reinstall/managed-init/uninstall
+test [passed on a Windows runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35282576084);
+real Windows Codex harness validation remains unverified.
 
 ### Native AOT on Apple-silicon macOS
 

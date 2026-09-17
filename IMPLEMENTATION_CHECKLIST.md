@@ -27,12 +27,14 @@
   binary and helper script, with optional `-CodexHome`, while preserving the
   data repository and `config.toml`.
 - [x] Add an isolated Windows runner test for install, reinstall, and uninstall.
-- [ ] Run the Windows installer lifecycle test and record its result.
+- [x] Run the isolated Windows installer lifecycle test: install, reinstall,
+  managed init, and uninstall passed in
+  [run 35282576084](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35282576084).
 - [ ] Later: validate the installed executable against a real Windows Codex
   harness.
 
-Immediate next work: review this slice, then separately authorize the push and
-manual Windows CI run. Real Windows Codex harness validation remains pending.
+Immediate next work: validate against a real Windows Codex harness when one is
+available. The isolated installer lifecycle has passed on a Windows runner.
 
 ## v1.3.1 — ChatGPT provider attachment
 
