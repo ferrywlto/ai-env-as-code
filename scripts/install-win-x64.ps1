@@ -172,7 +172,8 @@ try {
             throw 'Copied executable failed its version check.'
         }
         if (Test-Path -LiteralPath $target -PathType Leaf) {
-            [System.IO.File]::Replace($binaryTemporary, $target, $null)
+            # Move the verified sibling over the old executable without a backup path.
+            [System.IO.File]::Move($binaryTemporary, $target, $true)
         } else {
             [System.IO.File]::Move($binaryTemporary, $target)
         }
@@ -182,7 +183,7 @@ try {
 
     if ($helperNeedsInstall) {
         if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
-            [System.IO.File]::Replace($uninstallerTemporary, $uninstaller, $null)
+            [System.IO.File]::Move($uninstallerTemporary, $uninstaller, $true)
         } else {
             [System.IO.File]::Move($uninstallerTemporary, $uninstaller)
         }
