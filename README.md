@@ -730,8 +730,10 @@ dotnet run --project src/Aec/Aec.csproj -- \
 
 ### Experimental Native AOT build on Windows x64
 
-This build path is not yet validated on a Windows runner or with Windows Codex.
-On x64 Windows, install the .NET 10 SDK and Visual Studio 2022 or later with
+The build and `version`/`help` smoke checks passed on a
+[GitHub-hosted Windows x64 runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35171142521),
+but this path has not been validated with Windows Codex. On x64 Windows,
+install the .NET 10 SDK and Visual Studio 2022 or later with
 the Desktop development with C++ workload, then run in PowerShell:
 
 ```powershell

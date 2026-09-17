@@ -14,13 +14,13 @@
   x64 validation from an ARM Mac.
 - [x] Add the Windows x64 Native AOT build script and manual-only workflow
   for `aec.exe version` and `aec.exe help` smoke checks.
-- [ ] Run the workflow on a Windows runner after review, then record whether
-  the build and both smoke checks passed.
+- [x] Run the workflow on a Windows runner: build, `version`, and `help` passed
+  in [run 35171142521](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35171142521).
 - [ ] Later: add installer work and validate against a real Windows Codex
   harness.
 
-Immediate next work: review this slice, then separately authorize the push and
-manual Windows workflow run; record its result before planning an installer.
+Immediate next work: plan the Windows installer separately; real Windows Codex
+harness validation remains pending.
 
 ## v1.3.1 — ChatGPT provider attachment
 
