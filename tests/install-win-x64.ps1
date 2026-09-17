@@ -29,6 +29,11 @@ Assert (Test-Path -LiteralPath $sourceArtifact -PathType Leaf) 'Native AOT artif
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('aec-win-installer-' + [guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $testRoot
 $originalLocalAppData = $env:LOCALAPPDATA
+$gitIdentityNames = @('GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL')
+$originalGitIdentity = @{}
+foreach ($name in $gitIdentityNames) {
+    $originalGitIdentity[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+}
 try {
     $sourceRoot = Join-Path $testRoot 'source'
     $scriptsDir = Join-Path $sourceRoot 'scripts'
@@ -94,6 +99,12 @@ try {
     $runtimeAgents = Join-Path $codexHome 'AGENTS.md'
     [System.IO.File]::WriteAllText($runtimeAgents, 'Personal instructions' + [Environment]::NewLine)
     $dataRepo = Join-Path $testRoot 'aec-data'
+    # AEC init commits the disposable repository; CI runners have no Git identity.
+    # These process-only values leave the user's Git configuration untouched.
+    [Environment]::SetEnvironmentVariable('GIT_AUTHOR_NAME', 'AEC Installer Test', 'Process')
+    [Environment]::SetEnvironmentVariable('GIT_AUTHOR_EMAIL', 'aec-installer-test@example.invalid', 'Process')
+    [Environment]::SetEnvironmentVariable('GIT_COMMITTER_NAME', 'AEC Installer Test', 'Process')
+    [Environment]::SetEnvironmentVariable('GIT_COMMITTER_EMAIL', 'aec-installer-test@example.invalid', 'Process')
     & $customTarget init --repo $dataRepo --codex-home $codexHome | Out-Null
     Assert ($LASTEXITCODE -eq 0) 'isolated AEC initialization failed'
     $skill = Join-Path $codexHome 'skills/aec/SKILL.md'
@@ -134,5 +145,8 @@ try {
     Write-Output 'Windows installer lifecycle tests passed'
 } finally {
     $env:LOCALAPPDATA = $originalLocalAppData
+    foreach ($name in $gitIdentityNames) {
+        [Environment]::SetEnvironmentVariable($name, $originalGitIdentity[$name], 'Process')
+    }
     Remove-Item -LiteralPath $testRoot -Recurse -Force
 }
