@@ -806,8 +806,35 @@ The manual-only `.github/workflows/linux-arm64-smoke.yml` workflow builds on an
 Ubuntu 24.04 ARM64 runner and checks `aec version` and `aec help`. The Native
 AOT build and both command checks
 [passed on that runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35409334463).
-This first Linux slice does not install the executable or validate it with a
-real Codex harness; the Linux verification matrix entry remains ⚠.
+
+After building, install the executable for the current user:
+
+```sh
+./scripts/install-linux-arm64.sh
+```
+
+The default target is `$HOME/.local/bin/aec`. To use another absolute directory:
+
+```sh
+./scripts/install-linux-arm64.sh --install-dir /absolute/path/to/bin
+```
+
+Installation is idempotent and does not change `PATH` or shell profiles. A
+custom directory produces a warning because the `$aec` skill finds `aec`
+through the `PATH` inherited by Codex. The installer generates
+`scripts/uninstall-aec-linux-arm64.sh` beside itself; run that exact path to
+remove AEC runtime integration before deleting the installed binary and helper:
+
+```sh
+./scripts/uninstall-aec-linux-arm64.sh
+./scripts/uninstall-aec-linux-arm64.sh --codex-home /absolute/path/to/.codex
+```
+
+The helper verifies its own generated path and the installed executable digest.
+It preserves the AEC data repository and `config.toml`, and stops without
+deleting installation files if AEC runtime cleanup fails. The isolated lifecycle
+test is part of the manual Linux workflow but has not yet been run. A real Linux
+Codex harness also remains unverified, so the matrix entry stays ⚠.
 
 ### Native AOT on Apple-silicon macOS
 

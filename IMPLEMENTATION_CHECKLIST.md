@@ -11,13 +11,18 @@
 - [x] Commit, push, and explicitly run the Linux ARM64 workflow: Native AOT
   build, `aec version`, and `aec help` passed in
   [run 35409334463](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35409334463).
-- [ ] Next slice: Linux ARM64 installer, generated uninstaller, and isolated
-  lifecycle test.
+- [x] Add the Linux ARM64 installer with the per-user `$HOME/.local/bin`
+  default, absolute custom-directory support, and no `PATH` mutation.
+- [x] Generate `scripts/uninstall-aec-linux-arm64.sh` beside the installer;
+  verify its original path and installed executable digest before cleanup.
+- [x] Add an isolated Linux lifecycle test covering install, reinstall, custom
+  path, tamper/copy refusal, real managed init/uninstall, and helper conflict.
+- [ ] Run the Linux installer lifecycle workflow and record its result.
 - [ ] Later: validate with a real local Linux Codex harness before marking
   the matrix as verified.
 
-Immediate next work: implement the Linux ARM64 installer, generated uninstaller,
-and isolated lifecycle test as a separately approved slice.
+Immediate next work: review this lifecycle slice, then separately approve its
+commit, push, and manual Linux workflow run.
 
 ## Approved cross-platform decisions and Windows installer slice
 
