@@ -791,11 +791,27 @@ and `config.toml`. The isolated Windows install/reinstall/managed-init/uninstall
 test [passed on a Windows runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35282576084);
 real Windows Codex harness validation remains unverified.
 
+### Experimental Native AOT build on Ubuntu Linux ARM64
+
+On an ARM64 Ubuntu 24.04 machine, install Git, the .NET 10 SDK, `clang`, and
+`zlib1g-dev`. Ubuntu installs the native build prerequisites with
+`sudo apt-get install clang zlib1g-dev`. Then run from any directory:
+
+```sh
+/absolute/path/to/ai-env-as-code/scripts/build-linux-arm64.sh
+```
+
+The script publishes the ignored `artifacts/aec-linux-arm64/aec` executable.
+The manual-only `.github/workflows/linux-arm64-smoke.yml` workflow builds on an
+Ubuntu 24.04 ARM64 runner and checks `aec version` and `aec help`. This first
+Linux slice does not install the executable or validate it with a real Codex
+harness; the Linux verification matrix entry remains ⚠.
+
 ### Native AOT on Apple-silicon macOS
 
-The initial executable workflow supports only ARM64 macOS. Git is required at
-runtime because AEC repositories use Git history as their source of truth. Building
-requires the .NET 10 SDK and Xcode Command Line Tools:
+The initial installed and harness-verified workflow supports only ARM64 macOS.
+Git is required at runtime because AEC repositories use Git history as their
+source of truth. Building requires the .NET 10 SDK and Xcode Command Line Tools:
 
 ```bash
 ./scripts/build-osx-arm64.sh

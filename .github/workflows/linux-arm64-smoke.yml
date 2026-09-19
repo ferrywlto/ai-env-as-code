@@ -1,0 +1,41 @@
+name: Linux ARM64 smoke
+
+# Keep cloud execution explicit while Linux support is still experimental.
+"on": workflow_dispatch
+
+permissions: {}
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      # Fetch the requested public commit with built-in Git, without a token or
+      # a third-party action. Never read the user's personal AEC data repository.
+      - name: Check out requested commit
+        shell: bash
+        run: |
+          set -eu
+          git init --quiet .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install Native AOT build prerequisites
+        shell: bash
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+      - name: Build Native AOT executable
+        shell: bash
+        run: sh ./scripts/build-linux-arm64.sh
+      - name: Smoke-test command dispatch
+        shell: bash
+        run: |
+          set -eu
+          artifact=./artifacts/aec-linux-arm64/aec
+          version=$("$artifact" version)
+          test -n "$version"
+          printf '%s\n' "$version"
+          help=$("$artifact" help)
+          printf '%s\n' "$help" | grep -Fq 'aec init'
+          printf '%s\n' "$help"

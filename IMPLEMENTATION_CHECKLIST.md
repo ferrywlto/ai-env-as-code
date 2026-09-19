@@ -1,5 +1,23 @@
 # Implementation Checklist
 
+## Linux ARM64 build and smoke slice
+
+- [x] Add a host-checked Ubuntu ARM64 Native AOT build script targeting
+  `linux-arm64` and writing under ignored `artifacts/`.
+- [x] Add a manual-only `ubuntu-24.04-arm` workflow to build and smoke-test
+  `aec version` and `aec help` without accessing personal AEC data.
+- [x] Document the build prerequisites and distinguish CI smoke from real
+  Codex harness verification.
+- [ ] Commit, push, and explicitly trigger the Linux ARM64 workflow after
+  separate approval; record its result.
+- [ ] Next slice: Linux ARM64 installer, generated uninstaller, and isolated
+  lifecycle test.
+- [ ] Later: validate with a real local Linux Codex harness before marking
+  the matrix as verified.
+
+Immediate next work: review the build-and-smoke slice, then separately approve
+the push and manual Linux CI run.
+
 ## Approved cross-platform decisions and Windows installer slice
 
 - [x] Record the local-harness-only configuration scope; cloud-hosted use is
