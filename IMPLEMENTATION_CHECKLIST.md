@@ -7,11 +7,12 @@
   `aec help`.
 - [x] Run the existing isolated macOS installer/generated-uninstaller test.
 - [x] Keep CI evidence separate from the existing real local Codex verification.
-- [ ] Commit, push, explicitly run the workflow, and record its result after
-  separate approval.
+- [x] Commit, push, and explicitly run the workflow: Native AOT build, command
+  smoke checks, and isolated installer/uninstaller test passed in
+  [run 35412687899](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35412687899).
 
-Immediate next work: review this workflow, then separately approve its commit,
-push, and manual GitHub Actions run.
+Immediate next work: choose the next local harness-provider slice; macOS ARM64
+now has both real Codex dogfooding and repeatable CI regression evidence.
 
 ## Linux ARM64 build and smoke slice
 
