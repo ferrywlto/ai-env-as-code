@@ -1,5 +1,18 @@
 # Implementation Checklist
 
+## macOS ARM64 smoke workflow
+
+- [x] Add a manual-only `macos-15` ARM64 workflow using built-in Git checkout.
+- [x] Build the Native AOT executable and smoke-test `aec version` and
+  `aec help`.
+- [x] Run the existing isolated macOS installer/generated-uninstaller test.
+- [x] Keep CI evidence separate from the existing real local Codex verification.
+- [ ] Commit, push, explicitly run the workflow, and record its result after
+  separate approval.
+
+Immediate next work: review this workflow, then separately approve its commit,
+push, and manual GitHub Actions run.
+
 ## Linux ARM64 build and smoke slice
 
 - [x] Add a host-checked Ubuntu ARM64 Native AOT build script targeting

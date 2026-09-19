@@ -847,6 +847,13 @@ source of truth. Building requires the .NET 10 SDK and Xcode Command Line Tools:
 ./scripts/build-osx-arm64.sh
 ```
 
+The manual-only `.github/workflows/macos-arm64-smoke.yml` workflow uses a
+macOS 15 ARM64 runner to build the Native AOT executable, check `aec version`
+and `aec help`, and exercise the isolated installer/generated-uninstaller test.
+It never reads the personal AEC data repository. Codex on macOS is marked ✓
+because it has also been exercised with the real local harness, not merely
+because CI exists.
+
 These examples assume the repository root as the working directory. Once invoked
 through a valid relative or absolute path, each script resolves the repository from
 its own location rather than the caller's working directory. The build publishes

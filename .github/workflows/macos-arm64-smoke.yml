@@ -1,0 +1,38 @@
+name: macOS ARM64 smoke
+
+# Keep cloud execution explicit; pushes do not consume a macOS runner.
+"on": workflow_dispatch
+
+permissions: {}
+
+jobs:
+  build-and-smoke:
+    runs-on: macos-15
+    steps:
+      # Fetch the requested public commit with built-in Git, without a token or
+      # third-party action. Never access the personal AEC data repository.
+      - name: Check out requested commit
+        shell: bash
+        run: |
+          set -eu
+          git init --quiet .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Build Native AOT executable
+        shell: bash
+        run: sh ./scripts/build-osx-arm64.sh
+      - name: Smoke-test command dispatch
+        shell: bash
+        run: |
+          set -eu
+          artifact=./artifacts/aec-osx-arm64/aec
+          version=$("$artifact" version)
+          test -n "$version"
+          printf '%s\n' "$version"
+          help=$("$artifact" help)
+          printf '%s\n' "$help" | grep -Fq 'aec init'
+          printf '%s\n' "$help"
+      - name: Test isolated install and uninstall
+        shell: bash
+        run: sh ./tests/install-osx-arm64.sh
