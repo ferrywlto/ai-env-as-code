@@ -803,9 +803,11 @@ On an ARM64 Ubuntu 24.04 machine, install Git, the .NET 10 SDK, `clang`, and
 
 The script publishes the ignored `artifacts/aec-linux-arm64/aec` executable.
 The manual-only `.github/workflows/linux-arm64-smoke.yml` workflow builds on an
-Ubuntu 24.04 ARM64 runner and checks `aec version` and `aec help`. This first
-Linux slice does not install the executable or validate it with a real Codex
-harness; the Linux verification matrix entry remains ⚠.
+Ubuntu 24.04 ARM64 runner and checks `aec version` and `aec help`. The Native
+AOT build and both command checks
+[passed on that runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35409334463).
+This first Linux slice does not install the executable or validate it with a
+real Codex harness; the Linux verification matrix entry remains ⚠.
 
 ### Native AOT on Apple-silicon macOS
 

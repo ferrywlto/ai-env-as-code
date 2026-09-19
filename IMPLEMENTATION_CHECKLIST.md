@@ -8,15 +8,16 @@
   `aec version` and `aec help` without accessing personal AEC data.
 - [x] Document the build prerequisites and distinguish CI smoke from real
   Codex harness verification.
-- [ ] Commit, push, and explicitly trigger the Linux ARM64 workflow after
-  separate approval; record its result.
+- [x] Commit, push, and explicitly run the Linux ARM64 workflow: Native AOT
+  build, `aec version`, and `aec help` passed in
+  [run 35409334463](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35409334463).
 - [ ] Next slice: Linux ARM64 installer, generated uninstaller, and isolated
   lifecycle test.
 - [ ] Later: validate with a real local Linux Codex harness before marking
   the matrix as verified.
 
-Immediate next work: review the build-and-smoke slice, then separately approve
-the push and manual Linux CI run.
+Immediate next work: implement the Linux ARM64 installer, generated uninstaller,
+and isolated lifecycle test as a separately approved slice.
 
 ## Approved cross-platform decisions and Windows installer slice
 
