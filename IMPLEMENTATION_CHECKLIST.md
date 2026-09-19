@@ -17,12 +17,14 @@
   verify its original path and installed executable digest before cleanup.
 - [x] Add an isolated Linux lifecycle test covering install, reinstall, custom
   path, tamper/copy refusal, real managed init/uninstall, and helper conflict.
-- [ ] Run the Linux installer lifecycle workflow and record its result.
+- [x] Run the isolated Linux installer lifecycle: install, reinstall, repair,
+  managed init, and uninstall passed in
+  [run 35410432127](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35410432127).
 - [ ] Later: validate with a real local Linux Codex harness before marking
   the matrix as verified.
 
-Immediate next work: review this lifecycle slice, then separately approve its
-commit, push, and manual Linux workflow run.
+Immediate next work: validate the installed executable against a real local
+Linux Codex harness when one is available.
 
 ## Approved cross-platform decisions and Windows installer slice
 

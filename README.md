@@ -832,9 +832,10 @@ remove AEC runtime integration before deleting the installed binary and helper:
 
 The helper verifies its own generated path and the installed executable digest.
 It preserves the AEC data repository and `config.toml`, and stops without
-deleting installation files if AEC runtime cleanup fails. The isolated lifecycle
-test is part of the manual Linux workflow but has not yet been run. A real Linux
-Codex harness also remains unverified, so the matrix entry stays ⚠.
+deleting installation files if AEC runtime cleanup fails. The isolated
+install/reinstall/repair/managed-init/uninstall lifecycle
+[passed on an Ubuntu ARM64 runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35410432127).
+A real Linux Codex harness remains unverified, so the matrix entry stays ⚠.
 
 ### Native AOT on Apple-silicon macOS
 
