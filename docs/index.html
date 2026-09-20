@@ -116,7 +116,7 @@ aec init --repo /absolute/path/to/aec-data</code></pre>
             </thead>
             <tbody>
               <tr><th scope="row">Codex</th><td>✓ Verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
-              <tr><th scope="row">GitHub Copilot</th><td>⚠ Alpha, not verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
+              <tr><th scope="row">GitHub Copilot</th><td>⚠ Alpha, not verified</td><td>⚠ Alpha, not verified</td><td>⚠ Not verified</td></tr>
               <tr><th scope="row">Claude</th><td>⚠ Not verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
               <tr><th scope="row">Gemini</th><td>⚠ Not verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
             </tbody>
@@ -125,7 +125,8 @@ aec init --repo /absolute/path/to/aec-data</code></pre>
         <p class="verification-note">
           ✓ means tested with the actual local harness. ⚠ means not yet verified.
           Passing Windows build and installer CI checks does not verify Codex on Windows.
-          Copilot's alpha initializer also remains unverified until exercised with local Copilot CLI.
+          Copilot's alpha initializer is exercised in isolated macOS and Windows tests,
+          but remains unverified until exercised with the local Copilot CLI harness.
         </p>
         <ul>
           <li><span>01</span> Windows and Linux support for Codex</li>

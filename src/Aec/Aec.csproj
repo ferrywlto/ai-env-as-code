@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <Version>1.4.0-alpha.2</Version>
-    <InformationalVersion>1.4.0-alpha.2</InformationalVersion>
+    <Version>1.4.0-alpha.3</Version>
+    <InformationalVersion>1.4.0-alpha.3</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Authors>@ferrywlto</Authors>
     <Copyright>Copyright (c) 2026 @ferrywlto</Copyright>

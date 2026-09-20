@@ -1,5 +1,18 @@
 # Implementation Checklist
 
+## v1.4.0-alpha.3 — Copilot Windows initialization smoke
+
+- [x] Exercise Copilot initialization through the Windows x64 Native AOT artifact
+  with isolated repository and Copilot-home paths.
+- [x] Verify canonical/runtime equality, the managed block, bundled skill
+  installation, and continued non-ownership of Copilot `config.json`.
+- [x] Keep the Windows support matrix warning-marked because CI does not install
+  or exercise the actual GitHub Copilot CLI harness.
+- [ ] Run the manual Windows x64 workflow for this commit and record the result.
+
+Immediate next work: commit and push this increment, then explicitly run the
+manual Windows x64 workflow.
+
 ## v1.4.0-alpha.2 — Provider source-path alignment
 
 - [x] Move bundled Codex skill sources to `skills/codex/aec/`.

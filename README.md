@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 1.4.0-alpha.2 aligns provider-specific engine source paths while preserving
-the existing CLI, canonical data paths, and installed runtime paths. Copilot remains
-initialization-only and is not real-harness verified.
+Version 1.4.0-alpha.3 adds isolated Windows x64 Native AOT coverage for Copilot
+initialization. Copilot remains initialization-only and is not real-harness
+verified on either platform.
 
 ## Version history
 
@@ -35,8 +35,9 @@ initialization-only and is not real-harness verified.
 | 1.3.1 | Attach completed repositories that include the AEC ChatGPT scaffold |
 | 1.4.0-alpha.1 | Initialize native GitHub Copilot CLI instructions and the local AEC skill |
 | 1.4.0-alpha.2 | Align Codex, Copilot, and ChatGPT engine source paths by provider |
+| 1.4.0-alpha.3 | Smoke-test Copilot initialization through the Windows x64 Native AOT artifact |
 
-The project and CLI report the current release as `1.4.0-alpha.2` through `aec version`.
+The project and CLI report the current release as `1.4.0-alpha.3` through `aec version`.
 
 ## Approved development decisions
 
@@ -63,7 +64,7 @@ below.
 | Harness | macOS ARM64 | Windows x64 | Linux ARM64 |
 |---|---|---|---|
 | Codex | ✓ Verified | ⚠ Not verified | ⚠ Not verified |
-| GitHub Copilot | ⚠ Alpha, not verified | ⚠ Not verified | ⚠ Not verified |
+| GitHub Copilot | ⚠ Alpha, not verified | ⚠ Alpha, not verified | ⚠ Not verified |
 | Claude | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 | Gemini | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 
@@ -71,9 +72,9 @@ below.
 ⚠ means it has not. The passing Windows build and isolated installer CI test do
 not verify AEC against a real Windows Codex harness.
 
-Copilot's macOS entry means the isolated initializer and its fixtures exist. It is
-not evidence that Copilot CLI itself has been installed or exercised on a macOS
-machine.
+Copilot's macOS and Windows entries mean the isolated initializer is exercised on
+those platforms. They are not evidence that Copilot CLI itself has been installed
+or exercised on either platform.
 
 ## version
 

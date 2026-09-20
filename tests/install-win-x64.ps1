@@ -113,6 +113,23 @@ try {
     $canonicalAgents = Join-Path $dataRepo 'environment/providers/codex/AGENTS.md'
     $canonicalHash = (Get-FileHash -LiteralPath $canonicalAgents -Algorithm SHA256).Hash
     $configHash = (Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash
+
+    # Exercise the same Native AOT executable against Windows-style Copilot paths.
+    # This validates AEC's local files without requiring Copilot CLI on the runner.
+    $copilotHome = Join-Path $testRoot 'copilot-home'
+    $null = New-Item -ItemType Directory -Path $copilotHome
+    $runtimeCopilotInstructions = Join-Path $copilotHome 'copilot-instructions.md'
+    [System.IO.File]::WriteAllText($runtimeCopilotInstructions, 'Personal Copilot instructions' + [Environment]::NewLine)
+    & $customTarget init --repo $dataRepo --provider=copilot --copilot-home $copilotHome | Out-Null
+    Assert ($LASTEXITCODE -eq 0) 'isolated Copilot initialization failed'
+    $canonicalCopilotInstructions = Join-Path $dataRepo 'environment/providers/copilot/copilot-instructions.md'
+    $copilotSkill = Join-Path $copilotHome 'skills/aec/SKILL.md'
+    Assert (Test-Path -LiteralPath $canonicalCopilotInstructions -PathType Leaf) 'canonical Copilot instructions were not created'
+    Assert (Test-Path -LiteralPath $copilotSkill -PathType Leaf) 'Copilot AEC skill was not installed'
+    Assert ((Get-FileHash -LiteralPath $runtimeCopilotInstructions -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $canonicalCopilotInstructions -Algorithm SHA256).Hash) 'Copilot runtime and canonical instructions differ'
+    Assert ([System.IO.File]::ReadAllText($runtimeCopilotInstructions).Contains('<!-- AEC:COPILOT:BEGIN')) 'Copilot managed block was not installed'
+    Assert (-not (Test-Path -LiteralPath (Join-Path $copilotHome 'config.json'))) 'Copilot initialization created unmanaged config.json'
+
     & $uninstaller -CodexHome $codexHome | Out-Null
     Assert (-not (Test-Path -LiteralPath $customTarget)) 'uninstall left custom binary'
     Assert (-not (Test-Path -LiteralPath $uninstaller)) 'uninstall left helper'
