@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 1.4.0-alpha.3 adds isolated Windows x64 Native AOT coverage for Copilot
-initialization. Copilot remains initialization-only and is not real-harness
-verified on either platform.
+Version 1.4.0-alpha.4 adds read-only Copilot status inspection with the same exact
+byte and exit-code semantics used by the established Codex flow. Copilot remains
+alpha and is not real-harness verified on either platform.
 
 ## Version history
 
@@ -36,8 +36,9 @@ verified on either platform.
 | 1.4.0-alpha.1 | Initialize native GitHub Copilot CLI instructions and the local AEC skill |
 | 1.4.0-alpha.2 | Align Codex, Copilot, and ChatGPT engine source paths by provider |
 | 1.4.0-alpha.3 | Smoke-test Copilot initialization through the Windows x64 Native AOT artifact |
+| 1.4.0-alpha.4 | Inspect Copilot canonical/runtime instruction drift without mutation |
 
-The project and CLI report the current release as `1.4.0-alpha.3` through `aec version`.
+The project and CLI report the current release as `1.4.0-alpha.4` through `aec version`.
 
 ## Approved development decisions
 
@@ -579,9 +580,22 @@ than the user-authored instruction contract. It does not stage, commit, push, or
 invoke Copilot. Review and commit the canonical instruction file after initialization
 so Git history becomes its source of truth.
 
-Copilot `status`, `backup`, `apply`, `uninstall`, and skill upgrade are not part of
-this alpha slice. Do not substitute Codex commands or flags. The support matrix
-remains unverified until a local Copilot CLI harness is installed and exercised.
+Read-only Copilot status uses the same selected repository and home:
+
+```text
+aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+```
+
+It compares the canonical and runtime `copilot-instructions.md` bytes exactly and
+writes `in_sync`, `different`, or `missing`. It returns 0 for `in_sync`, 2 for
+drift or a missing runtime file, and 1 for validation failure without partial
+output. The command does not write files, stage, commit, push, or invoke Copilot.
+
+An exact official initialization-only Copilot skill is upgraded during the next
+provider `init`; customized skills still fail closed. Copilot `backup`, `apply`,
+`uninstall`, and standalone skill upgrade are not part of this alpha slice. The
+support matrix remains unverified until a local Copilot CLI harness is installed
+and exercised.
 
 ## status
 

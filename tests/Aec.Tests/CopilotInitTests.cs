@@ -19,7 +19,7 @@ public sealed class CopilotInitTests
         Assert.Equal(expected, File.ReadAllBytes(layout.CanonicalInstructions));
         Assert.Equal(expected, File.ReadAllBytes(layout.RuntimeInstructions));
         Assert.Contains(
-            "Initialize the local GitHub Copilot CLI integration",
+            "aec status --repo ABSOLUTE_PATH --provider=copilot",
             File.ReadAllText(layout.Skill),
             StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(layout.CopilotHome, "config.json")));
@@ -162,6 +162,28 @@ public sealed class CopilotInitTests
         Assert.Contains("conflicts with the bundled version", result.Error, StringComparison.Ordinal);
         Assert.False(File.Exists(layout.CanonicalInstructions));
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.RuntimeInstructions));
+    }
+
+    [Fact]
+    public void UpgradesTheExactOfficialInitializationOnlySkillDuringInit()
+    {
+        using var layout = new CopilotLayout();
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.Skill)!);
+        var predecessor = Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "Skills",
+            "Copilot-1.4.0-alpha.1.md");
+        File.Copy(predecessor, layout.Skill);
+
+        var result = Run(layout.Repository, layout.CopilotHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", result.Output);
+        Assert.Contains(
+            "aec status --repo ABSOLUTE_PATH --provider=copilot",
+            File.ReadAllText(layout.Skill),
+            StringComparison.Ordinal);
     }
 
     [Fact]

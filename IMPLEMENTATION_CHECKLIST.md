@@ -1,5 +1,26 @@
 # Implementation Checklist
 
+## v1.4.0-alpha.4 — Read-only Copilot status
+
+- [x] Add explicit Copilot status routing with `--provider=copilot` and the
+  established `--copilot-home` resolution order.
+- [x] Compare canonical and runtime `copilot-instructions.md` bytes without
+  mutation, returning 0 for `in_sync`, 2 for `different` or `missing`, and 1
+  for validation errors.
+- [x] Reject Codex-only flags and provider-less Copilot flags.
+- [x] Teach the bundled Copilot skill the status contract and permit provider
+  init to replace only the exact official initialization-only predecessor.
+- [x] Add focused command, immutability, resolution, argument, help, and skill
+  migration tests.
+- [x] Extend the isolated Windows Native AOT lifecycle to require an `in_sync`
+  Copilot status after provider initialization.
+- [ ] Run the manual Windows x64 workflow for the committed status increment and
+  record the result.
+
+Immediate next work: commit and validate this increment on the Windows runner,
+then implement Copilot `backup` as the runtime-to-repository direction without
+adding `apply` or starting the deferred v2 public API migration.
+
 ## v1.4.0-alpha.3 — Copilot Windows initialization smoke
 
 - [x] Exercise Copilot initialization through the Windows x64 Native AOT artifact
@@ -57,8 +78,8 @@ aec copilot init|status|backup|apply ...
 - [ ] Validate with a real local macOS Copilot CLI harness before changing the
   support matrix from ⚠.
 
-Immediate next work: add Copilot `status`, `backup`, and `apply` as one
-directional-command slice; do not add Copilot uninstallation or skill upgrade yet.
+Immediate next work: add Copilot `backup` and `apply` as separate directional
+slices; do not add Copilot uninstallation or standalone skill upgrade yet.
 
 ## macOS Native AOT SDK selection
 

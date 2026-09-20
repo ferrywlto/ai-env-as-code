@@ -129,6 +129,9 @@ try {
     Assert ((Get-FileHash -LiteralPath $runtimeCopilotInstructions -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $canonicalCopilotInstructions -Algorithm SHA256).Hash) 'Copilot runtime and canonical instructions differ'
     Assert ([System.IO.File]::ReadAllText($runtimeCopilotInstructions).Contains('<!-- AEC:COPILOT:BEGIN')) 'Copilot managed block was not installed'
     Assert (-not (Test-Path -LiteralPath (Join-Path $copilotHome 'config.json'))) 'Copilot initialization created unmanaged config.json'
+    $copilotStatus = @(& $customTarget status --repo $dataRepo --provider=copilot --copilot-home $copilotHome)
+    Assert ($LASTEXITCODE -eq 0) 'isolated Copilot status failed'
+    Assert ($copilotStatus -contains 'copilot/copilot-instructions.md in_sync') 'Copilot status did not report in_sync'
 
     & $uninstaller -CodexHome $codexHome | Out-Null
     Assert (-not (Test-Path -LiteralPath $customTarget)) 'uninstall left custom binary'

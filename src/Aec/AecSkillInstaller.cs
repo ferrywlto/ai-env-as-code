@@ -11,7 +11,10 @@ internal static class AecSkillInstaller
 
     private static readonly SkillResource[] CopilotResources =
     [
-        new(SkillFileName, "Aec.CopilotSkill.SKILL.md", [])
+        new(
+            SkillFileName,
+            "Aec.CopilotSkill.SKILL.md",
+            ["7bfd08be9c22c7efd1dfec14d75ae9060ce7bd69ec288d517477681b9cd394e9"])
     ];
 
     private static readonly SkillResource[] Resources =
@@ -88,6 +91,7 @@ internal static class AecSkillInstaller
         PreflightDirectory(skillDirectory, "Copilot AEC skill directory");
 
         var missingResources = new List<SkillResource>();
+        var updates = new List<SkillUpdate>();
         foreach (var resource in resources)
         {
             var path = Path.Combine(skillDirectory, resource.RelativePath);
@@ -98,7 +102,18 @@ internal static class AecSkillInstaller
                 continue;
             }
 
-            EnsureMatches(path, actual, resource.Content);
+            if (actual.AsSpan().SequenceEqual(resource.Content))
+            {
+                continue;
+            }
+
+            if (!IsSupportedPredecessor(actual, resource.SupportedPredecessorHashes))
+            {
+                throw new InvalidOperationException(
+                    $"Existing AEC skill conflicts with the bundled version: {path}");
+            }
+
+            updates.Add(new SkillUpdate(path, actual, resource.Content));
         }
 
         CreateAndVerifyDirectory(skillsDirectory, "Copilot skills directory");
@@ -108,8 +123,19 @@ internal static class AecSkillInstaller
             CreateFile(Path.Combine(skillDirectory, resource.RelativePath), resource.Content);
         }
 
+        // Provider init is the only current Copilot installation lifecycle, so it
+        // may replace only byte-exact official predecessor guidance during a rerun.
+        foreach (var update in updates)
+        {
+            AtomicFile.ReplaceIfUnchanged(
+                update.Path,
+                update.Current,
+                update.Desired,
+                "Copilot AEC skill file");
+        }
+
         VerifyCopilotInstallation(skillDirectory, resources);
-        return missingResources.Count > 0;
+        return missingResources.Count > 0 || updates.Count > 0;
     }
 
     public static bool Upgrade(string codexHome)

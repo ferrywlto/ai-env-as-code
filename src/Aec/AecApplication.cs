@@ -34,7 +34,7 @@ public static class AecApplication
                 "version" => RunVersion(args, output),
                 "skill" => RunSkill(args, output),
                 "uninstall" => RunUninstall(ParseCodexHomeArguments(args, 1), output),
-                "status" => RunStatus(ParseRepositoryArguments(args, "status"), output),
+                "status" => RunStatus(ParseStatusArguments(args), output),
                 "backup" => RunBackup(ParseRepositoryArguments(args, "backup"), output, error),
                 "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output, error),
                 "init" => RunInit(ParseInitArguments(args), output, error),
@@ -48,9 +48,16 @@ public static class AecApplication
         }
     }
 
-    private static int RunStatus(RepositoryOptions options, TextWriter output)
+    private static int RunStatus(StatusOptions options, TextWriter output)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
+
+        if (options.Provider == "copilot")
+        {
+            var copilotHome = ResolveCopilotHome(options.CopilotHome);
+            return CopilotStatusCommand.Run(repository, copilotHome, output);
+        }
+
         var codexHome = ResolveCodexHome(options.CodexHome);
 
         EnsureNoLinksInManagedRoots(repository, codexHome);
@@ -243,6 +250,86 @@ public static class AecApplication
         }
 
         return new RepositoryOptions(repository, codexHome);
+    }
+
+    private static StatusOptions ParseStatusArguments(string[] args)
+    {
+        string? repository = null;
+        string? codexHome = null;
+        string? copilotHome = null;
+        string? provider = null;
+
+        for (var index = 1; index < args.Length; index++)
+        {
+            var argument = args[index];
+            if (argument.StartsWith("--provider=", StringComparison.Ordinal))
+            {
+                if (provider is not null)
+                {
+                    throw new ArgumentException("--provider may be specified only once.");
+                }
+
+                provider = argument["--provider=".Length..];
+                if (provider != "copilot")
+                {
+                    throw new ArgumentException($"Unsupported status provider: {provider}");
+                }
+
+                continue;
+            }
+
+            if (argument is not ("--repo" or "--codex-home" or "--copilot-home"))
+            {
+                throw new ArgumentException($"Unknown argument: {argument}");
+            }
+
+            var value = ReadRequiredOptionValue(args, ref index, argument);
+            if (argument == "--repo")
+            {
+                if (repository is not null)
+                {
+                    throw new ArgumentException("--repo may be specified only once.");
+                }
+
+                repository = value;
+            }
+            else if (argument == "--codex-home")
+            {
+                if (codexHome is not null)
+                {
+                    throw new ArgumentException("--codex-home may be specified only once.");
+                }
+
+                codexHome = value;
+            }
+            else
+            {
+                if (copilotHome is not null)
+                {
+                    throw new ArgumentException("--copilot-home may be specified only once.");
+                }
+
+                copilotHome = value;
+            }
+        }
+
+        if (repository is null)
+        {
+            throw new ArgumentException(
+                "status requires --repo with the source-of-truth data repository.");
+        }
+
+        if (provider == "copilot" && codexHome is not null)
+        {
+            throw new ArgumentException("--codex-home is not valid with --provider=copilot.");
+        }
+
+        if (provider is null && copilotHome is not null)
+        {
+            throw new ArgumentException("--copilot-home requires --provider=copilot.");
+        }
+
+        return new StatusOptions(repository, codexHome, copilotHome, provider);
     }
 
     private static InitOptions ParseInitArguments(string[] args)
@@ -633,6 +720,7 @@ public static class AecApplication
               aec init --repo ABSOLUTE_PATH --provider=chatgpt
               aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+              aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
             """;
@@ -655,6 +743,12 @@ public static class AecApplication
     }
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
+
+    private sealed record StatusOptions(
+        string Repository,
+        string? CodexHome,
+        string? CopilotHome,
+        string? Provider);
 
     private sealed record CodexHomeOptions(string? CodexHome);
 
