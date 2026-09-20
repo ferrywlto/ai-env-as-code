@@ -8,10 +8,12 @@
   installation, and continued non-ownership of Copilot `config.json`.
 - [x] Keep the Windows support matrix warning-marked because CI does not install
   or exercise the actual GitHub Copilot CLI harness.
-- [ ] Run the manual Windows x64 workflow for this commit and record the result.
+- [x] Run the manual Windows x64 workflow: Native AOT build, command smoke checks,
+  and the isolated Codex/Copilot installer lifecycle passed in
+  [run 35529409643](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35529409643).
 
-Immediate next work: commit and push this increment, then explicitly run the
-manual Windows x64 workflow.
+Immediate next work: continue Copilot provider operations while preserving the
+warning-marked Windows harness status until the real CLI is available.
 
 ## v1.4.0-alpha.2 — Provider source-path alignment
 
