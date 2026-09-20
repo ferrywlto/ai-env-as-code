@@ -450,6 +450,7 @@ public sealed class ChatGptInitTests
               aec uninstall [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
               aec init --repo ABSOLUTE_PATH --provider=chatgpt
+              aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]

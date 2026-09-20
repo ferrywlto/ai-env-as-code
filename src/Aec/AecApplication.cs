@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Aec;
 
 public static class AecApplication
@@ -5,6 +7,8 @@ public static class AecApplication
     internal const int MaximumTextBytes = 1024 * 1024;
     internal const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
     internal const string ConfigSourceRelativePath = "environment/providers/codex/config.toml";
+    internal const string CopilotSourceRelativePath =
+        "environment/providers/copilot/copilot-instructions.md";
 
     public static int Run(string[] args, TextWriter output, TextWriter error)
     {
@@ -160,10 +164,17 @@ public static class AecApplication
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
 
-        // Provider initialization is repository-only and must never resolve or inspect runtime state.
+        // ChatGPT has no local runtime. Copilot is a local provider and needs its
+        // explicit runtime home only for this provider-specific initialization flow.
         if (options.Provider == "chatgpt")
         {
             return ChatGptInitCommand.Run(repository, output);
+        }
+
+        if (options.Provider == "copilot")
+        {
+            var copilotHome = ResolveCopilotHome(options.CopilotHome);
+            return CopilotInitCommand.Run(repository, copilotHome, output);
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
@@ -240,6 +251,7 @@ public static class AecApplication
         string? codexHome = null;
         string? provider = null;
         var forcePathChange = false;
+        string? copilotHome = null;
 
         for (var index = 1; index < args.Length; index++)
         {
@@ -263,7 +275,7 @@ public static class AecApplication
                 }
 
                 provider = argument["--provider=".Length..];
-                if (provider != "chatgpt")
+                if (provider is not ("chatgpt" or "copilot"))
                 {
                     throw new ArgumentException($"Unsupported provider: {provider}");
                 }
@@ -279,6 +291,17 @@ public static class AecApplication
                 }
 
                 codexHome = ReadRequiredOptionValue(args, ref index, argument);
+                continue;
+            }
+
+            if (argument == "--copilot-home")
+            {
+                if (copilotHome is not null)
+                {
+                    throw new ArgumentException("--copilot-home may be specified only once.");
+                }
+
+                copilotHome = ReadRequiredOptionValue(args, ref index, argument);
                 continue;
             }
 
@@ -308,20 +331,36 @@ public static class AecApplication
                 "init requires --repo with the source-of-truth data repository.");
         }
 
-        if (provider is not null && codexHome is not null)
+        if (provider == "chatgpt" && codexHome is not null)
         {
             throw new ArgumentException("--codex-home is not valid with --provider=chatgpt.");
+        }
+
+        if (provider == "chatgpt" && copilotHome is not null)
+        {
+            throw new ArgumentException("--copilot-home is not valid with --provider=chatgpt.");
+        }
+
+        if (provider == "copilot" && codexHome is not null)
+        {
+            throw new ArgumentException("--codex-home is not valid with --provider=copilot.");
+        }
+
+        if (provider is null && copilotHome is not null)
+        {
+            throw new ArgumentException("--copilot-home requires --provider=copilot.");
         }
 
         if (provider is not null && forcePathChange)
         {
             throw new ArgumentException(
-                "--force-path-change is not valid with --provider=chatgpt.");
+                "--force-path-change is not valid with --provider initialization.");
         }
 
         return new InitOptions(
             repository,
             codexHome,
+            copilotHome,
             provider,
             forcePathChange);
     }
@@ -383,6 +422,28 @@ public static class AecApplication
         }
 
         return Path.Combine(userProfile, ".codex");
+    }
+
+    internal static string ResolveCopilotHome(string? explicitPath)
+    {
+        if (explicitPath is not null)
+        {
+            return RequireAbsolutePath(explicitPath, "--copilot-home");
+        }
+
+        var environmentPath = Environment.GetEnvironmentVariable("COPILOT_HOME");
+        if (!string.IsNullOrWhiteSpace(environmentPath))
+        {
+            return RequireAbsolutePath(environmentPath, "COPILOT_HOME");
+        }
+
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(userProfile))
+        {
+            throw new InvalidOperationException("The user profile directory could not be resolved.");
+        }
+
+        return Path.Combine(userProfile, ".copilot");
     }
 
     internal static string RequireAbsolutePath(string path, string label)
@@ -570,6 +631,7 @@ public static class AecApplication
               aec uninstall [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
               aec init --repo ABSOLUTE_PATH --provider=chatgpt
+              aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
@@ -580,9 +642,16 @@ public static class AecApplication
 
     private static void WriteVersion(TextWriter output)
     {
-        var version = typeof(AecApplication).Assembly.GetName().Version
-            ?? throw new InvalidOperationException("Application version could not be resolved.");
-        output.WriteLine(version.ToString(fieldCount: 3));
+        var assembly = typeof(AecApplication).Assembly;
+        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            version = assembly.GetName().Version?.ToString(fieldCount: 3);
+        }
+
+        output.WriteLine(version ?? throw new InvalidOperationException(
+            "Application version could not be resolved."));
     }
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
@@ -592,6 +661,7 @@ public static class AecApplication
     private sealed record InitOptions(
         string Repository,
         string? CodexHome,
+        string? CopilotHome,
         string? Provider,
         bool ForcePathChange);
 }

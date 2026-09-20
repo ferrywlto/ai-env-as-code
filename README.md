@@ -1,7 +1,8 @@
 # AI Environment as Code
 
-Version 1.3.1 keeps a ChatGPT provider scaffold created by AEC attachable through
-ordinary `aec init`, including after the data repository is restored on another machine.
+Version 1.4.0-alpha.1 adds an isolated GitHub Copilot CLI initialization path for
+macOS development. It is not real-harness verified and intentionally exposes only
+provider initialization while directional Copilot operations are built next.
 
 ## Version history
 
@@ -32,8 +33,9 @@ ordinary `aec init`, including after the data repository is restored on another 
 | 1.2.3 | Harden backup path containment and Git object verification |
 | 1.3.0 | Route managed Codex changes through the bundled `$aec` skill |
 | 1.3.1 | Attach completed repositories that include the AEC ChatGPT scaffold |
+| 1.4.0-alpha.1 | Initialize native GitHub Copilot CLI instructions and the local AEC skill |
 
-The project and CLI report the current release as `1.3.1` through `aec version`.
+The project and CLI report the current release as `1.4.0-alpha.1` through `aec version`.
 
 ## Approved development decisions
 
@@ -60,13 +62,17 @@ below.
 | Harness | macOS ARM64 | Windows x64 | Linux ARM64 |
 |---|---|---|---|
 | Codex | ✓ Verified | ⚠ Not verified | ⚠ Not verified |
-| GitHub Copilot | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
+| GitHub Copilot | ⚠ Alpha, not verified | ⚠ Not verified | ⚠ Not verified |
 | Claude | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 | Gemini | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 
 ✓ means AEC has been exercised with the actual local harness on that platform.
 ⚠ means it has not. The passing Windows build and isolated installer CI test do
 not verify AEC against a real Windows Codex harness.
+
+Copilot's macOS entry means the isolated initializer and its fixtures exist. It is
+not evidence that Copilot CLI itself has been installed or exercised on a macOS
+machine.
 
 ## version
 
@@ -541,6 +547,39 @@ The first change writes `initialized`; an idempotent rerun writes `unchanged`.
 Both return exit code 0. `unchanged` describes only the initialized file state—it
 does not mean the files are committed. Provider initialization performs no
 staging, commit, push, or ChatGPT account operation.
+
+### GitHub Copilot provider initialization (alpha)
+
+```text
+aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+```
+
+This alpha path extends an existing AEC repository with the native Copilot
+instruction contract:
+
+```text
+<repo>/environment/providers/copilot/copilot-instructions.md
+<copilot-home>/copilot-instructions.md
+<copilot-home>/skills/aec/SKILL.md
+```
+
+`--copilot-home` takes precedence over an absolute `COPILOT_HOME`; otherwise AEC
+uses `~/.copilot`. The selected home must already exist and must be outside the data
+repository. AEC captures the existing runtime instruction file when the canonical
+file is first absent, prepends its Copilot-specific managed block while preserving
+all non-AEC bytes, and installs only the bundled `SKILL.md`. When a recognized
+canonical file already exists, a repeat `init` applies it back to the selected
+runtime path. A path mismatch or a customized `skills/aec/SKILL.md` stops before
+instruction files are changed.
+
+The command does not manage `config.json`, which is Copilot application state rather
+than the user-authored instruction contract. It does not stage, commit, push, or
+invoke Copilot. Review and commit the canonical instruction file after initialization
+so Git history becomes its source of truth.
+
+Copilot `status`, `backup`, `apply`, `uninstall`, and skill upgrade are not part of
+this alpha slice. Do not substitute Codex commands or flags. The support matrix
+remains unverified until a local Copilot CLI harness is installed and exercised.
 
 ## status
 

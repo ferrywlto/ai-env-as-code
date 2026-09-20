@@ -128,6 +128,19 @@ aec init --repo ABSOLUTE_PATH --provider=chatgpt
 Do not pass `--codex-home`. If provider initialization reports a recorded-path
 mismatch, use the ordinary confirmed-init flow first.
 
+Initialize the local GitHub Copilot CLI provider only with:
+
+```text
+aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+```
+
+The selected Copilot home is explicit `--copilot-home`, then absolute
+`COPILOT_HOME`, then `~/.copilot`. This alpha command creates or reconciles the
+native `copilot-instructions.md`, its canonical provider copy, and the Copilot
+`skills/aec/SKILL.md`. It does not manage `config.json`, stage, commit, push, or
+invoke Copilot. Copilot `status`, `backup`, `apply`, `uninstall`, and skill upgrade
+are not yet available; do not substitute Codex commands or flags.
+
 ## Back up runtime to Git
 
 Run `aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` only after the

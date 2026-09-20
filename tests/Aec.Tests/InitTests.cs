@@ -1802,7 +1802,7 @@ public sealed class InitProcessStateTests
 
     [Theory]
     [InlineData("apply", "Unknown argument")]
-    [InlineData("provider", "not valid with --provider=chatgpt")]
+    [InlineData("provider", "not valid with --provider initialization")]
     [InlineData("duplicate", "may be specified only once")]
     public void ForcePathChangeIsAcceptedOnlyOnceByOrdinaryInit(
         string variation,

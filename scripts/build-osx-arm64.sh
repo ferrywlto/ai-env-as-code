@@ -47,6 +47,15 @@ if ! command -v xcrun >/dev/null 2>&1 ||
   exit 1
 fi
 
+# Native AOT invokes clang directly. On a machine that has both full Xcode and
+# Command Line Tools, clang can otherwise select the Command Line Tools SDK even
+# when Xcode is the active developer directory. Ask xcrun for Xcode's macOS SDK
+# unless the caller deliberately supplied an SDKROOT override.
+if [ -z "${SDKROOT:-}" ]; then
+  SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+  export SDKROOT
+fi
+
 # A trailing \ continues one command onto the next line. These publish settings:
 # - select the Aec project and its optimized Release configuration;
 # - target Apple-silicon macOS and include the required .NET runtime components;

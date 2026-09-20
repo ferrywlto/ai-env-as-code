@@ -9,6 +9,11 @@ internal static class AecSkillInstaller
     private const string AgentsDirectoryName = "agents";
     private const string OpenAiFileName = "openai.yaml";
 
+    private static readonly SkillResource[] CopilotResources =
+    [
+        new(SkillFileName, "Aec.CopilotSkill.SKILL.md", [])
+    ];
+
     private static readonly SkillResource[] Resources =
     [
         // Only byte-exact released predecessors are eligible for replacement.
@@ -24,7 +29,8 @@ internal static class AecSkillInstaller
                 "1bf54d30a4237801df36dd4949d8a21e843dc6c1f98cfb092694c0999b51eacf",
                 "60754cc941dbfaf17042c4eb4093c9706ea0054c526001f096da2fc4a795aec9",
                 "af5dd269b6807429d4c6079bcc79340c2c10f2bac8e91f52383fd8d7b766581f",
-                "2924f13eb5d90cd088642533461de6f37fa99c73ce94ba95b395ae5f1cd7b535"
+                "2924f13eb5d90cd088642533461de6f37fa99c73ce94ba95b395ae5f1cd7b535",
+                "6181d99ddde36b53ed3007066ec716369f46a84c2067e58337f152005865f352"
             ]),
         new(
             Path.Combine(AgentsDirectoryName, OpenAiFileName),
@@ -68,6 +74,42 @@ internal static class AecSkillInstaller
         }
 
         VerifyInstallation(skillDirectory, resources);
+    }
+
+    // Copilot reads only SKILL.md. Keeping this small installer separate from the
+    // Codex bundle avoids creating an OpenAI-specific agents directory in Copilot.
+    public static bool InstallCopilot(string copilotHome)
+    {
+        var resources = LoadResources(CopilotResources);
+        var skillsDirectory = Path.Combine(copilotHome, "skills");
+        var skillDirectory = Path.Combine(skillsDirectory, "aec");
+
+        PreflightDirectory(skillsDirectory, "Copilot skills directory");
+        PreflightDirectory(skillDirectory, "Copilot AEC skill directory");
+
+        var missingResources = new List<SkillResource>();
+        foreach (var resource in resources)
+        {
+            var path = Path.Combine(skillDirectory, resource.RelativePath);
+            var actual = AecApplication.ReadOptionalTextFile(path, "Copilot AEC skill file");
+            if (actual is null)
+            {
+                missingResources.Add(resource);
+                continue;
+            }
+
+            EnsureMatches(path, actual, resource.Content);
+        }
+
+        CreateAndVerifyDirectory(skillsDirectory, "Copilot skills directory");
+        CreateAndVerifyDirectory(skillDirectory, "Copilot AEC skill directory");
+        foreach (var resource in missingResources)
+        {
+            CreateFile(Path.Combine(skillDirectory, resource.RelativePath), resource.Content);
+        }
+
+        VerifyCopilotInstallation(skillDirectory, resources);
+        return missingResources.Count > 0;
     }
 
     public static bool Upgrade(string codexHome)
@@ -183,8 +225,13 @@ internal static class AecSkillInstaller
 
     private static SkillResource[] LoadResources()
     {
+        return LoadResources(Resources);
+    }
+
+    private static SkillResource[] LoadResources(IEnumerable<SkillResource> resources)
+    {
         var assembly = typeof(AecSkillInstaller).Assembly;
-        return Resources
+        return resources
             .Select(resource => resource with
             {
                 Content = ReadResource(assembly, resource.ResourceName)
@@ -214,6 +261,19 @@ internal static class AecSkillInstaller
         {
             var path = Path.Combine(skillDirectory, resource.RelativePath);
             var actual = AecApplication.ReadRequiredTextFile(path, "AEC skill file");
+            EnsureMatches(path, actual, resource.Content);
+        }
+    }
+
+    private static void VerifyCopilotInstallation(
+        string skillDirectory,
+        IReadOnlyCollection<SkillResource> resources)
+    {
+        AecApplication.EnsureRealDirectory(skillDirectory, "Copilot AEC skill directory");
+        foreach (var resource in resources)
+        {
+            var path = Path.Combine(skillDirectory, resource.RelativePath);
+            var actual = AecApplication.ReadRequiredTextFile(path, "Copilot AEC skill file");
             EnsureMatches(path, actual, resource.Content);
         }
     }

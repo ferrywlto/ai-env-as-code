@@ -1,5 +1,30 @@
 # Implementation Checklist
 
+## v1.4.0-alpha.1 — Copilot macOS initialization
+
+- [x] Define the native Copilot instruction contract at
+  `copilot-instructions.md`, distinct from Codex `AGENTS.md`.
+- [x] Add explicit `--provider=copilot` and `--copilot-home` initialization,
+  resolving explicit path, `COPILOT_HOME`, then `~/.copilot`.
+- [x] Capture or reconcile the canonical and runtime instruction files while
+  preserving non-AEC bytes and rejecting path or skill conflicts.
+- [x] Install the Copilot-compatible `skills/aec/SKILL.md` without creating
+  Codex/OpenAI metadata paths.
+- [x] Keep `config.json` outside AEC ownership and document the alpha boundary.
+- [x] Add isolated xUnit coverage for initialization, resolution, repeatability,
+  runtime reconciliation, and conflict rejection.
+- [ ] Validate with a real local macOS Copilot CLI harness before changing the
+  support matrix from ⚠.
+
+Immediate next work: add Copilot `status`, `backup`, and `apply` as one
+directional-command slice; do not add Copilot uninstallation or skill upgrade yet.
+
+## macOS Native AOT SDK selection
+
+- [x] When `SDKROOT` is not explicitly supplied, resolve Xcode's macOS SDK through
+  `xcrun` before Native AOT invokes `clang`.
+- [x] Preserve a caller-provided `SDKROOT` for advanced or CI-specific toolchains.
+
 ## macOS ARM64 smoke workflow
 
 - [x] Add a manual-only `macos-15` ARM64 workflow using built-in Git checkout.

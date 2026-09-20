@@ -71,7 +71,7 @@ internal static class ChatGptInitCommand
         return 0;
     }
 
-    private static void ValidateRepository(string repository)
+    internal static void ValidateRepository(string repository)
     {
         AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
         AecApplication.EnsureRealDirectory(repository, "Repository");
