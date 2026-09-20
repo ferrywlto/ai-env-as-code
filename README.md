@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 1.4.0-alpha.1 adds an isolated GitHub Copilot CLI initialization path for
-macOS development. It is not real-harness verified and intentionally exposes only
-provider initialization while directional Copilot operations are built next.
+Version 1.4.0-alpha.2 aligns provider-specific engine source paths while preserving
+the existing CLI, canonical data paths, and installed runtime paths. Copilot remains
+initialization-only and is not real-harness verified.
 
 ## Version history
 
@@ -34,8 +34,9 @@ provider initialization while directional Copilot operations are built next.
 | 1.3.0 | Route managed Codex changes through the bundled `$aec` skill |
 | 1.3.1 | Attach completed repositories that include the AEC ChatGPT scaffold |
 | 1.4.0-alpha.1 | Initialize native GitHub Copilot CLI instructions and the local AEC skill |
+| 1.4.0-alpha.2 | Align Codex, Copilot, and ChatGPT engine source paths by provider |
 
-The project and CLI report the current release as `1.4.0-alpha.1` through `aec version`.
+The project and CLI report the current release as `1.4.0-alpha.2` through `aec version`.
 
 ## Approved development decisions
 

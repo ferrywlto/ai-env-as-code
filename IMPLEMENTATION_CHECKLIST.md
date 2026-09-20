@@ -1,5 +1,31 @@
 # Implementation Checklist
 
+## v1.4.0-alpha.2 — Provider source-path alignment
+
+- [x] Move bundled Codex skill sources to `skills/codex/aec/`.
+- [x] Move bundled Copilot skill sources to `skills/copilot/aec/`.
+- [x] Group provider-specific engine files under `src/Aec/Providers/<provider>/`.
+- [x] Preserve namespaces, command syntax, canonical repository paths, embedded
+  resource names, and installed `<provider-home>/skills/aec/` paths.
+
+## Deferred v2 public API change
+
+After Copilot `status`, `backup`, and `apply` are complete, release the breaking
+provider-first command contract as `2.0.0-alpha.1`:
+
+```text
+aec codex init|status|backup|apply ...
+aec copilot init|status|backup|apply ...
+```
+
+- [ ] Replace implicit Codex routing with explicit provider command groups.
+- [ ] Replace `--codex-home` and `--copilot-home` with group-local `--home`.
+- [ ] Move Codex uninstall and skill upgrade beneath the Codex command group.
+- [ ] Remove legacy command forms without compatibility aliases.
+- [ ] Update installers, generated uninstallers, skills, documentation, and tests.
+- [ ] Do not begin this public API migration until Copilot directional commands
+  have the same complete lifecycle as Codex.
+
 ## v1.4.0-alpha.1 — Copilot macOS initialization
 
 - [x] Define the native Copilot instruction contract at
