@@ -16,8 +16,9 @@ source_artifact="$repo_root/artifacts/aec-osx-arm64/aec"
 [ -f "$source_installer" ] || fail "installer was not found: $source_installer"
 [ -x "$source_artifact" ] || fail "Native AOT artifact was not found: $source_artifact"
 
-# pwd normalizes a trailing slash in TMPDIR so expected paths match the installer.
-test_root=$(CDPATH= cd -- "$(mktemp -d "${TMPDIR:-/tmp}/aec-installer-tests.XXXXXX")" && pwd)
+# pwd -P normalizes TMPDIR and resolves macOS's /var -> /private/var link so
+# AEC's intentional symlink-path guard accepts this disposable test fixture.
+test_root=$(CDPATH= cd -- "$(mktemp -d "${TMPDIR:-/tmp}/aec-installer-tests.XXXXXX")" && pwd -P)
 cleanup() {
     rm -rf -- "$test_root"
 }
@@ -102,6 +103,73 @@ assert_empty "$test_root/conflict/bin/aec"
 grep -F 'Refusing to overwrite non-AEC uninstaller' "$test_root/conflict-error" >/dev/null || \
     fail "conflict error did not explain the preserved file"
 
+# AEC initialization creates commits. Give the disposable process its own Git
+# identity and disable signing so this test never depends on the user's Git setup.
+git_config="$test_root/gitconfig"
+printf '%s\n' \
+    '[user]' \
+    '    name = AEC macOS Smoke' \
+    '    email = aec-macos-smoke@example.invalid' \
+    '[commit]' \
+    '    gpgSign = false' >"$git_config"
+export GIT_CONFIG_GLOBAL="$git_config"
+export GIT_CONFIG_NOSYSTEM=1
+
+# Exercise the Native AOT executable against disposable Codex and Copilot homes.
+# This validates AEC's local file lifecycle without requiring Copilot CLI itself.
+codex_home="$test_root/codex-home"
+data_repo="$test_root/aec-data"
+mkdir -p "$codex_home"
+printf '%s\n' 'Personal Codex instructions' >"$codex_home/AGENTS.md"
+printf '%s\n' 'personality = "none"' >"$codex_home/config.toml"
+"$custom_target" init --repo "$data_repo" --codex-home "$codex_home" >/dev/null
+
+copilot_home="$test_root/copilot-home"
+runtime_copilot="$copilot_home/copilot-instructions.md"
+canonical_copilot="$data_repo/environment/providers/copilot/copilot-instructions.md"
+copilot_skill="$copilot_home/skills/aec/SKILL.md"
+mkdir -p "$copilot_home"
+printf '%s\n' 'Personal Copilot instructions' >"$runtime_copilot"
+"$custom_target" init --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" >/dev/null
+
+[ -f "$canonical_copilot" ] || fail "canonical Copilot instructions were not created"
+[ -f "$copilot_skill" ] || fail "Copilot AEC skill was not installed"
+assert_file_equals "$canonical_copilot" "$runtime_copilot"
+grep -F '<!-- AEC:COPILOT:BEGIN' "$runtime_copilot" >/dev/null || \
+    fail "Copilot managed block was not installed"
+assert_empty "$copilot_home/config.json"
+
+"$custom_target" status --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
+    >"$test_root/copilot-status"
+printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/copilot-status-expected"
+assert_output "$test_root/copilot-status-expected" "$test_root/copilot-status"
+
+# Backup must copy runtime drift into the canonical file and create exactly one
+# source-of-truth commit with the documented subject.
+printf '\n%s\n' 'macOS backup drift' >>"$runtime_copilot"
+"$custom_target" backup --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
+    >"$test_root/copilot-backup"
+grep -E '^committed [0-9a-f]+$' "$test_root/copilot-backup" >/dev/null || \
+    fail "Copilot backup did not report its commit"
+assert_file_equals "$canonical_copilot" "$runtime_copilot"
+[ "$(git -C "$data_repo" log -1 --format=%s)" = 'Backup Copilot instructions' ] || \
+    fail "Copilot backup used an unexpected commit subject"
+
+# Apply must restore the committed canonical bytes without changing Git HEAD.
+head_before_apply=$(git -C "$data_repo" rev-parse HEAD)
+printf '%s\n' 'macOS apply drift' >>"$runtime_copilot"
+"$custom_target" apply --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
+    >"$test_root/copilot-apply"
+printf '%s\n' 'applied' >"$test_root/copilot-apply-expected"
+assert_output "$test_root/copilot-apply-expected" "$test_root/copilot-apply"
+assert_file_equals "$canonical_copilot" "$runtime_copilot"
+[ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || \
+    fail "Copilot apply changed repository HEAD"
+
+"$custom_target" status --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
+    >"$test_root/copilot-final-status"
+assert_output "$test_root/copilot-status-expected" "$test_root/copilot-final-status"
+
 # A small fake binary makes the generated script's all-or-nothing cleanup testable
 # without changing the actual personal Codex environment.
 fake_source="$test_root/fake-source"
@@ -109,7 +177,7 @@ fake_artifact="$test_root/fake-aec"
 mkdir -p "$fake_source/scripts" "$fake_source/artifacts/aec-osx-arm64"
 cp "$source_installer" "$fake_source/scripts/install-osx-arm64.sh"
 printf '%s\n' '#!/bin/sh' \
-    'if [ "$1" = "version" ]; then printf "1.4.0-alpha.6\\n"; exit 0; fi' \
+    'if [ "$1" = "version" ]; then printf "1.4.0-alpha.7\\n"; exit 0; fi' \
     'if [ "$AEC_TEST_UNINSTALL_RESULT" = "fail" ]; then exit 17; fi' \
     'printf "%s\\n" "$*" > "$AEC_TEST_ARGS_FILE"' \
     'exit 0' >"$fake_artifact"

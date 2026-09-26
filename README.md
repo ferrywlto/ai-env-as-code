@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 1.4.0-alpha.6 completes Copilot's directional lifecycle with committed
-repository-to-runtime apply. Copilot remains alpha and is not real-harness
-verified on either platform.
+Version 1.4.0-alpha.7 exercises Copilot's complete directional lifecycle through
+the isolated macOS ARM64 Native AOT artifact. Copilot remains alpha and is not
+verified against the real harness on any platform.
 
 ## Version history
 
@@ -39,8 +39,9 @@ verified on either platform.
 | 1.4.0-alpha.4 | Inspect Copilot canonical/runtime instruction drift without mutation |
 | 1.4.0-alpha.5 | Capture Copilot runtime instructions into one verified canonical commit |
 | 1.4.0-alpha.6 | Apply committed canonical Copilot instructions to the local runtime |
+| 1.4.0-alpha.7 | Exercise the complete Copilot lifecycle in an isolated macOS ARM64 workflow |
 
-The project and CLI report the current release as `1.4.0-alpha.6` through `aec version`.
+The project and CLI report the current release as `1.4.0-alpha.7` through `aec version`.
 
 ## Approved development decisions
 
@@ -75,9 +76,9 @@ below.
 ⚠ means it has not. The passing Windows build and isolated installer CI test do
 not verify AEC against a real Windows Codex harness.
 
-Copilot's macOS and Windows entries mean the isolated initializer is exercised on
-those platforms. They are not evidence that Copilot CLI itself has been installed
-or exercised on either platform.
+Copilot's macOS and Windows entries mean its isolated AEC lifecycle is exercised
+on those platforms. They are not evidence that Copilot CLI itself has been
+installed or exercised on either platform.
 
 ## version
 

@@ -33,6 +33,6 @@ jobs:
           help=$("$artifact" help)
           printf '%s\n' "$help" | grep -Fq 'aec init'
           printf '%s\n' "$help"
-      - name: Test isolated install and uninstall
+      - name: Test isolated install, Copilot lifecycle, and uninstall
         shell: bash
         run: sh ./tests/install-osx-arm64.sh

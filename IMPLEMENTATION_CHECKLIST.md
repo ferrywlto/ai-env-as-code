@@ -1,5 +1,24 @@
 # Implementation Checklist
 
+## v1.4.0-alpha.7 — Copilot macOS Native AOT lifecycle
+
+- [x] Extend the existing isolated macOS ARM64 installer test instead of adding
+  an overlapping workflow.
+- [x] Initialize disposable Codex and Copilot homes through the built Native AOT
+  executable without accessing personal runtime state.
+- [x] Exercise Copilot init, in-sync status, runtime-to-repository backup, and
+  committed repository-to-runtime apply.
+- [x] Verify canonical/runtime byte equality, the backup commit subject, and an
+  unchanged Git `HEAD` across apply.
+- [x] Isolate Git identity and signing from the runner and developer machine.
+- [x] Keep macOS warning-marked because this test does not install or invoke the
+  actual Copilot CLI harness.
+- [ ] Commit, push, and explicitly run the manual macOS ARM64 workflow.
+
+Immediate next work: obtain macOS workflow evidence, then implement the same
+isolated Copilot lifecycle on Linux ARM64 before beginning the deferred v2 API
+migration.
+
 ## v1.4.0-alpha.6 — Copilot repository-to-runtime apply
 
 - [x] Add explicit Copilot apply routing with `--provider=copilot` and the
@@ -20,8 +39,8 @@
   and the complete isolated init/status/backup/apply lifecycle passed in
   [run 36273405366](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36273405366).
 
-Immediate next work: begin the separately approved `2.0.0-alpha.1`
-provider-first public API migration.
+Immediate next work: validate the complete lifecycle through the remaining
+isolated macOS and Linux ARM64 workflows before the v2 migration.
 
 ## v1.4.0-alpha.5 — Copilot runtime-to-repository backup
 
@@ -104,8 +123,8 @@ aec copilot init|status|backup|apply ...
 - [ ] Move Codex uninstall and skill upgrade beneath the Codex command group.
 - [ ] Remove legacy command forms without compatibility aliases.
 - [ ] Update installers, generated uninstallers, skills, documentation, and tests.
-- [x] Copilot now has the required init/status/backup/apply lifecycle; the v2
-  migration gate is satisfied.
+- [ ] Validate the complete Copilot lifecycle through isolated macOS and Linux
+  ARM64 workflows. Windows has passed; macOS is the current slice.
 
 ## v1.4.0-alpha.1 — Copilot macOS initialization
 
