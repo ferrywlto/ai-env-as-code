@@ -16,11 +16,12 @@
   document the apply direction in the bundled Copilot skill.
 - [x] Extend the isolated Windows lifecycle to restore committed canonical bytes
   after runtime drift and verify that `HEAD` is unchanged.
-- [ ] Run the manual Windows x64 workflow after commit/push and record the result.
+- [x] Run the manual Windows x64 workflow: Native AOT build, command smoke checks,
+  and the complete isolated init/status/backup/apply lifecycle passed in
+  [run 36273405366](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36273405366).
 
-Immediate next work: validate the complete Copilot directional lifecycle on the
-Windows runner, then begin the separately approved `2.0.0-alpha.1` provider-first
-public API migration.
+Immediate next work: begin the separately approved `2.0.0-alpha.1`
+provider-first public API migration.
 
 ## v1.4.0-alpha.5 — Copilot runtime-to-repository backup
 
@@ -103,8 +104,8 @@ aec copilot init|status|backup|apply ...
 - [ ] Move Codex uninstall and skill upgrade beneath the Codex command group.
 - [ ] Remove legacy command forms without compatibility aliases.
 - [ ] Update installers, generated uninstallers, skills, documentation, and tests.
-- [ ] Do not begin this public API migration until Copilot directional commands
-  have the same complete lifecycle as Codex.
+- [x] Copilot now has the required init/status/backup/apply lifecycle; the v2
+  migration gate is satisfied.
 
 ## v1.4.0-alpha.1 — Copilot macOS initialization
 
