@@ -1,5 +1,27 @@
 # Implementation Checklist
 
+## v1.4.0-alpha.6 — Copilot repository-to-runtime apply
+
+- [x] Add explicit Copilot apply routing with `--provider=copilot` and the
+  established `--copilot-home` resolution order.
+- [x] Require canonical instructions to be one regular committed Git file whose
+  working bytes exactly match the committed blob and selected repository binding.
+- [x] Atomically replace only runtime `copilot-instructions.md`; create a missing
+  runtime file with user-only permissions and avoid equal-byte rewrites.
+- [x] Preserve canonical bytes, Git `HEAD`, and unrelated repository changes;
+  create no commit and capture no runtime state.
+- [x] Reject dirty/uncommitted/unsupported canonical sources, path mismatches,
+  repository-contained runtime paths, and invalid provider flags before writing.
+- [x] Teach provider init to migrate the exact official backup-only skill and
+  document the apply direction in the bundled Copilot skill.
+- [x] Extend the isolated Windows lifecycle to restore committed canonical bytes
+  after runtime drift and verify that `HEAD` is unchanged.
+- [ ] Run the manual Windows x64 workflow after commit/push and record the result.
+
+Immediate next work: validate the complete Copilot directional lifecycle on the
+Windows runner, then begin the separately approved `2.0.0-alpha.1` provider-first
+public API migration.
+
 ## v1.4.0-alpha.5 — Copilot runtime-to-repository backup
 
 - [x] Add explicit Copilot backup routing with `--provider=copilot` and

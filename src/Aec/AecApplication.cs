@@ -39,7 +39,10 @@ public static class AecApplication
                     ParseProviderRepositoryArguments(args, "backup"),
                     output,
                     error),
-                "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output, error),
+                "apply" => RunApply(
+                    ParseProviderRepositoryArguments(args, "apply"),
+                    output,
+                    error),
                 "init" => RunInit(ParseInitArguments(args), output, error),
                 _ => throw new ArgumentException($"Unknown command: {args[0]}")
             };
@@ -204,11 +207,18 @@ public static class AecApplication
     }
 
     private static int RunApply(
-        RepositoryOptions options,
+        ProviderRepositoryOptions options,
         TextWriter output,
         TextWriter warning)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
+
+        if (options.Provider == "copilot")
+        {
+            var copilotHome = ResolveCopilotHome(options.CopilotHome);
+            return CopilotApplyCommand.Run(repository, copilotHome, output);
+        }
+
         var codexHome = ResolveCodexHome(options.CodexHome);
 
         EnsureNoLinksInManagedRoots(repository, codexHome);
@@ -736,6 +746,7 @@ public static class AecApplication
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+              aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
             """;
 
         output.WriteLine(usage.ReplaceLineEndings(output.NewLine));

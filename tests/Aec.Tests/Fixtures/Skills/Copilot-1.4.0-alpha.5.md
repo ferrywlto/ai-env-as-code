@@ -1,12 +1,12 @@
 ---
 name: aec
-description: Initialize, inspect, back up, or apply the local GitHub Copilot CLI integration for an AI Environment as Code repository.
+description: Initialize, inspect, or back up the local GitHub Copilot CLI integration for an AI Environment as Code repository.
 ---
 
 # AEC for GitHub Copilot
 
-Use this skill only when the user explicitly requests initialization, status,
-backup, or apply of their local GitHub Copilot CLI instructions through AEC.
+Use this skill only when the user explicitly requests initialization, status
+inspection, or backup of their local GitHub Copilot CLI instructions through AEC.
 
 The user must select the AEC data repository explicitly. Never infer it from the
 current directory, the executable, or the skill location. Run:
@@ -42,18 +42,7 @@ Copilot instructions` when that canonical path differs from `HEAD`. It writes
 `unchanged` when the canonical path is already committed with the runtime bytes.
 It never changes runtime instructions or pushes the commit.
 
-For an explicitly authorized committed repository-to-runtime deployment, run:
-
-```text
-aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
-```
-
-It requires the canonical file to match its committed Git blob and repository
-binding, then atomically replaces only runtime `copilot-instructions.md`. It writes
-`unchanged` when runtime already matches. It never captures runtime changes,
-creates a commit, pushes, manages `config.json`, or installs/upgrades the skill.
-
-Copilot support is alpha. `uninstall` and standalone skill upgrade are not yet
-available for Copilot. Do not substitute Codex commands or flags, and do not claim
-real-harness verification until Copilot CLI is installed and exercised on the
-target machine.
+Copilot support is alpha. `apply`, `uninstall`, and standalone skill
+upgrade are not yet available for Copilot. Do not substitute Codex commands or
+flags, and do not claim real-harness verification until Copilot CLI is installed
+and exercised on the target machine.

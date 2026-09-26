@@ -8,7 +8,11 @@ internal static class CopilotBackupCommand
     {
         AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
         AecApplication.EnsureNoLinksInExistingPath(copilotHome, "Copilot home path");
-        ApplyCommand.EnsureRuntimeOutsideRepository(repository, copilotHome);
+        ApplyCommand.EnsureRuntimeOutsideRepository(
+            repository,
+            copilotHome,
+            "copilot-instructions.md",
+            "Copilot runtime target");
         AecApplication.EnsureRealDirectory(repository, "Repository");
         AecApplication.EnsureSourceDirectories(repository);
         AecApplication.EnsureRealDirectory(copilotHome, "Copilot home");

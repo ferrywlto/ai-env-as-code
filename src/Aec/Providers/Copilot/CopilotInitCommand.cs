@@ -7,7 +7,11 @@ internal static class CopilotInitCommand
         ChatGptInitCommand.ValidateRepository(repository);
         AecApplication.EnsureNoLinksInExistingPath(copilotHome, "Copilot home path");
         AecApplication.EnsureRealDirectory(copilotHome, "Copilot home");
-        ApplyCommand.EnsureRuntimeOutsideRepository(repository, copilotHome);
+        ApplyCommand.EnsureRuntimeOutsideRepository(
+            repository,
+            copilotHome,
+            "copilot-instructions.md",
+            "Copilot runtime target");
 
         var runtimePath = Path.Combine(copilotHome, "copilot-instructions.md");
         var canonicalPath = Path.Combine(repository, AecApplication.CopilotSourceRelativePath);

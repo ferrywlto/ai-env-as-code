@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 1.4.0-alpha.5 adds explicit Copilot runtime-to-repository backup with an
-exact canonical capture and fixed Git commit. Copilot remains alpha and is not
-real-harness verified on either platform.
+Version 1.4.0-alpha.6 completes Copilot's directional lifecycle with committed
+repository-to-runtime apply. Copilot remains alpha and is not real-harness
+verified on either platform.
 
 ## Version history
 
@@ -38,8 +38,9 @@ real-harness verified on either platform.
 | 1.4.0-alpha.3 | Smoke-test Copilot initialization through the Windows x64 Native AOT artifact |
 | 1.4.0-alpha.4 | Inspect Copilot canonical/runtime instruction drift without mutation |
 | 1.4.0-alpha.5 | Capture Copilot runtime instructions into one verified canonical commit |
+| 1.4.0-alpha.6 | Apply committed canonical Copilot instructions to the local runtime |
 
-The project and CLI report the current release as `1.4.0-alpha.5` through `aec version`.
+The project and CLI report the current release as `1.4.0-alpha.6` through `aec version`.
 
 ## Approved development decisions
 
@@ -605,11 +606,23 @@ the exact runtime bytes into the canonical path, stages only that path, and crea
 the fixed `Backup Copilot instructions` commit. It writes `unchanged` when the
 same bytes are already committed. It never changes runtime instructions or pushes.
 
-Exact official initialization-only and status-only Copilot skills are upgraded
-during the next provider `init`; customized skills still fail closed. Copilot
-`apply`, `uninstall`, and standalone skill upgrade are not part of this alpha
-slice. The support matrix remains unverified until a local Copilot CLI harness is
-installed and exercised.
+Copilot apply is the explicit committed repository-to-runtime direction:
+
+```text
+aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+```
+
+It requires the canonical path's working bytes to match one regular file committed
+at `HEAD`, validates the selected repository binding, and atomically replaces only
+runtime `copilot-instructions.md`. Equal bytes report `unchanged` without a rewrite.
+It never captures runtime changes, changes canonical data, stages, commits, pushes,
+manages `config.json`, or installs/upgrades the skill.
+
+Exact official initialization-only, status-only, and backup-only Copilot skills
+are upgraded during the next provider `init`; customized skills still fail closed.
+Copilot `uninstall` and standalone skill upgrade are not part of this alpha slice.
+The support matrix remains unverified until a local Copilot CLI harness is installed
+and exercised.
 
 ## status
 

@@ -322,7 +322,7 @@ internal static class ApplyCommand
             "Canonical config");
     }
 
-    private static byte[] ReadCommittedFile(
+    internal static byte[] ReadCommittedFile(
         string repository,
         string commit,
         string relativePath,
@@ -442,10 +442,23 @@ internal static class ApplyCommand
 
     internal static void EnsureRuntimeOutsideRepository(string repository, string codexHome)
     {
-        var runtimePath = Path.GetFullPath(Path.Combine(codexHome, "AGENTS.md"));
+        EnsureRuntimeOutsideRepository(
+            repository,
+            codexHome,
+            "AGENTS.md",
+            "Codex runtime target");
+    }
+
+    internal static void EnsureRuntimeOutsideRepository(
+        string repository,
+        string runtimeHome,
+        string runtimeFileName,
+        string label)
+    {
+        var runtimePath = Path.GetFullPath(Path.Combine(runtimeHome, runtimeFileName));
         if (IsPathInsideDirectory(repository, runtimePath))
         {
-            throw new InvalidOperationException("Codex runtime target must be outside the data repository.");
+            throw new InvalidOperationException($"{label} must be outside the data repository.");
         }
     }
 

@@ -139,6 +139,15 @@ try {
     Assert ((Get-FileHash -LiteralPath $runtimeCopilotInstructions -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $canonicalCopilotInstructions -Algorithm SHA256).Hash) 'Copilot backup did not capture runtime bytes'
     $copilotCommitSubject = git -C $dataRepo log -1 --format=%s
     Assert ($LASTEXITCODE -eq 0 -and $copilotCommitSubject -ceq 'Backup Copilot instructions') 'Copilot backup used an unexpected commit subject'
+    $headBeforeCopilotApply = git -C $dataRepo rev-parse HEAD
+    Assert ($LASTEXITCODE -eq 0) 'could not capture HEAD before Copilot apply'
+    [System.IO.File]::AppendAllText($runtimeCopilotInstructions, 'Windows apply drift' + [Environment]::NewLine)
+    $copilotApply = @(& $customTarget apply --repo $dataRepo --provider=copilot --copilot-home $copilotHome)
+    Assert ($LASTEXITCODE -eq 0) 'isolated Copilot apply failed'
+    Assert ($copilotApply -contains 'applied') 'Copilot apply did not report applied'
+    Assert ((Get-FileHash -LiteralPath $runtimeCopilotInstructions -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $canonicalCopilotInstructions -Algorithm SHA256).Hash) 'Copilot apply did not restore committed canonical bytes'
+    $headAfterCopilotApply = git -C $dataRepo rev-parse HEAD
+    Assert ($LASTEXITCODE -eq 0 -and $headAfterCopilotApply -ceq $headBeforeCopilotApply) 'Copilot apply changed repository HEAD'
 
     & $uninstaller -CodexHome $codexHome | Out-Null
     Assert (-not (Test-Path -LiteralPath $customTarget)) 'uninstall left custom binary'

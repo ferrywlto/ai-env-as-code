@@ -167,6 +167,7 @@ public sealed class CopilotInitTests
     [Theory]
     [InlineData("Copilot-1.4.0-alpha.1.md")]
     [InlineData("Copilot-1.4.0-alpha.4.md")]
+    [InlineData("Copilot-1.4.0-alpha.5.md")]
     public void UpgradesAnExactOfficialCopilotSkillDuringInit(string fixtureName)
     {
         using var layout = new CopilotLayout();
@@ -183,7 +184,7 @@ public sealed class CopilotInitTests
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
         Assert.Contains(
-            "aec backup --repo ABSOLUTE_PATH --provider=copilot",
+            "aec apply --repo ABSOLUTE_PATH --provider=copilot",
             File.ReadAllText(layout.Skill),
             StringComparison.Ordinal);
     }

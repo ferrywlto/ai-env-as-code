@@ -456,6 +456,7 @@ public sealed class ChatGptInitTests
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+              aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
             """;
 
         Assert.Equal(0, result.ExitCode);
