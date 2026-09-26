@@ -16,10 +16,12 @@
   document the backup direction in the bundled Copilot skill.
 - [x] Extend the isolated Windows lifecycle to capture runtime Copilot drift and
   verify the canonical bytes and commit subject.
-- [ ] Run the manual Windows x64 workflow after commit/push and record the result.
+- [x] Run the manual Windows x64 workflow: Native AOT build, command smoke checks,
+  and the isolated init/status/backup lifecycle passed in
+  [run 36272081560](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36272081560).
 
-Immediate next work: validate status/backup together on the Windows runner, then
-implement Copilot `apply` as the repository-to-runtime direction.
+Immediate next work: implement Copilot `apply` as the repository-to-runtime
+direction.
 
 ## v1.4.0-alpha.4 — Read-only Copilot status
 
@@ -35,12 +37,11 @@ implement Copilot `apply` as the repository-to-runtime direction.
   migration tests.
 - [x] Extend the isolated Windows Native AOT lifecycle to require an `in_sync`
   Copilot status after provider initialization.
-- [ ] Run the manual Windows x64 workflow for the committed status increment and
-  record the result.
+- [x] Validate Copilot status through the Windows x64 Native AOT lifecycle in
+  [run 36272081560](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36272081560).
 
-Immediate next work: commit and validate this increment on the Windows runner,
-then implement Copilot `backup` as the runtime-to-repository direction without
-adding `apply` or starting the deferred v2 public API migration.
+Immediate next work: continue the separately recorded Copilot backup/apply
+increments without starting the deferred v2 public API migration.
 
 ## v1.4.0-alpha.3 — Copilot Windows initialization smoke
 
