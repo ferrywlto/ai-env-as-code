@@ -14,7 +14,10 @@ internal static class AecSkillInstaller
         new(
             SkillFileName,
             "Aec.CopilotSkill.SKILL.md",
-            ["7bfd08be9c22c7efd1dfec14d75ae9060ce7bd69ec288d517477681b9cd394e9"])
+            [
+                "7bfd08be9c22c7efd1dfec14d75ae9060ce7bd69ec288d517477681b9cd394e9",
+                "adfaa1f7037cf68484693215e59d988e4c1e5f90d72ed9fc55a14ff4df83d314"
+            ])
     ];
 
     private static readonly SkillResource[] Resources =

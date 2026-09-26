@@ -1,5 +1,26 @@
 # Implementation Checklist
 
+## v1.4.0-alpha.5 — Copilot runtime-to-repository backup
+
+- [x] Add explicit Copilot backup routing with `--provider=copilot` and
+  `--copilot-home` resolution matching init/status.
+- [x] Validate canonical/runtime managed blocks and repository bindings before
+  changing the canonical file.
+- [x] Capture exact runtime instruction bytes, stage only the Copilot canonical
+  path, and create the fixed `Backup Copilot instructions` commit.
+- [x] Preserve runtime bytes and timestamps; report `unchanged` when the
+  canonical path already matches both runtime and `HEAD`.
+- [x] Reject unrelated working-tree/index changes, missing runtime files,
+  unsupported blocks, path mismatches, and invalid provider flags.
+- [x] Teach provider init to migrate the exact official status-only skill and
+  document the backup direction in the bundled Copilot skill.
+- [x] Extend the isolated Windows lifecycle to capture runtime Copilot drift and
+  verify the canonical bytes and commit subject.
+- [ ] Run the manual Windows x64 workflow after commit/push and record the result.
+
+Immediate next work: validate status/backup together on the Windows runner, then
+implement Copilot `apply` as the repository-to-runtime direction.
+
 ## v1.4.0-alpha.4 — Read-only Copilot status
 
 - [x] Add explicit Copilot status routing with `--provider=copilot` and the

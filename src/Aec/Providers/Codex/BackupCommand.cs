@@ -37,6 +37,59 @@ internal static class BackupCommand
             new InitializationBackupExpectation(expectedRuntimePersonality));
     }
 
+    internal static int RunSingleFile(
+        string repository,
+        string relativePath,
+        string runtimePath,
+        string canonicalLabel,
+        string runtimeLabel,
+        string commitMessage,
+        Action<byte[], byte[]> validate,
+        TextWriter output)
+    {
+        ValidateRepository(repository);
+        EnsureNoChangesOutsideSingleFile(repository, relativePath, canonicalLabel);
+
+        var canonicalPath = Path.Combine(repository, relativePath);
+        var canonical = AecApplication.ReadRequiredTextFile(canonicalPath, canonicalLabel);
+        var runtime = AecApplication.ReadRequiredTextFile(runtimePath, runtimeLabel);
+        validate(canonical, runtime);
+
+        if (!canonical.AsSpan().SequenceEqual(runtime))
+        {
+            AtomicFile.ReplaceIfUnchanged(
+                canonicalPath,
+                canonical,
+                runtime,
+                canonicalLabel);
+        }
+
+        StageSingleFile(repository, relativePath, canonicalLabel);
+        EnsureNoChangesOutsideSingleFile(repository, relativePath, canonicalLabel);
+        var expectedBlob = EnsureStagedBytesMatchWorkingFile(
+            repository,
+            relativePath,
+            canonicalLabel.ToLowerInvariant());
+
+        if (HasHead(repository) && !HasStagedSingleFileChange(repository, relativePath, canonicalLabel))
+        {
+            output.WriteLine("unchanged");
+            return 0;
+        }
+
+        CommitStagedIndex(repository, commitMessage, [(relativePath, expectedBlob)]);
+        var head = ResolveHead(repository);
+        VerifySingleFileCommit(
+            repository,
+            relativePath,
+            expectedBlob,
+            commitMessage,
+            canonicalLabel);
+        EnsureNoChangesOutsideSingleFile(repository, relativePath, canonicalLabel);
+        output.WriteLine($"committed {head}");
+        return 0;
+    }
+
     private static int RunManagedEnvironment(
         string repository,
         string codexHome,
@@ -408,6 +461,29 @@ internal static class BackupCommand
         }
     }
 
+    private static void EnsureNoChangesOutsideSingleFile(
+        string repository,
+        string relativePath,
+        string label)
+    {
+        var status = RunRequired(
+            repository,
+            "Git could not inspect repository changes",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            ".",
+            $":(top,exclude,literal){relativePath}");
+
+        if (status.Output.Length != 0)
+        {
+            throw new InvalidOperationException(
+                $"Repository has changes outside {label.ToLowerInvariant()}.");
+        }
+    }
+
     private static string EnsureStagedBytesMatchSource(string repository)
     {
         var sourceHash = RunRequired(
@@ -480,6 +556,20 @@ internal static class BackupCommand
             "--",
             AecApplication.SourceRelativePath,
             AecApplication.ConfigSourceRelativePath);
+    }
+
+    private static void StageSingleFile(
+        string repository,
+        string relativePath,
+        string label)
+    {
+        RunRequired(
+            repository,
+            $"Git could not stage the {label.ToLowerInvariant()}",
+            "add",
+            "--force",
+            "--",
+            relativePath);
     }
 
     private static void EnsureSourceMatchesExpected(string repository, byte[] expected)
@@ -810,6 +900,46 @@ internal static class BackupCommand
         }
     }
 
+    private static void VerifySingleFileCommit(
+        string repository,
+        string relativePath,
+        string expectedBlob,
+        string expectedSubject,
+        string label)
+    {
+        VerifyCommittedBlob(
+            repository,
+            relativePath,
+            expectedBlob,
+            label.ToLowerInvariant());
+
+        var subject = RunRequired(
+            repository,
+            $"Git could not inspect the {label.ToLowerInvariant()} commit message",
+            "log",
+            "-1",
+            "--format=%s").Output.TrimEnd('\r', '\n');
+        if (!string.Equals(subject, expectedSubject, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"{label} commit subject does not match the required message.");
+        }
+
+        var status = RunRequired(
+            repository,
+            $"Git could not verify the {label.ToLowerInvariant()} after commit",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            relativePath);
+        if (status.Output.Length != 0)
+        {
+            throw new InvalidOperationException($"{label} is not clean after its commit.");
+        }
+    }
+
     private static void VerifyCommittedBlob(
         string repository,
         string relativePath,
@@ -878,6 +1008,30 @@ internal static class BackupCommand
             1 => true,
             _ => throw new InvalidOperationException(
                 $"Git could not inspect staged managed environment files (exit code {result.ExitCode}).")
+        };
+    }
+
+    private static bool HasStagedSingleFileChange(
+        string repository,
+        string relativePath,
+        string label)
+    {
+        var result = Run(
+            repository,
+            "diff",
+            "--cached",
+            "--quiet",
+            "--exit-code",
+            "--",
+            relativePath);
+
+        return result.ExitCode switch
+        {
+            0 => false,
+            1 => true,
+            _ => throw new InvalidOperationException(
+                $"Git could not inspect the staged {label.ToLowerInvariant()} " +
+                $"(exit code {result.ExitCode}).")
         };
     }
 

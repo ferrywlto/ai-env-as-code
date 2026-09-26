@@ -132,6 +132,13 @@ try {
     $copilotStatus = @(& $customTarget status --repo $dataRepo --provider=copilot --copilot-home $copilotHome)
     Assert ($LASTEXITCODE -eq 0) 'isolated Copilot status failed'
     Assert ($copilotStatus -contains 'copilot/copilot-instructions.md in_sync') 'Copilot status did not report in_sync'
+    [System.IO.File]::AppendAllText($runtimeCopilotInstructions, [Environment]::NewLine + 'Windows backup drift' + [Environment]::NewLine)
+    $copilotBackup = @(& $customTarget backup --repo $dataRepo --provider=copilot --copilot-home $copilotHome)
+    Assert ($LASTEXITCODE -eq 0) 'isolated Copilot backup failed'
+    Assert ($copilotBackup.Count -eq 1 -and $copilotBackup[0] -like 'committed *') 'Copilot backup did not report its commit'
+    Assert ((Get-FileHash -LiteralPath $runtimeCopilotInstructions -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $canonicalCopilotInstructions -Algorithm SHA256).Hash) 'Copilot backup did not capture runtime bytes'
+    $copilotCommitSubject = git -C $dataRepo log -1 --format=%s
+    Assert ($LASTEXITCODE -eq 0 -and $copilotCommitSubject -ceq 'Backup Copilot instructions') 'Copilot backup used an unexpected commit subject'
 
     & $uninstaller -CodexHome $codexHome | Out-Null
     Assert (-not (Test-Path -LiteralPath $customTarget)) 'uninstall left custom binary'

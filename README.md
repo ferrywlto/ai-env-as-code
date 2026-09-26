@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 1.4.0-alpha.4 adds read-only Copilot status inspection with the same exact
-byte and exit-code semantics used by the established Codex flow. Copilot remains
-alpha and is not real-harness verified on either platform.
+Version 1.4.0-alpha.5 adds explicit Copilot runtime-to-repository backup with an
+exact canonical capture and fixed Git commit. Copilot remains alpha and is not
+real-harness verified on either platform.
 
 ## Version history
 
@@ -37,8 +37,9 @@ alpha and is not real-harness verified on either platform.
 | 1.4.0-alpha.2 | Align Codex, Copilot, and ChatGPT engine source paths by provider |
 | 1.4.0-alpha.3 | Smoke-test Copilot initialization through the Windows x64 Native AOT artifact |
 | 1.4.0-alpha.4 | Inspect Copilot canonical/runtime instruction drift without mutation |
+| 1.4.0-alpha.5 | Capture Copilot runtime instructions into one verified canonical commit |
 
-The project and CLI report the current release as `1.4.0-alpha.4` through `aec version`.
+The project and CLI report the current release as `1.4.0-alpha.5` through `aec version`.
 
 ## Approved development decisions
 
@@ -578,7 +579,8 @@ instruction files are changed.
 The command does not manage `config.json`, which is Copilot application state rather
 than the user-authored instruction contract. It does not stage, commit, push, or
 invoke Copilot. Review and commit the canonical instruction file after initialization
-so Git history becomes its source of truth.
+so Git history becomes its source of truth, either manually or with the explicit
+Copilot `backup` command documented below.
 
 Read-only Copilot status uses the same selected repository and home:
 
@@ -591,11 +593,23 @@ writes `in_sync`, `different`, or `missing`. It returns 0 for `in_sync`, 2 for
 drift or a missing runtime file, and 1 for validation failure without partial
 output. The command does not write files, stage, commit, push, or invoke Copilot.
 
-An exact official initialization-only Copilot skill is upgraded during the next
-provider `init`; customized skills still fail closed. Copilot `backup`, `apply`,
-`uninstall`, and standalone skill upgrade are not part of this alpha slice. The
-support matrix remains unverified until a local Copilot CLI harness is installed
-and exercised.
+Copilot backup is the explicit runtime-to-repository direction:
+
+```text
+aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+```
+
+It requires supported managed blocks bound to the selected repository in both
+runtime and canonical files. It rejects unrelated repository changes, captures
+the exact runtime bytes into the canonical path, stages only that path, and creates
+the fixed `Backup Copilot instructions` commit. It writes `unchanged` when the
+same bytes are already committed. It never changes runtime instructions or pushes.
+
+Exact official initialization-only and status-only Copilot skills are upgraded
+during the next provider `init`; customized skills still fail closed. Copilot
+`apply`, `uninstall`, and standalone skill upgrade are not part of this alpha
+slice. The support matrix remains unverified until a local Copilot CLI harness is
+installed and exercised.
 
 ## status
 

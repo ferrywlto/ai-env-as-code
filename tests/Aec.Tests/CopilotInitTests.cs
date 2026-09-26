@@ -164,8 +164,10 @@ public sealed class CopilotInitTests
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.RuntimeInstructions));
     }
 
-    [Fact]
-    public void UpgradesTheExactOfficialInitializationOnlySkillDuringInit()
+    [Theory]
+    [InlineData("Copilot-1.4.0-alpha.1.md")]
+    [InlineData("Copilot-1.4.0-alpha.4.md")]
+    public void UpgradesAnExactOfficialCopilotSkillDuringInit(string fixtureName)
     {
         using var layout = new CopilotLayout();
         Directory.CreateDirectory(Path.GetDirectoryName(layout.Skill)!);
@@ -173,7 +175,7 @@ public sealed class CopilotInitTests
             AppContext.BaseDirectory,
             "Fixtures",
             "Skills",
-            "Copilot-1.4.0-alpha.1.md");
+            fixtureName);
         File.Copy(predecessor, layout.Skill);
 
         var result = Run(layout.Repository, layout.CopilotHome);
@@ -181,7 +183,7 @@ public sealed class CopilotInitTests
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
         Assert.Contains(
-            "aec status --repo ABSOLUTE_PATH --provider=copilot",
+            "aec backup --repo ABSOLUTE_PATH --provider=copilot",
             File.ReadAllText(layout.Skill),
             StringComparison.Ordinal);
     }

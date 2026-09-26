@@ -34,8 +34,11 @@ public static class AecApplication
                 "version" => RunVersion(args, output),
                 "skill" => RunSkill(args, output),
                 "uninstall" => RunUninstall(ParseCodexHomeArguments(args, 1), output),
-                "status" => RunStatus(ParseStatusArguments(args), output),
-                "backup" => RunBackup(ParseRepositoryArguments(args, "backup"), output, error),
+                "status" => RunStatus(ParseProviderRepositoryArguments(args, "status"), output),
+                "backup" => RunBackup(
+                    ParseProviderRepositoryArguments(args, "backup"),
+                    output,
+                    error),
                 "apply" => RunApply(ParseRepositoryArguments(args, "apply"), output, error),
                 "init" => RunInit(ParseInitArguments(args), output, error),
                 _ => throw new ArgumentException($"Unknown command: {args[0]}")
@@ -48,7 +51,7 @@ public static class AecApplication
         }
     }
 
-    private static int RunStatus(StatusOptions options, TextWriter output)
+    private static int RunStatus(ProviderRepositoryOptions options, TextWriter output)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
 
@@ -148,11 +151,18 @@ public static class AecApplication
     }
 
     private static int RunBackup(
-        RepositoryOptions options,
+        ProviderRepositoryOptions options,
         TextWriter output,
         TextWriter warning)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
+
+        if (options.Provider == "copilot")
+        {
+            var copilotHome = ResolveCopilotHome(options.CopilotHome);
+            return CopilotBackupCommand.Run(repository, copilotHome, output);
+        }
+
         var codexHome = ResolveCodexHome(options.CodexHome);
 
         EnsureNoLinksInManagedRoots(repository, codexHome);
@@ -252,7 +262,9 @@ public static class AecApplication
         return new RepositoryOptions(repository, codexHome);
     }
 
-    private static StatusOptions ParseStatusArguments(string[] args)
+    private static ProviderRepositoryOptions ParseProviderRepositoryArguments(
+        string[] args,
+        string command)
     {
         string? repository = null;
         string? codexHome = null;
@@ -272,7 +284,7 @@ public static class AecApplication
                 provider = argument["--provider=".Length..];
                 if (provider != "copilot")
                 {
-                    throw new ArgumentException($"Unsupported status provider: {provider}");
+                    throw new ArgumentException($"Unsupported {command} provider: {provider}");
                 }
 
                 continue;
@@ -316,7 +328,7 @@ public static class AecApplication
         if (repository is null)
         {
             throw new ArgumentException(
-                "status requires --repo with the source-of-truth data repository.");
+                $"{command} requires --repo with the source-of-truth data repository.");
         }
 
         if (provider == "copilot" && codexHome is not null)
@@ -329,7 +341,7 @@ public static class AecApplication
             throw new ArgumentException("--copilot-home requires --provider=copilot.");
         }
 
-        return new StatusOptions(repository, codexHome, copilotHome, provider);
+        return new ProviderRepositoryOptions(repository, codexHome, copilotHome, provider);
     }
 
     private static InitOptions ParseInitArguments(string[] args)
@@ -722,6 +734,7 @@ public static class AecApplication
               aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+              aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
             """;
 
@@ -744,7 +757,7 @@ public static class AecApplication
 
     private sealed record RepositoryOptions(string Repository, string? CodexHome);
 
-    private sealed record StatusOptions(
+    private sealed record ProviderRepositoryOptions(
         string Repository,
         string? CodexHome,
         string? CopilotHome,
