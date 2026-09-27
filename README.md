@@ -888,9 +888,8 @@ On an ARM64 Ubuntu 24.04 machine, install Git, the .NET 10 SDK, `clang`, and
 The script publishes the ignored `artifacts/aec-linux-arm64/aec` executable.
 The manual-only `.github/workflows/linux-arm64-smoke.yml` workflow builds on an
 Ubuntu 24.04 ARM64 runner, checks `aec version` and `aec help`, and exercises the
-isolated installer plus complete Copilot AEC lifecycle. The Native AOT build and
-both command checks
-[passed on that runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35409334463).
+isolated installer plus complete Copilot AEC lifecycle. All of those checks
+[passed on that runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284376).
 
 After building, install the executable for the current user:
 
@@ -917,10 +916,8 @@ remove AEC runtime integration before deleting the installed binary and helper:
 
 The helper verifies its own generated path and the installed executable digest.
 It preserves the AEC data repository and `config.toml`, and stops without
-deleting installation files if AEC runtime cleanup fails. The isolated
-install/reinstall/repair/managed-init/uninstall lifecycle
-[passed on an Ubuntu ARM64 runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35410432127).
-A real Linux Codex harness remains unverified, so the matrix entry stays ⚠.
+deleting installation files if AEC runtime cleanup fails. A real Linux Codex
+harness remains unverified, so the matrix entry stays ⚠.
 
 ### Native AOT on Apple-silicon macOS
 
@@ -934,8 +931,9 @@ source of truth. Building requires the .NET 10 SDK and Xcode Command Line Tools:
 
 The manual-only `.github/workflows/macos-arm64-smoke.yml` workflow uses a
 macOS 15 ARM64 runner to build the Native AOT executable, check `aec version`
-and `aec help`, and exercise the isolated installer/generated-uninstaller test.
-All checks [passed on the macOS runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35412687899).
+and `aec help`, and exercise the isolated installer plus complete Copilot AEC
+lifecycle. All checks
+[passed on the macOS runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284718).
 The workflow never reads the personal AEC data repository. Codex on macOS is
 marked ✓ because it has also been exercised with the real local harness, not
 merely because CI exists.

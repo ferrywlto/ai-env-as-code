@@ -11,10 +11,13 @@
 - [x] Isolate Git identity and commit signing from the runner configuration.
 - [x] Keep Linux warning-marked because the test neither installs nor invokes the
   actual Copilot CLI harness.
-- [ ] Commit, push, and explicitly run the manual Linux ARM64 workflow.
+- [x] Commit, push, and explicitly run the manual Linux ARM64 workflow: Native
+  AOT build, command smoke checks, installer lifecycle, and complete isolated
+  Copilot lifecycle passed in
+  [run 36283284376](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284376).
 
-Immediate next work: obtain macOS and Linux workflow evidence before beginning
-the deferred v2 provider-first API migration.
+Immediate next work: review the deferred v2 provider-first API migration as the
+next separately approved increment.
 
 ## v1.4.0-alpha.7 — Copilot macOS Native AOT lifecycle
 
@@ -29,11 +32,13 @@ the deferred v2 provider-first API migration.
 - [x] Isolate Git identity and signing from the runner and developer machine.
 - [x] Keep macOS warning-marked because this test does not install or invoke the
   actual Copilot CLI harness.
-- [ ] Commit, push, and explicitly run the manual macOS ARM64 workflow.
+- [x] Commit, push, and explicitly run the manual macOS ARM64 workflow: Native
+  AOT build, command smoke checks, installer lifecycle, and complete isolated
+  Copilot lifecycle passed in
+  [run 36283284718](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284718).
 
-Immediate next work: obtain macOS workflow evidence, then implement the same
-isolated Copilot lifecycle on Linux ARM64 before beginning the deferred v2 API
-migration.
+Immediate next work: implement and validate the same isolated Copilot lifecycle
+on Linux ARM64 before beginning the deferred v2 API migration.
 
 ## v1.4.0-alpha.6 — Copilot repository-to-runtime apply
 
@@ -139,8 +144,8 @@ aec copilot init|status|backup|apply ...
 - [ ] Move Codex uninstall and skill upgrade beneath the Codex command group.
 - [ ] Remove legacy command forms without compatibility aliases.
 - [ ] Update installers, generated uninstallers, skills, documentation, and tests.
-- [ ] Validate the complete Copilot lifecycle through isolated macOS and Linux
-  ARM64 workflows. Windows has passed; both implementations await workflow runs.
+- [x] Validate the complete Copilot lifecycle through isolated macOS ARM64,
+  Windows x64, and Linux ARM64 workflows.
 
 ## v1.4.0-alpha.1 — Copilot macOS initialization
 
