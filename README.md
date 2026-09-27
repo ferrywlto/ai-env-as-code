@@ -1,8 +1,8 @@
 # AI Environment as Code
 
-Version 1.4.0-alpha.7 exercises Copilot's complete directional lifecycle through
-the isolated macOS ARM64 Native AOT artifact. Copilot remains alpha and is not
-verified against the real harness on any platform.
+Version 1.4.0-alpha.8 adds Copilot's complete directional lifecycle to the
+isolated Linux ARM64 Native AOT workflow, matching the macOS and Windows coverage.
+Copilot remains alpha and is not verified against the real harness on any platform.
 
 ## Version history
 
@@ -40,8 +40,9 @@ verified against the real harness on any platform.
 | 1.4.0-alpha.5 | Capture Copilot runtime instructions into one verified canonical commit |
 | 1.4.0-alpha.6 | Apply committed canonical Copilot instructions to the local runtime |
 | 1.4.0-alpha.7 | Exercise the complete Copilot lifecycle in an isolated macOS ARM64 workflow |
+| 1.4.0-alpha.8 | Add the complete Copilot lifecycle to the isolated Linux ARM64 workflow |
 
-The project and CLI report the current release as `1.4.0-alpha.7` through `aec version`.
+The project and CLI report the current release as `1.4.0-alpha.8` through `aec version`.
 
 ## Approved development decisions
 
@@ -68,7 +69,7 @@ below.
 | Harness | macOS ARM64 | Windows x64 | Linux ARM64 |
 |---|---|---|---|
 | Codex | ✓ Verified | ⚠ Not verified | ⚠ Not verified |
-| GitHub Copilot | ⚠ Alpha, not verified | ⚠ Alpha, not verified | ⚠ Not verified |
+| GitHub Copilot | ⚠ Alpha, not verified | ⚠ Alpha, not verified | ⚠ Alpha, not verified |
 | Claude | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 | Gemini | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 
@@ -76,9 +77,9 @@ below.
 ⚠ means it has not. The passing Windows build and isolated installer CI test do
 not verify AEC against a real Windows Codex harness.
 
-Copilot's macOS and Windows entries mean its isolated AEC lifecycle is exercised
-on those platforms. They are not evidence that Copilot CLI itself has been
-installed or exercised on either platform.
+Copilot's three platform entries mean its isolated AEC lifecycle is covered on
+those platforms. They are not evidence that Copilot CLI itself has been installed
+or exercised on any platform.
 
 ## version
 
@@ -886,8 +887,9 @@ On an ARM64 Ubuntu 24.04 machine, install Git, the .NET 10 SDK, `clang`, and
 
 The script publishes the ignored `artifacts/aec-linux-arm64/aec` executable.
 The manual-only `.github/workflows/linux-arm64-smoke.yml` workflow builds on an
-Ubuntu 24.04 ARM64 runner and checks `aec version` and `aec help`. The Native
-AOT build and both command checks
+Ubuntu 24.04 ARM64 runner, checks `aec version` and `aec help`, and exercises the
+isolated installer plus complete Copilot AEC lifecycle. The Native AOT build and
+both command checks
 [passed on that runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35409334463).
 
 After building, install the executable for the current user:

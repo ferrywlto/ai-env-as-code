@@ -1,5 +1,21 @@
 # Implementation Checklist
 
+## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
+
+- [x] Extend the existing isolated Linux ARM64 installer test instead of adding
+  an overlapping workflow.
+- [x] Add coverage for Copilot init, in-sync status, runtime-to-repository backup,
+  and committed repository-to-runtime apply through the Native AOT executable.
+- [x] Verify managed files, canonical/runtime byte equality, absence of unmanaged
+  `config.json`, the backup commit subject, and unchanged `HEAD` across apply.
+- [x] Isolate Git identity and commit signing from the runner configuration.
+- [x] Keep Linux warning-marked because the test neither installs nor invokes the
+  actual Copilot CLI harness.
+- [ ] Commit, push, and explicitly run the manual Linux ARM64 workflow.
+
+Immediate next work: obtain macOS and Linux workflow evidence before beginning
+the deferred v2 provider-first API migration.
+
 ## v1.4.0-alpha.7 — Copilot macOS Native AOT lifecycle
 
 - [x] Extend the existing isolated macOS ARM64 installer test instead of adding
@@ -124,7 +140,7 @@ aec copilot init|status|backup|apply ...
 - [ ] Remove legacy command forms without compatibility aliases.
 - [ ] Update installers, generated uninstallers, skills, documentation, and tests.
 - [ ] Validate the complete Copilot lifecycle through isolated macOS and Linux
-  ARM64 workflows. Windows has passed; macOS is the current slice.
+  ARM64 workflows. Windows has passed; both implementations await workflow runs.
 
 ## v1.4.0-alpha.1 — Copilot macOS initialization
 

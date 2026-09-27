@@ -89,22 +89,75 @@ fi
 [ -x "$uninstaller" ] || fail "failed runtime cleanup removed the helper"
 
 # Use the real AEC binary to create managed state in an isolated Codex home.
-# Process-only Git identity variables avoid changing global Git configuration.
+# A private Git configuration supplies CI identity and disables signing without
+# reading or changing the runner's or developer's personal Git configuration.
 codex_home="$test_root/codex-home"
 mkdir -p "$codex_home"
 printf 'Personal instructions\n' >"$codex_home/AGENTS.md"
 printf 'personality = "none"\n' >"$codex_home/config.toml"
 data_repo="$test_root/aec-data"
-export GIT_AUTHOR_NAME='AEC Installer Test'
-export GIT_AUTHOR_EMAIL='aec-installer-test@example.invalid'
-export GIT_COMMITTER_NAME='AEC Installer Test'
-export GIT_COMMITTER_EMAIL='aec-installer-test@example.invalid'
+git_config="$test_root/gitconfig"
+printf '%s\n' \
+  '[user]' \
+  '    name = AEC Linux Smoke' \
+  '    email = aec-linux-smoke@example.invalid' \
+  '[commit]' \
+  '    gpgSign = false' >"$git_config"
+export GIT_CONFIG_GLOBAL="$git_config"
+export GIT_CONFIG_NOSYSTEM=1
 "$custom_target" init --repo "$data_repo" --codex-home "$codex_home" >/dev/null
 [ -f "$codex_home/skills/aec/SKILL.md" ] || fail "AEC skill was not installed"
 grep -F '<!-- AEC:BEGIN' "$codex_home/AGENTS.md" >/dev/null || fail "managed block was not installed"
 canonical="$data_repo/environment/providers/codex/AGENTS.md"
 canonical_hash=$(sha256sum "$canonical")
 config_hash=$(sha256sum "$codex_home/config.toml")
+
+# Exercise Copilot's complete directional lifecycle through the same Linux
+# Native AOT binary without installing or invoking Copilot CLI on the runner.
+copilot_home="$test_root/copilot-home"
+runtime_copilot="$copilot_home/copilot-instructions.md"
+canonical_copilot="$data_repo/environment/providers/copilot/copilot-instructions.md"
+copilot_skill="$copilot_home/skills/aec/SKILL.md"
+mkdir -p "$copilot_home"
+printf 'Personal Copilot instructions\n' >"$runtime_copilot"
+"$custom_target" init --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" >/dev/null
+
+[ -f "$canonical_copilot" ] || fail "canonical Copilot instructions were not created"
+[ -f "$copilot_skill" ] || fail "Copilot AEC skill was not installed"
+cmp -s "$canonical_copilot" "$runtime_copilot" || fail "Copilot runtime and canonical instructions differ"
+grep -F '<!-- AEC:COPILOT:BEGIN' "$runtime_copilot" >/dev/null || fail "Copilot managed block was not installed"
+[ ! -e "$copilot_home/config.json" ] || fail "Copilot initialization created unmanaged config.json"
+
+"$custom_target" status --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
+  >"$test_root/copilot-status"
+[ "$(cat "$test_root/copilot-status")" = 'copilot/copilot-instructions.md in_sync' ] || \
+  fail "Copilot status did not report in_sync"
+
+# Backup must capture runtime drift in the canonical source and create the
+# documented source-of-truth commit.
+printf '\nLinux backup drift\n' >>"$runtime_copilot"
+"$custom_target" backup --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
+  >"$test_root/copilot-backup"
+grep -E '^committed [0-9a-f]+$' "$test_root/copilot-backup" >/dev/null || \
+  fail "Copilot backup did not report its commit"
+cmp -s "$canonical_copilot" "$runtime_copilot" || fail "Copilot backup did not capture runtime bytes"
+[ "$(git -C "$data_repo" log -1 --format=%s)" = 'Backup Copilot instructions' ] || \
+  fail "Copilot backup used an unexpected commit subject"
+
+# Apply must restore committed bytes without moving the repository's HEAD.
+head_before_apply=$(git -C "$data_repo" rev-parse HEAD)
+printf 'Linux apply drift\n' >>"$runtime_copilot"
+"$custom_target" apply --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
+  >"$test_root/copilot-apply"
+[ "$(cat "$test_root/copilot-apply")" = 'applied' ] || fail "Copilot apply did not report applied"
+cmp -s "$canonical_copilot" "$runtime_copilot" || fail "Copilot apply did not restore canonical bytes"
+[ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || \
+  fail "Copilot apply changed repository HEAD"
+
+"$custom_target" status --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
+  >"$test_root/copilot-final-status"
+[ "$(cat "$test_root/copilot-final-status")" = 'copilot/copilot-instructions.md in_sync' ] || \
+  fail "Copilot status did not return to in_sync after apply"
 
 "$uninstaller" --codex-home "$codex_home" >/dev/null
 [ ! -e "$custom_target" ] || fail "uninstall left the custom executable"
