@@ -1,8 +1,10 @@
 # AI Environment as Code
 
-Version 1.4.0-alpha.8 adds Copilot's complete directional lifecycle to the
-isolated Linux ARM64 Native AOT workflow, matching the macOS and Windows coverage.
-Copilot remains alpha and is not verified against the real harness on any platform.
+Version 2.0.0-alpha.1 begins shared-instruction development with an internal,
+deterministic composition function. The existing CLI commands are unchanged;
+shared-source enrollment and deployment are not yet available. See the
+[approved design](docs/shared-instructions-design.md). Copilot remains alpha
+and is not verified against the real harness on any platform.
 
 ## Version history
 
@@ -41,8 +43,9 @@ Copilot remains alpha and is not verified against the real harness on any platfo
 | 1.4.0-alpha.6 | Apply committed canonical Copilot instructions to the local runtime |
 | 1.4.0-alpha.7 | Exercise the complete Copilot lifecycle in an isolated macOS ARM64 workflow |
 | 1.4.0-alpha.8 | Add the complete Copilot lifecycle to the isolated Linux ARM64 workflow |
+| 2.0.0-alpha.1 | Add internal shared-instruction composition without changing runtime commands |
 
-The project and CLI report the current release as `1.4.0-alpha.8` through `aec version`.
+The development CLI reports `2.0.0-alpha.1` through `aec version`.
 
 ## Approved development decisions
 

@@ -1,5 +1,25 @@
 # Implementation Checklist
 
+## 2.0 development — shared instructions first
+
+- [x] Create `development/2.0` from the completed platform lifecycle work.
+- [x] Record the approved policy split and lazy enrollment in
+  [the shared-instruction design](docs/shared-instructions-design.md).
+- [x] Implement deterministic in-memory composition using explicitly selected inputs.
+- [x] Verify focused composition and version tests: 23 passed; product build
+  succeeded with zero warnings or errors.
+- [x] Review the [composed Codex/Copilot examples](docs/shared-instructions-preview.md)
+  with the user; the shared approval and access policy and distinct provider
+  overlays were approved.
+- [ ] Resolve rendered-output target paths and safe backup attribution before
+  integrating enrollment or runtime deployment.
+- [ ] Enroll only the explicitly used platform and harness; preserve existing
+  enrolled data and manual ChatGPT files.
+
+Immediate next work: decide output paths and safe backup attribution before
+repository integration. The internal composition increment is `2.0.0-alpha.1`;
+CLI migration follows shared-instruction contract review.
+
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 
 - [x] Extend the existing isolated Linux ARM64 installer test instead of adding
@@ -131,8 +151,11 @@ warning-marked Windows harness status until the real CLI is available.
 
 ## Deferred v2 public API change
 
-After Copilot `status`, `backup`, and `apply` are complete, release the breaking
-provider-first command contract as `2.0.0-alpha.1`:
+Shared-instruction composition and enrollment decisions now precede this work.
+The provider-first syntax below remains a proposal pending that design review.
+
+After shared-instruction contract review, introduce the breaking provider-first
+command contract in a subsequent 2.0 alpha increment:
 
 ```text
 aec codex init|status|backup|apply ...
