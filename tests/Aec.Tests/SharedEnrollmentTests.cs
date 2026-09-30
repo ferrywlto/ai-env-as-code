@@ -211,10 +211,7 @@ public sealed class SharedEnrollmentTests
 
         public void Dispose()
         {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
+            TestDirectoryCleanup.Delete(root);
         }
     }
 }

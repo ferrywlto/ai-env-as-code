@@ -101,14 +101,16 @@ The tests provide narrower evidence than this harness matrix:
 
 | Test layer | Where it runs | What it proves |
 |---|---|---|
-| xUnit | Local macOS ARM64 today; configured for each OS workflow's next manual run | Command logic against disposable files and real temporary Git repositories on the host OS; not cross-platform emulation |
+| xUnit | Local macOS ARM64 and manually dispatched OS runners | Command logic against disposable files and real temporary Git repositories on the host OS; not cross-platform emulation |
 | Native AOT smoke | Manually dispatched macOS, Windows, and Linux GitHub Actions OS runners | Built executable and isolated install/lifecycle flows on those operating systems; no container is declared |
 | Real harness | A machine with the actual harness installed | So far, only local Codex on macOS has been verified |
 
-The three manually dispatched workflows now include focused composition,
-section, and `render` xUnit tests. This change has passed locally on macOS;
-the updated workflows have **not yet been run remotely**, and their Native AOT
-steps do not directly invoke `aec render`.
+The three manually dispatched workflows include focused composition, section,
+`render`, and enrollment xUnit tests. The [macOS ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570129)
+and [Linux ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570825)
+runs passed. The [Windows x64 run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786568936)
+failed in test-fixture cleanup; its Native AOT and installer steps were skipped.
+Native AOT smoke does not yet directly invoke `aec render`.
 
 ## Read more
 

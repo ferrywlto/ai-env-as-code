@@ -49,11 +49,20 @@
   and validate both skill frontmatter blocks and all three workflow YAML files.
   The skill-creator validator cannot start without PyYAML; frontmatter was
   parsed independently with Ruby.
-- [ ] After separate push and workflow-run approval, verify those tests on
-  all three OS runners; Native AOT `aec render` smoke remains a later slice.
+- [x] Dispatch all three workflows against `4223f0e`: [macOS ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570129)
+  and [Linux ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570825)
+  passed focused tests, Native AOT build, and isolated smoke checks.
+- [ ] Resolve the [Windows x64 run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786568936):
+  14/41 focused tests failed during fixture `Dispose()` with
+  `UnauthorizedAccessException` from recursive deletion of temporary Git
+  repositories. The Native AOT and installer steps were skipped. A narrow
+  test-only cleanup fix passed the same 41/41 focused tests locally on macOS;
+  it needs a Windows rerun before verification. Do not
+  count the failed run as a product-command failure or Windows verification.
+- [ ] Add Native AOT `aec render` smoke in a later slice.
 
-Immediate next work: review the opt-in enrollment slice. After separate commit,
-push, and workflow-run approvals, validate it on the three OS runners. Then add
+Immediate next work: rerun the Windows workflow with the fixture cleanup fix.
+After Windows validation, add
 committed target validation one directional command at a time. The current
 `status`, `backup`, and `apply` still follow the 1.x provider-specific file
 contract.
