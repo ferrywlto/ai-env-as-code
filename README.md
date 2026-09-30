@@ -73,12 +73,14 @@ The tests provide narrower evidence than this harness matrix:
 
 | Test layer | Where it runs | What it proves |
 |---|---|---|
-| xUnit | The developer's current OS and filesystem | Command logic against disposable files and real temporary Git repositories; not cross-platform emulation |
+| xUnit | Local macOS ARM64 today; configured for each OS workflow's next manual run | Command logic against disposable files and real temporary Git repositories on the host OS; not cross-platform emulation |
 | Native AOT smoke | Manually dispatched macOS, Windows, and Linux GitHub Actions OS runners | Built executable and isolated install/lifecycle flows on those operating systems; no container is declared |
 | Real harness | A machine with the actual harness installed | So far, only local Codex on macOS has been verified |
 
-The current OS smoke workflows do **not** run `dotnet test` or exercise the new
-`render` flow. Cross-platform `render` test coverage remains a future increment.
+The three manually dispatched workflows now include focused composition,
+section, and `render` xUnit tests. This change has passed locally on macOS;
+the updated workflows have **not yet been run remotely**, and their Native AOT
+steps do not directly invoke `aec render`.
 
 ## Read more
 

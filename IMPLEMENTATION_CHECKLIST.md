@@ -7,7 +7,7 @@
 - [x] Make source ownership, lazy enrollment, alignment, and planned backup
   attribution visual in the [design](docs/shared-instructions-design.md).
 - [x] Distinguish local xUnit, OS-runner Native AOT smoke, and real-harness
-  verification; document that CI does not yet run xUnit or `render`.
+  verification without treating test configuration as a remote pass.
 - [x] Create `development/2.0` from the completed platform lifecycle work.
 - [x] Record the approved policy split and lazy enrollment in
   [the shared-instruction design](docs/shared-instructions-design.md).
@@ -33,13 +33,17 @@
 - [ ] Integrate committed target validation with `status`, `backup`, and `apply`.
 - [ ] Enroll only the explicitly used platform and harness; preserve existing
   enrolled data and manual ChatGPT files.
-- [ ] Add xUnit and `render` coverage to each OS workflow as a separate
-  approved validation increment.
+- [x] Add focused composition, section, and `render` xUnit tests to each
+  manually dispatched macOS ARM64, Windows x64, and Linux ARM64 workflow;
+  local Release scope passed 31/31 and all three YAML files parse.
+- [ ] After separate push and workflow-run approval, verify those tests on
+  all three OS runners; Native AOT `aec render` smoke remains a later slice.
 
-Immediate next work: add explicit current-platform/provider target enrollment,
-then integrate committed target validation into one directional command at a
-time. The current `status`, `backup`, and `apply` still follow the 1.x
-provider-specific file contract.
+Immediate next work: review the focused OS workflow changes, then separately
+approve any commit, push, and remote dispatch. After validation, add explicit
+current-platform/provider target enrollment and integrate committed target
+validation one directional command at a time. The current `status`, `backup`,
+and `apply` still follow the 1.x provider-specific file contract.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

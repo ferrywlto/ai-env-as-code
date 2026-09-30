@@ -22,6 +22,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git fetch failed.' }
           git checkout --detach FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { throw 'git checkout failed.' }
+      - name: Test shared-instruction rendering on Windows x64
+        shell: pwsh
+        run: |
+          dotnet test tests/Aec.Tests/Aec.Tests.csproj `
+            --configuration Release `
+            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests' `
+            --blame-hang --blame-hang-timeout 30s --blame-hang-dump-type none
+          if ($LASTEXITCODE -ne 0) { throw 'Shared-instruction tests failed.' }
       - name: Build Native AOT executable
         shell: pwsh
         run: ./scripts/build-win-x64.ps1
