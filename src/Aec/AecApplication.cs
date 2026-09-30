@@ -32,6 +32,8 @@ public static class AecApplication
             return args[0] switch
             {
                 "version" => RunVersion(args, output),
+                "render" => RenderCommand.Run(
+                    RequireAbsolutePath(ParseRenderRepository(args), "--repo"), output),
                 "skill" => RunSkill(args, output),
                 "uninstall" => RunUninstall(ParseCodexHomeArguments(args, 1), output),
                 "status" => RunStatus(ParseProviderRepositoryArguments(args, "status"), output),
@@ -270,6 +272,27 @@ public static class AecApplication
         }
 
         return new RepositoryOptions(repository, codexHome);
+    }
+
+    private static string ParseRenderRepository(string[] args)
+    {
+        if (args.Length == 1)
+        {
+            throw new ArgumentException(
+                "render requires --repo with the source-of-truth data repository.");
+        }
+
+        if (args.Length != 3 || args[1] != "--repo")
+        {
+            throw new ArgumentException($"Unknown render argument: {args[1]}");
+        }
+
+        if (args[2].StartsWith("--", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("--repo requires a value.");
+        }
+
+        return args[2];
     }
 
     private static ProviderRepositoryOptions ParseProviderRepositoryArguments(
@@ -736,6 +759,7 @@ public static class AecApplication
             Usage:
               aec help
               aec version
+              aec render --repo ABSOLUTE_PATH
               aec skill upgrade [--codex-home ABSOLUTE_PATH]
               aec uninstall [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]

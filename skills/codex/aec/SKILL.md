@@ -31,6 +31,20 @@ checkout as a fallback. Use only the following operations.
 If the requested data-flow direction is unclear, run `status` and ask the user to
 choose. Never invent an automatic `sync` operation.
 
+## Shared instructions (2.0 development)
+
+For a requested preference change across enrolled local harnesses, propose the
+authored source that owns it: shared instructions for common behaviour, platform
+policy for approved local paths, or a provider overlay for harness mechanics.
+Show the affected target files before editing. After the approved source edit,
+run `aec render --repo ABSOLUTE_PATH` to regenerate the current platform's
+enrolled canonical targets; review the source and target changes together and
+obtain explicit approval before committing them.
+`render` changes no runtime and creates no commit. The current `apply` and
+`backup` commands still use their 1.x canonical paths, so do not claim a rendered
+target was deployed. If v2 target enrollment is absent, stop this workflow and
+explain that cross-harness deployment is not available yet.
+
 ## Upgrade installed skill guidance
 
 After the latest AEC executable has been built and installed, run only with the
@@ -138,8 +152,9 @@ The selected Copilot home is explicit `--copilot-home`, then absolute
 `COPILOT_HOME`, then `~/.copilot`. This alpha command creates or reconciles the
 native `copilot-instructions.md`, its canonical provider copy, and the Copilot
 `skills/aec/SKILL.md`. It does not manage `config.json`, stage, commit, push, or
-invoke Copilot. Copilot `status`, `backup`, `apply`, `uninstall`, and skill upgrade
-are not yet available; do not substitute Codex commands or flags.
+invoke Copilot. Copilot `status`, `backup`, and `apply` require the same explicit
+`--provider=copilot` selection; Copilot `uninstall` and skill upgrade are not yet
+available. Do not substitute Codex commands or flags.
 
 ## Back up runtime to Git
 

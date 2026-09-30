@@ -9,7 +9,23 @@ Use this skill only when the user explicitly requests initialization, status,
 backup, or apply of their local GitHub Copilot CLI instructions through AEC.
 
 The user must select the AEC data repository explicitly. Never infer it from the
-current directory, the executable, or the skill location. Run:
+current directory, the executable, or the skill location.
+
+## Shared instructions (2.0 development)
+
+For a requested preference change across enrolled local harnesses, propose the
+authored source that owns it: shared instructions for common behaviour, platform
+policy for approved local paths, or a provider overlay for harness mechanics.
+Show the affected target files before editing. After the approved source edit,
+run `aec render --repo ABSOLUTE_PATH` to regenerate the current platform's
+enrolled canonical targets; review the source and target changes together and
+obtain explicit approval before committing them.
+`render` changes no runtime and creates no commit. The current `apply` and
+`backup` commands still use their 1.x canonical paths, so do not claim a rendered
+target was deployed. If v2 target enrollment is absent, stop this workflow and
+explain that cross-harness deployment is not available yet.
+
+For ordinary Copilot initialization, run:
 
 ```text
 aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]

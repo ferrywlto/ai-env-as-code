@@ -17,7 +17,8 @@ internal static class AecSkillInstaller
             [
                 "7bfd08be9c22c7efd1dfec14d75ae9060ce7bd69ec288d517477681b9cd394e9",
                 "adfaa1f7037cf68484693215e59d988e4c1e5f90d72ed9fc55a14ff4df83d314",
-                "2be86f3a85f8daae019da03d7d8977b82a2dd4b641d0b67b95c27aa4351b23f2"
+                "2be86f3a85f8daae019da03d7d8977b82a2dd4b641d0b67b95c27aa4351b23f2",
+                "bf6b4f2f8c7d5fe6c249dc95d0bf77d8f038db8615d48c8ba2e1a97b7146d179"
             ])
     ];
 
@@ -37,7 +38,8 @@ internal static class AecSkillInstaller
                 "60754cc941dbfaf17042c4eb4093c9706ea0054c526001f096da2fc4a795aec9",
                 "af5dd269b6807429d4c6079bcc79340c2c10f2bac8e91f52383fd8d7b766581f",
                 "2924f13eb5d90cd088642533461de6f37fa99c73ce94ba95b395ae5f1cd7b535",
-                "6181d99ddde36b53ed3007066ec716369f46a84c2067e58337f152005865f352"
+                "6181d99ddde36b53ed3007066ec716369f46a84c2067e58337f152005865f352",
+                "38c275ecae9f400ff6ce149620889b72d09c04087184ab8d5971f72f62e5a26d"
             ]),
         new(
             Path.Combine(AgentsDirectoryName, OpenAiFileName),
