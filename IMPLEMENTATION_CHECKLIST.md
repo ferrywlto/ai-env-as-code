@@ -2,6 +2,12 @@
 
 ## 2.0 development — shared instructions first
 
+- [x] Make the README diagram-first and move detailed command, release, build,
+  and troubleshooting material to [the reference](docs/reference.md).
+- [x] Make source ownership, lazy enrollment, alignment, and planned backup
+  attribution visual in the [design](docs/shared-instructions-design.md).
+- [x] Distinguish local xUnit, OS-runner Native AOT smoke, and real-harness
+  verification; document that CI does not yet run xUnit or `render`.
 - [x] Create `development/2.0` from the completed platform lifecycle work.
 - [x] Record the approved policy split and lazy enrollment in
   [the shared-instruction design](docs/shared-instructions-design.md).
@@ -11,14 +17,29 @@
 - [x] Review the [composed Codex/Copilot examples](docs/shared-instructions-preview.md)
   with the user; the shared approval and access policy and distinct provider
   overlays were approved.
-- [ ] Resolve rendered-output target paths and safe backup attribution before
-  integrating enrollment or runtime deployment.
+- [x] Document `aec render`, portable per-platform/provider target paths, local
+  AEC block generation, and single-section backup attribution.
+- [x] Implement AEC-owned section boundaries and safe extraction.
+- [x] Implement repository-only `aec render` for explicitly enrolled current-platform
+  target directories; do not create unused targets or touch runtime/Git history.
+- [x] Run focused section, render, and version tests (10 passed).
+- [x] Update both bundled skills to classify approved shared, platform, and
+  provider changes and route enrolled targets through render; explicitly warn
+  that legacy apply does not deploy the rendered targets yet.
+- [x] Validate focused upgrade and Copilot init tests (41 passed), product build
+  (zero warnings/errors), whitespace checks, and both skill YAML frontmatter
+  blocks. The skill-creator validator could not run because PyYAML is absent
+  from the installed Python runtimes.
+- [ ] Integrate committed target validation with `status`, `backup`, and `apply`.
 - [ ] Enroll only the explicitly used platform and harness; preserve existing
   enrolled data and manual ChatGPT files.
+- [ ] Add xUnit and `render` coverage to each OS workflow as a separate
+  approved validation increment.
 
-Immediate next work: decide output paths and safe backup attribution before
-repository integration. The internal composition increment is `2.0.0-alpha.1`;
-CLI migration follows shared-instruction contract review.
+Immediate next work: add explicit current-platform/provider target enrollment,
+then integrate committed target validation into one directional command at a
+time. The current `status`, `backup`, and `apply` still follow the 1.x
+provider-specific file contract.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 
