@@ -33,10 +33,21 @@ choose. Never invent an automatic `sync` operation.
 
 ## Shared instructions (2.0 development)
 
-For a requested preference change across enrolled local harnesses, propose the
-authored source that owns it: shared instructions for common behaviour, platform
-policy for approved local paths, or a provider overlay for harness mechanics.
-Show the affected target files before editing. After the approved source edit,
+Help the user classify each rule by scope: all enrolled harnesses belong in shared
+instructions, local paths or OS rules in platform policy, and one harness's
+mechanics in its provider overlay. Never infer this split from an existing
+`AGENTS.md`; show a proposed split for review first.
+
+After the user has reviewed and committed all three authored source files,
+explicitly enroll Codex on the current platform only when authorized:
+
+```text
+aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
+```
+
+This creates only the portable Codex target. It does not edit runtime, commit,
+push, or replace the legacy init flow. Review the target before a separate
+commit. For later approved source changes, show affected target files, then
 run `aec render --repo ABSOLUTE_PATH` to regenerate the current platform's
 enrolled canonical targets; review the source and target changes together and
 obtain explicit approval before committing them.

@@ -23,7 +23,7 @@ across harnesses do not guarantee identical model behaviour.
 ```mermaid
 flowchart TD
     Request[Requested instruction change] --> Scope{Where should it apply?}
-    Scope -->|Every harness and platform| Shared[Shared instructions]
+    Scope -->|Every enrolled harness and platform| Shared[Shared instructions]
     Scope -->|This platform's paths or permissions| Platform[Platform policy]
     Scope -->|One harness's mechanics| Provider[Provider overlay]
     Scope -->|AEC repository binding or command guidance| Control[AEC-generated block]
@@ -51,14 +51,16 @@ and worker mechanics. Do not invent Copilot mappings or discard unclassified tex
 
 ```mermaid
 flowchart TD
-    Select[Select the current platform and provider] --> Init{Explicit provider init?}
-    Init -->|Yes| Create[Create only that platform's and provider's sources and target]
-    Init -->|No| None[Create no enrollment]
-    Pulled[Provider source pulled from another machine] -.->|not proof of enrollment| Init
-    Create --> Keep[Preserve existing enrolled data and manual ChatGPT backups]
+    Legacy[Completed ordinary init and committed provider baseline] --> Split[Review and commit shared, platform and provider sources]
+    Split --> Select[Select the current platform and provider]
+    Select --> Init{Explicit init --enroll-shared?}
+    Init -->|Yes| Create[Create only the selected portable target]
+    Init -->|No| None[Create no target]
+    Pulled[Provider source pulled from another machine] -.->|not local enrollment| Init
+    Create --> Keep[Preserve existing data and manual ChatGPT backups]
 ```
 
-The intended first macOS ARM64 Codex initialization creates only:
+The intended v2 macOS ARM64 Codex source set contains only:
 
 ```text
 environment/
@@ -67,9 +69,11 @@ environment/
 └── providers/codex/overlay.md
 ```
 
-Existing Codex `AGENTS.md` and managed `config.toml` remain migration inputs.
-Initializing Copilot or another platform adds only the selected files. CI
-coverage does not enroll anything in the user's data repository.
+The current opt-in requires these files to exist in a completed repository
+and match committed `HEAD`. It does not create or classify them. Existing Codex
+`AGENTS.md` and managed `config.toml` remain the active legacy files;
+initializing Copilot or another platform enrolls only the selected target.
+CI coverage does not enroll anything in the user's data repository.
 
 ## Alignment workflow
 
@@ -104,9 +108,12 @@ command guidance belong in a generated local runtime block, not the portable
 target. Existing `environment/providers/<provider>/<instruction-file>` files
 remain the active canonical paths until a reviewed migration.
 
-Current `render` treats existing target directories as enrollment. Explicit
-`init` enrollment and committed target-record validation are not implemented
-yet; directory presence alone must not become the final trust rule.
+`init --enroll-shared` now creates the selected target after validating the
+three committed authored sources and the completed legacy AEC repository. It
+does not edit runtime, stage, commit or push. `render` still treats existing
+target directories as enrollment; committed target-record validation remains
+necessary before runtime integration. A pulled target is not proof that its
+harness is installed on the local machine.
 
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
@@ -148,8 +155,9 @@ and stale baselines stop. Safe reverse mapping is **not implemented yet**.
 flowchart LR
     Compose[In-memory composition] --> Sections[Exact source section markers]
     Sections --> Render[Repository-only render]
-    Render -.->|next| Enrollment[Explicit target enrollment]
-    Enrollment -.->|later| Directional[Status, backup and apply integration]
+    Render --> Enrollment[Opt-in target enrollment]
+    Enrollment -.->|next| Validation[Committed target validation]
+    Validation -.->|later| Directional[Status, backup and apply integration]
 ```
 
 A small .NET BCL composition function accepts explicitly supplied shared,
@@ -170,5 +178,5 @@ reverse mapping through `backup` remain separate increments.
 
 The approved rendered Codex/Copilot example confirms that shared approval and
 access policy are retained while provider-only instructions stay scoped. The
-next increment is explicit current-platform/provider enrollment; until then,
-the existing provider-specific canonical files remain the deployment source.
+next increment is committed target validation; existing provider-specific
+canonical files remain the deployment source until that migration is approved.

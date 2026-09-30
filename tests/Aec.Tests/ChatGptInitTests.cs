@@ -446,17 +446,26 @@ public sealed class ChatGptInitTests
             Usage:
               aec help
               aec version
+              aec render --repo ABSOLUTE_PATH
               aec skill upgrade [--codex-home ABSOLUTE_PATH]
               aec uninstall [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
               aec init --repo ABSOLUTE_PATH --provider=chatgpt
               aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+
+            Shared instruction scope:
+              shared: every enrolled harness
+              platform: local paths or OS rules
+              provider: one harness's mechanics
+            Review and commit authored sources before --enroll-shared; it does not deploy.
             """;
 
         Assert.Equal(0, result.ExitCode);

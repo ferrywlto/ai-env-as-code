@@ -296,7 +296,23 @@ internal static class InitCommand
         return 0;
     }
 
-    private static CompletedSnapshot LoadCompletedRepository(string repository)
+    internal static string ValidateCompletedRepositoryForEnrollment(
+        string repository,
+        string targetRelativePath)
+    {
+        var completed = LoadCompletedRepository(repository, targetRelativePath);
+        if (!AecInstructionBlock.RepositoryPathsEqual(completed.Binding.Repository, repository))
+        {
+            throw new InvalidOperationException(
+                "Canonical Codex instructions are bound to a different data repository.");
+        }
+
+        return completed.Commit;
+    }
+
+    private static CompletedSnapshot LoadCompletedRepository(
+        string repository,
+        string? allowedEnrollmentTarget = null)
     {
         AecApplication.EnsureRealDirectory(repository, "Repository");
         var gitDirectory = Path.Combine(repository, ".git");
@@ -305,7 +321,25 @@ internal static class InitCommand
         EnsureContainedGitMetadata(repository, gitDirectory);
         BackupCommand.ValidateRepository(repository);
         EnsureMainBranch(repository);
-        BackupCommand.EnsureNoChangesOutsideManagedSources(repository);
+        if (allowedEnrollmentTarget is null)
+        {
+            BackupCommand.EnsureNoChangesOutsideManagedSources(repository);
+        }
+        else
+        {
+            // A first enrollment leaves exactly one target uncommitted for review.
+            // A repeat invocation may inspect that same target, but nothing else.
+            var status = GitProcess.RunRequired(
+                repository,
+                "Git could not inspect enrollment changes",
+                "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".",
+                $":(top,exclude,literal){allowedEnrollmentTarget}");
+            if (status.Output.Length != 0)
+            {
+                throw new InvalidOperationException(
+                    "Repository has changes outside the selected enrollment target.");
+            }
+        }
 
         var commit = ApplyCommand.ResolveHeadCommit(repository);
         var content = ApplyCommand.ReadCommittedSource(repository, commit);

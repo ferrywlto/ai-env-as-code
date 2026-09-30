@@ -186,6 +186,15 @@ public static class AecApplication
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
 
+        if (options.EnrollShared)
+        {
+            var provider = options.Provider ?? "codex";
+            var providerHome = provider == "copilot"
+                ? ResolveCopilotHome(options.CopilotHome)
+                : ResolveCodexHome(options.CodexHome);
+            return SharedEnrollmentCommand.Run(repository, provider, providerHome, output);
+        }
+
         // ChatGPT has no local runtime. Copilot is a local provider and needs its
         // explicit runtime home only for this provider-specific initialization flow.
         if (options.Provider == "chatgpt")
@@ -383,6 +392,7 @@ public static class AecApplication
         string? codexHome = null;
         string? provider = null;
         var forcePathChange = false;
+        var enrollShared = false;
         string? copilotHome = null;
 
         for (var index = 1; index < args.Length; index++)
@@ -449,6 +459,17 @@ public static class AecApplication
                 continue;
             }
 
+            if (argument == "--enroll-shared")
+            {
+                if (enrollShared)
+                {
+                    throw new ArgumentException("--enroll-shared may be specified only once.");
+                }
+
+                enrollShared = true;
+                continue;
+            }
+
             if (argument.StartsWith("--", StringComparison.Ordinal))
             {
                 throw new ArgumentException($"Unknown argument: {argument}");
@@ -489,12 +510,25 @@ public static class AecApplication
                 "--force-path-change is not valid with --provider initialization.");
         }
 
+        if (enrollShared && forcePathChange)
+        {
+            throw new ArgumentException(
+                "--enroll-shared cannot be combined with --force-path-change.");
+        }
+
+        if (enrollShared && provider == "chatgpt")
+        {
+            throw new ArgumentException(
+                "--enroll-shared supports only local Codex or Copilot providers.");
+        }
+
         return new InitOptions(
             repository,
             codexHome,
             copilotHome,
             provider,
-            forcePathChange);
+            forcePathChange,
+            enrollShared);
     }
 
     private static CodexHomeOptions ParseCodexHomeArguments(string[] args, int startIndex)
@@ -765,12 +799,20 @@ public static class AecApplication
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
               aec init --repo ABSOLUTE_PATH --provider=chatgpt
               aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+
+            Shared instruction scope:
+              shared: every enrolled harness
+              platform: local paths or OS rules
+              provider: one harness's mechanics
+            Review and commit authored sources before --enroll-shared; it does not deploy.
             """;
 
         output.WriteLine(usage.ReplaceLineEndings(output.NewLine));
@@ -805,5 +847,6 @@ public static class AecApplication
         string? CodexHome,
         string? CopilotHome,
         string? Provider,
-        bool ForcePathChange);
+        bool ForcePathChange,
+        bool EnrollShared);
 }

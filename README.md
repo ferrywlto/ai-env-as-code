@@ -21,7 +21,8 @@ flowchart LR
 deploys committed repository content to runtime. `status` only inspects drift.
 The commands have separate directions; there is no automatic `sync`.
 
-The 2.0.0-alpha.2 development branch adds a separate, **repository-only** step:
+The 2.0.0-alpha.3 development branch adds **repository-only** enrollment and
+rendering:
 
 ```mermaid
 flowchart LR
@@ -32,9 +33,36 @@ flowchart LR
     Targets -.->|not yet connected to apply| Runtime[Local harness]
 ```
 
-`render` changes neither runtime nor Git history. Existing `init`, `status`,
+`render` changes neither runtime nor Git history. The new
+`init --enroll-shared` creates one selected target from reviewed, committed
+sources without changing runtime or committing. Ordinary `init`, `status`,
 `backup`, and `apply` still use their 1.x provider-specific canonical files;
-target enrollment and runtime integration remain separate increments.
+runtime integration remains a later increment.
+
+## Where should an instruction go?
+
+```mermaid
+flowchart TD
+    Rule[One instruction] --> Scope{Who should follow it?}
+    Scope -->|Every enrolled harness| Shared[Shared instructions]
+    Scope -->|This platform's paths or OS rules| Platform[Platform policy]
+    Scope -->|Only Codex or only Copilot| Provider[Provider overlay]
+```
+
+For example, “ask before committing” is shared; approved local folder paths
+belong to platform policy; a Codex model choice belongs to its overlay. AEC
+does not guess this split from an existing instruction file. Review and commit
+all three authored sources before explicitly enrolling a target:
+
+```text
+environment/shared/instructions.md
+environment/platforms/<current-platform>/policy.md
+environment/providers/<selected-provider>/overlay.md
+```
+
+Then run `aec init --repo ABSOLUTE_PATH --enroll-shared` for Codex, or add
+`--provider=copilot` for Copilot. Review and separately commit the new target.
+This opt-in follows ordinary initialization; it does not deploy the target.
 
 ## Start on Apple-silicon macOS
 

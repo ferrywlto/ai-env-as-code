@@ -5,10 +5,10 @@ For the diagram-first overview, see the [project README](../README.md).
 Shell commands with relative paths assume the engine repository root unless
 their section says otherwise.
 
-Version 2.0.0-alpha.2 adds explicit section boundaries and repository-only
-`aec render` for enrolled local-platform targets. Existing `init`, `status`,
-`backup`, and `apply` still use their 1.x canonical files; shared-source
-enrollment and runtime deployment are later 2.0 increments. See the
+Version 2.0.0-alpha.3 adds opt-in enrollment from reviewed, committed authored
+sources. `aec render` and enrollment are repository-only. Ordinary `init`,
+`status`, `backup`, and `apply` still use their 1.x canonical files; runtime
+deployment of portable targets is a later 2.0 increment. See the
 [approved design](shared-instructions-design.md). Copilot remains alpha
 and is not verified against the real harness on any platform.
 
@@ -51,8 +51,42 @@ and is not verified against the real harness on any platform.
 | 1.4.0-alpha.8 | Add the complete Copilot lifecycle to the isolated Linux ARM64 workflow |
 | 2.0.0-alpha.1 | Add internal shared-instruction composition without changing runtime commands |
 | 2.0.0-alpha.2 | Add section boundaries and repository-only rendering for enrolled targets |
+| 2.0.0-alpha.3 | Enroll one current-platform/provider target from committed authored sources |
 
-The development CLI reports `2.0.0-alpha.2` through `aec version`.
+The development CLI reports `2.0.0-alpha.3` through `aec version`.
+
+## Shared-instruction enrollment (2.0 development)
+
+```mermaid
+flowchart LR
+    Legacy[Complete ordinary init] --> Sources[Review and commit three authored sources]
+    Sources --> Enroll["aec init --enroll-shared"]
+    Enroll --> Target[One portable target for this platform and provider]
+    Target --> Review[Review and separately commit target]
+```
+
+The three sources are `environment/shared/instructions.md` for rules across
+enrolled harnesses, `environment/platforms/<platform>/policy.md` for local paths or OS
+rules, and `environment/providers/<provider>/overlay.md` for one harness's
+mechanics. AEC does not classify existing instructions automatically. An empty
+overlay is valid when reviewed and committed for an enrolled provider.
+
+After the ordinary Codex or Copilot provider initialization is complete and
+the three sources exactly match committed Git files, opt in with one of:
+
+```text
+aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
+aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
+```
+
+The selected provider home and its managed runtime instruction file must exist
+outside the data repository and be bound to it. Enrollment validates the
+completed AEC repository and committed provider baseline, then
+creates only the selected target under
+`environment/targets/<platform>/<provider>/`. It never changes runtime,
+stages, commits, or pushes. A repeat with the same target reports `unchanged`;
+a different existing target is not overwritten. `--force-path-change` and
+`--provider=chatgpt` cannot be combined with `--enroll-shared`.
 
 ## Shared-instruction rendering (2.0 development)
 

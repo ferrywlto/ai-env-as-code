@@ -31,19 +31,32 @@
   blocks. The skill-creator validator could not run because PyYAML is absent
   from the installed Python runtimes.
 - [ ] Integrate committed target validation with `status`, `backup`, and `apply`.
-- [ ] Enroll only the explicitly used platform and harness; preserve existing
+- [x] Enroll only the explicitly used platform and harness; preserve existing
   enrolled data and manual ChatGPT files.
 - [x] Add focused composition, section, and `render` xUnit tests to each
   manually dispatched macOS ARM64, Windows x64, and Linux ARM64 workflow;
-  local Release scope passed 31/31 and all three YAML files parse.
+  local Release scope passed 31/31, all three YAML files parse, and the
+  workflow change was committed as `7d551de` without a push or remote run.
+- [x] Add opt-in `init --enroll-shared` for a completed repository and one
+  selected current-platform Codex or Copilot target. Require the three authored
+  sources and provider baseline to match committed Git; never infer their split,
+  change runtime, commit, or push.
+- [x] Teach the shared/platform/provider choice through a README diagram,
+  `aec help`, bundled skill guidance, and a missing-source error; focused
+  Release coverage passed 83/83 including enrollment, rendering, skill upgrades,
+  and provider init. The exact help-contract test passed separately.
+- [x] Preserve the legacy Codex init lifecycle (82/82 affected init tests passed)
+  and validate both skill frontmatter blocks and all three workflow YAML files.
+  The skill-creator validator cannot start without PyYAML; frontmatter was
+  parsed independently with Ruby.
 - [ ] After separate push and workflow-run approval, verify those tests on
   all three OS runners; Native AOT `aec render` smoke remains a later slice.
 
-Immediate next work: review the focused OS workflow changes, then separately
-approve any commit, push, and remote dispatch. After validation, add explicit
-current-platform/provider target enrollment and integrate committed target
-validation one directional command at a time. The current `status`, `backup`,
-and `apply` still follow the 1.x provider-specific file contract.
+Immediate next work: review the opt-in enrollment slice. After separate commit,
+push, and workflow-run approvals, validate it on the three OS runners. Then add
+committed target validation one directional command at a time. The current
+`status`, `backup`, and `apply` still follow the 1.x provider-specific file
+contract.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

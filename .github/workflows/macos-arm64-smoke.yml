@@ -25,7 +25,7 @@ jobs:
           set -eu
           dotnet test tests/Aec.Tests/Aec.Tests.csproj \
             --configuration Release \
-            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests' \
+            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests' \
             --blame-hang --blame-hang-timeout 30s --blame-hang-dump-type none
       - name: Build Native AOT executable
         shell: bash

@@ -100,7 +100,7 @@ internal static class RenderCommand
         return StrictUtf8.GetString(bytes);
     }
 
-    private static string CurrentPlatform() =>
+    internal static string CurrentPlatform() =>
         (RuntimeInformation.IsOSPlatform(OSPlatform.OSX),
             RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
             RuntimeInformation.ProcessArchitecture) switch
