@@ -108,9 +108,11 @@ The tests provide narrower evidence than this harness matrix:
 The three manually dispatched workflows include focused composition, section,
 `render`, and enrollment xUnit tests. The [macOS ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570129)
 and [Linux ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570825)
-runs passed. The [Windows x64 run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786568936)
-failed in test-fixture cleanup; its Native AOT and installer steps were skipped.
-Native AOT smoke does not yet directly invoke `aec render`.
+runs passed. After a test-fixture cleanup fix, the
+[Windows x64 rerun](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36789513384)
+passed 41/41 focused tests, Native AOT build, and isolated smoke checks.
+Native AOT smoke does not yet directly invoke `aec render`; only local Codex
+on macOS has real-harness verification.
 
 ## Read more
 
