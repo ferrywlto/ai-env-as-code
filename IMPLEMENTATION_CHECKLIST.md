@@ -58,12 +58,18 @@
   passed 41/41 focused tests, Native AOT build, command dispatch, and isolated
   installer/uninstaller checks. This is OS-runner evidence, not real-harness
   verification.
+- [x] Add Git-host-agnostic remote/default-branch preflight to both bundled
+  skills without adding a CLI `sync` command or implicit push. Keep no-remote
+  use local-only with a warning, and pause on ambiguous or divergent Git state.
+- [x] Package the skill guidance as 2.0.0-alpha.4, recognize exact alpha.3
+  predecessor hashes, and pass 42/42 focused Release tests. Both skill YAML
+  frontmatter blocks parse; the skill-creator validator is unavailable because
+  its Python runtime lacks PyYAML. The installed personal skill was not changed.
 - [ ] Add Native AOT `aec render` smoke in a later slice.
 
-Immediate next work: add committed target validation one directional command
-at a time. The current
-`status`, `backup`, and `apply` still follow the 1.x provider-specific file
-contract.
+Immediate next work: review the alpha.4 skill guidance. Committed-target
+validation remains on hold at the user's request; `status`, `backup`, and
+`apply` still follow the 1.x provider-specific file contract.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

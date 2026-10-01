@@ -5,8 +5,8 @@ For the diagram-first overview, see the [project README](../README.md).
 Shell commands with relative paths assume the engine repository root unless
 their section says otherwise.
 
-Version 2.0.0-alpha.3 adds opt-in enrollment from reviewed, committed authored
-sources. `aec render` and enrollment are repository-only. Ordinary `init`,
+Version 2.0.0-alpha.4 adds host-agnostic Git remote preflight guidance to the
+bundled skills. `aec render` and enrollment are repository-only. Ordinary `init`,
 `status`, `backup`, and `apply` still use their 1.x canonical files; runtime
 deployment of portable targets is a later 2.0 increment. See the
 [approved design](shared-instructions-design.md). Copilot remains alpha
@@ -52,8 +52,40 @@ and is not verified against the real harness on any platform.
 | 2.0.0-alpha.1 | Add internal shared-instruction composition without changing runtime commands |
 | 2.0.0-alpha.2 | Add section boundaries and repository-only rendering for enrolled targets |
 | 2.0.0-alpha.3 | Enroll one current-platform/provider target from committed authored sources |
+| 2.0.0-alpha.4 | Guide safe remote preflight and separately approved publication through the bundled skills |
 
-The development CLI reports `2.0.0-alpha.3` through `aec version`.
+The development CLI reports `2.0.0-alpha.4` through `aec version`.
+
+## Git remote transport (skill guidance)
+
+```mermaid
+flowchart TD
+    Repo[Explicit --repo local path] --> Remote{Tracked remote?}
+    Remote -->|No| Local[Warn: local-only AEC]
+    Remote -->|Yes| Default{Current branch is remote default?}
+    Default -->|No or unknown| Pause[Warn and ask; do not switch]
+    Default -->|Yes| Preflight[Fetch and fast-forward only when clean]
+    Local --> Work[Approved AEC action]
+    Preflight --> Work
+    Work -->|If remote-backed commit created| Push[Separately approved push and verification]
+```
+
+The CLI itself never fetches, pulls, or pushes. For a cloned data repository,
+the bundled skills identify the remote through the current branch's upstream
+and query that remote's advertised `HEAD` instead of assuming `origin`, `main`,
+GitHub, or GitLab. Missing or ambiguous tracking, an unreachable remote, a
+dirty/ahead/diverged local branch, or either local or upstream branch differing
+from the remote default pauses remote-backed changes for review. The skill never
+merges, rebases, switches branches, or force-pushes automatically. Before a
+separately approved push, it shows the resolved destination and asks if that
+differs from the fetch remote. A new repository without a remote remains usable
+locally, with an explicit warning that it is not yet shared across machines.
+
+For routine source-first instruction edits, publish an approved commit before
+`aec apply` so another machine can retrieve the same canonical version. Ordinary
+Codex `init` is a known exception: its fixed internal lifecycle commits and
+applies locally before a separately approved external push. `aec status` remains
+a local canonical/runtime comparison, not a remote-status check.
 
 ## Shared-instruction enrollment (2.0 development)
 

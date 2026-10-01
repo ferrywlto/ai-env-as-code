@@ -833,7 +833,7 @@ public sealed class ApplyTests
         var exitCode = AecApplication.Run(["version"], output, error);
 
         Assert.Equal(0, exitCode);
-        Assert.Equal($"2.0.0-alpha.3{Environment.NewLine}", output.ToString());
+        Assert.Equal($"2.0.0-alpha.4{Environment.NewLine}", output.ToString());
         Assert.Empty(error.ToString());
     }
 

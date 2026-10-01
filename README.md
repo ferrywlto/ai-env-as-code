@@ -4,7 +4,8 @@ Version your AI environment, automatically.
 
 AEC is a local .NET CLI that keeps selected AI-harness instructions in an
 explicitly chosen Git data repository. Git history is the source of truth;
-AEC never pushes for you.
+AEC commands never fetch or push. The bundled skills can coordinate Git remote
+checks and an explicitly approved push without depending on GitHub or GitLab.
 
 ## How it works today
 
@@ -21,8 +22,8 @@ flowchart LR
 deploys committed repository content to runtime. `status` only inspects drift.
 The commands have separate directions; there is no automatic `sync`.
 
-The 2.0.0-alpha.3 development branch adds **repository-only** enrollment and
-rendering:
+The 2.0.0-alpha.4 development branch adds **repository-only** enrollment and
+rendering plus Git-remote guidance in the bundled skills:
 
 ```mermaid
 flowchart LR
@@ -86,6 +87,9 @@ aec status --repo /absolute/path/to/aec-data
 ```
 
 Review the changes and history before pushing your data repository to a remote.
+If it has no remote, AEC remains local-only; the skill warns rather than guessing
+where to publish it. For a cloned repository, the skill checks its tracked remote
+and default branch before a canonical change or runtime apply.
 For pulled repositories, path changes, other providers, custom install paths,
 and uninstallation, use the [detailed reference](docs/reference.md).
 
