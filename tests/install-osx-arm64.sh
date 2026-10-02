@@ -170,6 +170,56 @@ assert_file_equals "$canonical_copilot" "$runtime_copilot"
     >"$test_root/copilot-final-status"
 assert_output "$test_root/copilot-status-expected" "$test_root/copilot-final-status"
 
+# Exercise repository-only rendering through the Native AOT executable. The
+# sources and enrolled target are committed first; changing the shared source
+# must update only the target, never runtime files or Git history.
+platform=macos-arm64
+shared_source="$data_repo/environment/shared/instructions.md"
+platform_source="$data_repo/environment/platforms/$platform/policy.md"
+provider_source="$data_repo/environment/providers/codex/overlay.md"
+rendered_target="$data_repo/environment/targets/$platform/codex/AGENTS.md"
+mkdir -p "$(dirname "$shared_source")" "$(dirname "$platform_source")"
+printf '%s\n' 'Shared approval.' >"$shared_source"
+printf '%s\n' 'Local paths.' >"$platform_source"
+printf '%s\n' 'Codex models.' >"$provider_source"
+git -C "$data_repo" add -- environment/shared/instructions.md \
+    "environment/platforms/$platform/policy.md" environment/providers/codex/overlay.md
+git -C "$data_repo" commit -m 'Author smoke instruction sources' >/dev/null
+"$custom_target" init --repo "$data_repo" --codex-home "$codex_home" --enroll-shared \
+    >"$test_root/enroll-output"
+printf 'enrolled environment/targets/%s/codex/AGENTS.md\n' "$platform" >"$test_root/enroll-expected"
+assert_output "$test_root/enroll-expected" "$test_root/enroll-output"
+git -C "$data_repo" add -- "environment/targets/$platform/codex/AGENTS.md"
+git -C "$data_repo" commit -m 'Enroll smoke Codex target' >/dev/null
+
+cp "$codex_home/AGENTS.md" "$test_root/codex-runtime-before-render"
+cp "$codex_home/config.toml" "$test_root/config-before-render"
+cp "$runtime_copilot" "$test_root/copilot-runtime-before-render"
+head_before_render=$(git -C "$data_repo" rev-parse HEAD)
+printf '%s\n' 'Shared approval updated.' >"$shared_source"
+"$custom_target" render --repo "$data_repo" >"$test_root/render-output"
+printf 'rendered environment/targets/%s/codex/AGENTS.md\n' "$platform" >"$test_root/render-expected-output"
+assert_output "$test_root/render-expected-output" "$test_root/render-output"
+printf '%s\n' \
+    '<!-- AEC:SOURCE:SHARED:BEGIN -->' 'Shared approval updated.' '' \
+    '<!-- AEC:SOURCE:SHARED:END -->' '' \
+    '<!-- AEC:SOURCE:PLATFORM:BEGIN -->' 'Local paths.' '' \
+    '<!-- AEC:SOURCE:PLATFORM:END -->' '' \
+    '<!-- AEC:SOURCE:PROVIDER:BEGIN -->' 'Codex models.' '' \
+    >"$test_root/render-expected-content"
+printf '%s' '<!-- AEC:SOURCE:PROVIDER:END -->' >>"$test_root/render-expected-content"
+assert_file_equals "$test_root/render-expected-content" "$rendered_target"
+"$custom_target" render --repo "$data_repo" >"$test_root/render-again-output"
+printf '%s\n' unchanged >"$test_root/render-again-expected"
+assert_output "$test_root/render-again-expected" "$test_root/render-again-output"
+[ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_render" ] || \
+    fail "render changed repository HEAD"
+git -C "$data_repo" diff --cached --quiet || fail "render staged repository changes"
+assert_file_equals "$test_root/codex-runtime-before-render" "$codex_home/AGENTS.md"
+assert_file_equals "$test_root/config-before-render" "$codex_home/config.toml"
+assert_file_equals "$test_root/copilot-runtime-before-render" "$runtime_copilot"
+assert_empty "$data_repo/environment/targets/$platform/copilot"
+
 # A small fake binary makes the generated script's all-or-nothing cleanup testable
 # without changing the actual personal Codex environment.
 fake_source="$test_root/fake-source"
@@ -214,4 +264,4 @@ assert_empty "$fake_uninstaller"
 printf 'uninstall --codex-home %s\n' "$fake_codex_home" >"$test_root/fake-args-expected"
 assert_output "$test_root/fake-args-expected" "$test_root/fake-args"
 
-printf '%s\n' 'installer generated-uninstaller tests passed'
+printf '%s\n' 'macOS installer, AEC lifecycle, and render smoke passed'

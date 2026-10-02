@@ -65,11 +65,18 @@
   predecessor hashes, and pass 42/42 focused Release tests. Both skill YAML
   frontmatter blocks parse; the skill-creator validator is unavailable because
   its Python runtime lacks PyYAML. The installed personal skill was not changed.
-- [ ] Add Native AOT `aec render` smoke in a later slice.
+- [ ] Run the new macOS ARM64 Native AOT `aec render` smoke against a disposable,
+  enrolled Codex target. The test checks exact rendered bytes, idempotence,
+  unchanged Git HEAD/index, untouched Codex/Copilot runtime files, and no unused
+  provider target. Shell syntax checks and 14/14 focused managed tests passed;
+  local AOT execution is blocked by the current Command Line Tools linker
+  rejecting macOS SDK architecture entries. Verify on the macOS CI runner after
+  separate commit, push, and workflow approval.
 
-Immediate next work: review the alpha.4 skill guidance. Committed-target
-validation remains on hold at the user's request; `status`, `backup`, and
-`apply` still follow the 1.x provider-specific file contract.
+Immediate next work: review and verify the macOS Native AOT render smoke on a
+compatible build runner, then choose whether to extend it to Windows/Linux.
+Committed-target validation remains on hold at the user's request; `status`,
+`backup`, and `apply` still follow the 1.x provider-specific file contract.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 
