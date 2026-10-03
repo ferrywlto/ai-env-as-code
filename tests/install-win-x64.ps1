@@ -149,6 +149,65 @@ try {
     $headAfterCopilotApply = git -C $dataRepo rev-parse HEAD
     Assert ($LASTEXITCODE -eq 0 -and $headAfterCopilotApply -ceq $headBeforeCopilotApply) 'Copilot apply changed repository HEAD'
 
+    # Render a committed, enrolled Codex target with the Native AOT executable.
+    # After the source edit, render itself must change only the repository target.
+    $platform = 'windows-x64'
+    $renderedRelative = "environment/targets/$platform/codex/AGENTS.md"
+    $sharedSource = Join-Path $dataRepo 'environment/shared/instructions.md'
+    $platformSource = Join-Path $dataRepo "environment/platforms/$platform/policy.md"
+    $providerSource = Join-Path $dataRepo 'environment/providers/codex/overlay.md'
+    $renderedTarget = Join-Path $dataRepo $renderedRelative
+    $null = New-Item -ItemType Directory -Path (Split-Path -Parent $sharedSource) -Force
+    $null = New-Item -ItemType Directory -Path (Split-Path -Parent $platformSource) -Force
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($sharedSource, "Shared approval.`n", $utf8NoBom)
+    [System.IO.File]::WriteAllText($platformSource, "Local paths.`n", $utf8NoBom)
+    [System.IO.File]::WriteAllText($providerSource, "Codex models.`n", $utf8NoBom)
+    git -C $dataRepo add -- 'environment/shared/instructions.md' "environment/platforms/$platform/policy.md" 'environment/providers/codex/overlay.md'
+    Assert ($LASTEXITCODE -eq 0) 'could not stage authored instruction sources'
+    git -C $dataRepo commit -m 'Author smoke instruction sources' | Out-Null
+    Assert ($LASTEXITCODE -eq 0) 'could not commit authored instruction sources'
+    $enrollOutput = @(& $customTarget init --repo $dataRepo --codex-home $codexHome --enroll-shared)
+    Assert ($LASTEXITCODE -eq 0) 'isolated Codex enrollment failed'
+    Assert ($enrollOutput.Count -eq 1 -and $enrollOutput[0] -ceq "enrolled $renderedRelative") 'unexpected enrollment output'
+    git -C $dataRepo add -- $renderedRelative
+    Assert ($LASTEXITCODE -eq 0) 'could not stage enrolled target'
+    git -C $dataRepo commit -m 'Enroll smoke Codex target' | Out-Null
+    Assert ($LASTEXITCODE -eq 0) 'could not commit enrolled target'
+
+    $headBeforeRender = git -C $dataRepo rev-parse HEAD
+    Assert ($LASTEXITCODE -eq 0) 'could not capture HEAD before render'
+    $codexRuntimeHash = (Get-FileHash -LiteralPath $runtimeAgents -Algorithm SHA256).Hash
+    $configRuntimeHash = (Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash
+    $copilotRuntimeHash = (Get-FileHash -LiteralPath $runtimeCopilotInstructions -Algorithm SHA256).Hash
+    [System.IO.File]::WriteAllText($sharedSource, "Shared approval updated.`n", $utf8NoBom)
+    $renderOutput = @(& $customTarget render --repo $dataRepo)
+    Assert ($LASTEXITCODE -eq 0) 'Native AOT render failed'
+    Assert ($renderOutput.Count -eq 1 -and $renderOutput[0] -ceq "rendered $renderedRelative") 'unexpected render output'
+    $expectedRendered = @(
+        '<!-- AEC:SOURCE:SHARED:BEGIN -->', 'Shared approval updated.', '',
+        '<!-- AEC:SOURCE:SHARED:END -->', '',
+        '<!-- AEC:SOURCE:PLATFORM:BEGIN -->', 'Local paths.', '',
+        '<!-- AEC:SOURCE:PLATFORM:END -->', '',
+        '<!-- AEC:SOURCE:PROVIDER:BEGIN -->', 'Codex models.', '',
+        '<!-- AEC:SOURCE:PROVIDER:END -->'
+    ) -join "`n"
+    $expectedTarget = Join-Path $testRoot 'expected-rendered-target'
+    [System.IO.File]::WriteAllText($expectedTarget, $expectedRendered, $utf8NoBom)
+    $actualRenderedHash = (Get-FileHash -LiteralPath $renderedTarget -Algorithm SHA256).Hash
+    $expectedRenderedHash = (Get-FileHash -LiteralPath $expectedTarget -Algorithm SHA256).Hash
+    Assert ($actualRenderedHash -ceq $expectedRenderedHash) 'rendered target bytes differ'
+    $renderAgainOutput = @(& $customTarget render --repo $dataRepo)
+    Assert ($LASTEXITCODE -eq 0 -and $renderAgainOutput.Count -eq 1 -and $renderAgainOutput[0] -ceq 'unchanged') 'repeat render was not idempotent'
+    $headAfterRender = git -C $dataRepo rev-parse HEAD
+    Assert ($LASTEXITCODE -eq 0 -and $headAfterRender -ceq $headBeforeRender) 'render changed repository HEAD'
+    git -C $dataRepo diff --cached --quiet
+    Assert ($LASTEXITCODE -eq 0) 'render staged repository changes'
+    Assert ((Get-FileHash -LiteralPath $runtimeAgents -Algorithm SHA256).Hash -ceq $codexRuntimeHash) 'render changed Codex runtime instructions'
+    Assert ((Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash -ceq $configRuntimeHash) 'render changed Codex runtime config'
+    Assert ((Get-FileHash -LiteralPath $runtimeCopilotInstructions -Algorithm SHA256).Hash -ceq $copilotRuntimeHash) 'render changed Copilot runtime instructions'
+    Assert (-not (Test-Path -LiteralPath (Join-Path $dataRepo "environment/targets/$platform/copilot"))) 'render created an unused Copilot target'
+
     & $uninstaller -CodexHome $codexHome | Out-Null
     Assert (-not (Test-Path -LiteralPath $customTarget)) 'uninstall left custom binary'
     Assert (-not (Test-Path -LiteralPath $uninstaller)) 'uninstall left helper'
@@ -178,7 +237,7 @@ try {
     Assert (-not (Test-Path -LiteralPath $conflictTarget)) 'conflicting install wrote a binary'
     Assert ([System.IO.File]::ReadAllText($personalHelper) -ceq 'personal script') 'personal script changed'
 
-    Write-Output 'Windows installer lifecycle tests passed'
+    Write-Output 'Windows installer, AEC lifecycle, and render smoke passed'
 } finally {
     $env:LOCALAPPDATA = $originalLocalAppData
     foreach ($name in $gitIdentityNames) {

@@ -65,16 +65,24 @@
   predecessor hashes, and pass 42/42 focused Release tests. Both skill YAML
   frontmatter blocks parse; the skill-creator validator is unavailable because
   its Python runtime lacks PyYAML. The installed personal skill was not changed.
-- [ ] Run the new macOS ARM64 Native AOT `aec render` smoke against a disposable,
+- [x] Run the new macOS ARM64 Native AOT `aec render` smoke against a disposable,
   enrolled Codex target. The test checks exact rendered bytes, idempotence,
   unchanged Git HEAD/index, untouched Codex/Copilot runtime files, and no unused
-  provider target. Shell syntax checks and 14/14 focused managed tests passed;
-  local AOT execution is blocked by the current Command Line Tools linker
-  rejecting macOS SDK architecture entries. Verify on the macOS CI runner after
-  separate commit, push, and workflow approval.
+  provider target. Shell syntax checks and 14/14 focused managed tests passed.
+  The [macOS runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/37075248187)
+  at `4798fe4` passed the focused tests, Native AOT build, command dispatch,
+  and complete isolated lifecycle. The local Command Line Tools linker remains
+  incompatible with current SDK architecture entries; runner success does not
+  validate a real harness or repair the local toolchain.
+- [ ] Run the new Windows x64 Native AOT `aec render` smoke in the existing
+  disposable installer lifecycle. It checks exact target bytes, idempotence,
+  unchanged Git HEAD/index, untouched Codex/Copilot runtime files, and no
+  unused provider target. PowerShell is unavailable on the local macOS host;
+  verify on the manual Windows runner after separate commit, push, and workflow
+  approval.
 
-Immediate next work: review and verify the macOS Native AOT render smoke on a
-compatible build runner, then choose whether to extend it to Windows/Linux.
+Immediate next work: review and verify the Windows x64 Native AOT render smoke,
+then decide whether to cover Linux ARM64 in a separate slice.
 Committed-target validation remains on hold at the user's request; `status`,
 `backup`, and `apply` still follow the 1.x provider-specific file contract.
 
