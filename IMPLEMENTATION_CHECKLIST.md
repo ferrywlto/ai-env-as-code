@@ -81,14 +81,16 @@
   at `7a8987f` passed focused tests, Native AOT build, command dispatch, and
   the complete isolated lifecycle. PowerShell is unavailable on the local
   macOS host; runner success is not real-harness verification.
-- [ ] Run the new Linux ARM64 Native AOT `aec render` smoke in the existing
+- [x] Run the new Linux ARM64 Native AOT `aec render` smoke in the existing
   disposable installer lifecycle. It checks exact target bytes, idempotence,
   unchanged Git HEAD/index, untouched Codex/Copilot runtime files, and no
   unused provider target. Local shell syntax and 14/14 focused managed tests
-  passed; verify the native lifecycle on the manual Linux runner after separate
-  commit, push, and workflow approval.
+  passed. The [Linux runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/37129095970)
+  at `4706008` passed focused tests, Native AOT build, command dispatch, and
+  the complete isolated lifecycle. Runner success is not real-harness verification.
 
-Immediate next work: review and verify the Linux ARM64 Native AOT render smoke.
+Immediate next work: decide whether to resume committed-target validation,
+beginning with read-only `status`.
 Committed-target validation remains on hold at the user's request; `status`,
 `backup`, and `apply` still follow the 1.x provider-specific file contract.
 
