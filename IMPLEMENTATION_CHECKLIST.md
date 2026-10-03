@@ -74,15 +74,16 @@
   and complete isolated lifecycle. The local Command Line Tools linker remains
   incompatible with current SDK architecture entries; runner success does not
   validate a real harness or repair the local toolchain.
-- [ ] Run the new Windows x64 Native AOT `aec render` smoke in the existing
+- [x] Run the new Windows x64 Native AOT `aec render` smoke in the existing
   disposable installer lifecycle. It checks exact target bytes, idempotence,
   unchanged Git HEAD/index, untouched Codex/Copilot runtime files, and no
-  unused provider target. PowerShell is unavailable on the local macOS host;
-  verify on the manual Windows runner after separate commit, push, and workflow
-  approval.
+  unused provider target. The [Windows runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/37120719391)
+  at `7a8987f` passed focused tests, Native AOT build, command dispatch, and
+  the complete isolated lifecycle. PowerShell is unavailable on the local
+  macOS host; runner success is not real-harness verification.
 
-Immediate next work: review and verify the Windows x64 Native AOT render smoke,
-then decide whether to cover Linux ARM64 in a separate slice.
+Immediate next work: decide whether to cover Linux ARM64 Native AOT rendering
+in a separate slice.
 Committed-target validation remains on hold at the user's request; `status`,
 `backup`, and `apply` still follow the 1.x provider-specific file contract.
 
