@@ -159,6 +159,61 @@ cmp -s "$canonical_copilot" "$runtime_copilot" || fail "Copilot apply did not re
 [ "$(cat "$test_root/copilot-final-status")" = 'copilot/copilot-instructions.md in_sync' ] || \
   fail "Copilot status did not return to in_sync after apply"
 
+# Exercise repository-only rendering through the Linux Native AOT executable.
+# Commit the authored sources and enrolled target before changing shared text;
+# render itself must not stage, commit, or write to either runtime home.
+platform=linux-arm64
+shared_source="$data_repo/environment/shared/instructions.md"
+platform_source="$data_repo/environment/platforms/$platform/policy.md"
+provider_source="$data_repo/environment/providers/codex/overlay.md"
+rendered_target="$data_repo/environment/targets/$platform/codex/AGENTS.md"
+mkdir -p "$(dirname "$shared_source")" "$(dirname "$platform_source")"
+printf 'Shared approval.\n' >"$shared_source"
+printf 'Local paths.\n' >"$platform_source"
+printf 'Codex models.\n' >"$provider_source"
+git -C "$data_repo" add -- environment/shared/instructions.md \
+  "environment/platforms/$platform/policy.md" environment/providers/codex/overlay.md
+git -C "$data_repo" commit -m 'Author smoke instruction sources' >/dev/null
+"$custom_target" init --repo "$data_repo" --codex-home "$codex_home" --enroll-shared \
+  >"$test_root/enroll-output"
+printf 'enrolled environment/targets/%s/codex/AGENTS.md\n' "$platform" >"$test_root/enroll-expected"
+cmp -s "$test_root/enroll-expected" "$test_root/enroll-output" || fail "unexpected enrollment output"
+git -C "$data_repo" add -- "environment/targets/$platform/codex/AGENTS.md"
+git -C "$data_repo" commit -m 'Enroll smoke Codex target' >/dev/null
+
+cp "$codex_home/AGENTS.md" "$test_root/codex-runtime-before-render"
+cp "$codex_home/config.toml" "$test_root/config-before-render"
+cp "$runtime_copilot" "$test_root/copilot-runtime-before-render"
+head_before_render=$(git -C "$data_repo" rev-parse HEAD)
+printf 'Shared approval updated.\n' >"$shared_source"
+"$custom_target" render --repo "$data_repo" >"$test_root/render-output"
+printf 'rendered environment/targets/%s/codex/AGENTS.md\n' "$platform" >"$test_root/render-expected-output"
+cmp -s "$test_root/render-expected-output" "$test_root/render-output" || fail "unexpected render output"
+printf '%s\n' \
+  '<!-- AEC:SOURCE:SHARED:BEGIN -->' 'Shared approval updated.' '' \
+  '<!-- AEC:SOURCE:SHARED:END -->' '' \
+  '<!-- AEC:SOURCE:PLATFORM:BEGIN -->' 'Local paths.' '' \
+  '<!-- AEC:SOURCE:PLATFORM:END -->' '' \
+  '<!-- AEC:SOURCE:PROVIDER:BEGIN -->' 'Codex models.' '' \
+  >"$test_root/render-expected-content"
+printf '%s' '<!-- AEC:SOURCE:PROVIDER:END -->' >>"$test_root/render-expected-content"
+cmp -s "$test_root/render-expected-content" "$rendered_target" || fail "rendered target bytes differ"
+"$custom_target" render --repo "$data_repo" >"$test_root/render-again-output"
+printf 'unchanged\n' >"$test_root/render-again-expected"
+cmp -s "$test_root/render-again-expected" "$test_root/render-again-output" || \
+  fail "repeat render was not idempotent"
+[ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_render" ] || \
+  fail "render changed repository HEAD"
+git -C "$data_repo" diff --cached --quiet || fail "render staged repository changes"
+cmp -s "$test_root/codex-runtime-before-render" "$codex_home/AGENTS.md" || \
+  fail "render changed Codex runtime instructions"
+cmp -s "$test_root/config-before-render" "$codex_home/config.toml" || \
+  fail "render changed Codex runtime config"
+cmp -s "$test_root/copilot-runtime-before-render" "$runtime_copilot" || \
+  fail "render changed Copilot runtime instructions"
+[ ! -e "$data_repo/environment/targets/$platform/copilot" ] || \
+  fail "render created an unused Copilot target"
+
 "$uninstaller" --codex-home "$codex_home" >/dev/null
 [ ! -e "$custom_target" ] || fail "uninstall left the custom executable"
 [ ! -e "$uninstaller" ] || fail "uninstall left the helper"
@@ -185,4 +240,4 @@ fi
 [ ! -e "$test_root/conflict/bin/aec" ] || fail "conflicting install wrote a binary"
 grep -F 'Refusing to overwrite non-AEC uninstaller' "$test_root/conflict-error" >/dev/null || fail "conflict was not explained"
 
-printf '%s\n' 'Linux installer lifecycle tests passed'
+printf '%s\n' 'Linux installer, AEC lifecycle, and render smoke passed'
