@@ -111,9 +111,11 @@ remain the active canonical paths until a reviewed migration.
 `init --enroll-shared` now creates the selected target after validating the
 three committed authored sources and the completed legacy AEC repository. It
 does not edit runtime, stage, commit or push. `render` still treats existing
-target directories as enrollment; committed target-record validation remains
-necessary before runtime integration. A pulled target is not proof that its
-harness is installed on the local machine.
+target directories as enrollment. An internal repository-only validator now
+checks one explicitly selected platform/provider target against the three
+committed authored sources and rejects dirty working bytes. It is not wired to
+runtime commands. A pulled target is not proof that its harness is installed
+on the local machine; local activation remains a separate decision.
 
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
@@ -141,8 +143,9 @@ and stale baselines stop. Safe reverse mapping is **not implemented yet**.
 - Do not infer personal access permissions from installation paths.
 - Do not treat provider directory presence as final proof of local harness
   enrollment: a pulled repository can contain providers used only elsewhere.
-- Before runtime integration, implement the target-record and committed-baseline
-  checks described above. The current CLI does not yet support them.
+- Before runtime integration, decide how to establish local harness activation;
+  the internal committed-baseline validator does not provide that proof. The
+  current CLI does not yet use it for `status`, `backup`, or `apply`.
 - Platform policy is sufficient for the current single-machine case. Different
   machines on the same platform may need distinct access roots; defer their
   storage contract until required, rather than claiming platform equals machine.
@@ -156,8 +159,9 @@ flowchart LR
     Compose[In-memory composition] --> Sections[Exact source section markers]
     Sections --> Render[Repository-only render]
     Render --> Enrollment[Opt-in target enrollment]
-    Enrollment -.->|next| Validation[Committed target validation]
-    Validation -.->|later| Directional[Status, backup and apply integration]
+    Enrollment --> Validation[Committed target validation helper]
+    Validation -.->|next decision| Local[Local harness activation]
+    Local -.->|later| Directional[Status, backup and apply integration]
 ```
 
 A small .NET BCL composition function accepts explicitly supplied shared,
@@ -178,5 +182,6 @@ reverse mapping through `backup` remain separate increments.
 
 The approved rendered Codex/Copilot example confirms that shared approval and
 access policy are retained while provider-only instructions stay scoped. The
-next increment is committed target validation; existing provider-specific
-canonical files remain the deployment source until that migration is approved.
+internal validator checks a selected target's committed files and exact rendered
+bytes without reading runtime. Existing provider-specific canonical files remain
+the deployment source until local activation and migration are approved.

@@ -88,11 +88,17 @@
   passed. The [Linux runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/37129095970)
   at `4706008` passed focused tests, Native AOT build, command dispatch, and
   the complete isolated lifecycle. Runner success is not real-harness verification.
+- [x] Add a repository-only committed-target validator for an explicitly selected
+  platform/provider. It requires clean, committed authored inputs and target
+  bytes that exactly match composition; focused tests cover Codex/Copilot clean
+  targets and missing, untracked, stale, staged, and unstaged cases. The focused
+  Release scope passed 22/22 and the product build passed with zero warnings.
+  It does not change `status`, `backup`, `apply`, runtime, or local harness
+  activation.
 
-Immediate next work: decide whether to resume committed-target validation,
-beginning with read-only `status`.
-Committed-target validation remains on hold at the user's request; `status`,
-`backup`, and `apply` still follow the 1.x provider-specific file contract.
+Immediate next work: decide the minimal local harness activation contract before
+wiring committed targets into read-only `status`. `status`, `backup`, and `apply`
+still follow the 1.x provider-specific file contract.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 
