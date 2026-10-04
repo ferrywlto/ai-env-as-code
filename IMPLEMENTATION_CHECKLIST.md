@@ -95,10 +95,19 @@
   Release scope passed 22/22 and the product build passed with zero warnings.
   It does not change `status`, `backup`, `apply`, runtime, or local harness
   activation.
+- [x] Add an internal read-only 2.0 instruction status helper for one explicitly
+  selected local provider home. It validates the committed target, requires an
+  existing runtime file to bind to the selected data repository, and compares
+  the complete generated-block-plus-target bytes. Missing runtime reports
+  `missing`; absent home, wrong binding, stale target, or uncommitted target
+  stops. The focused new and legacy status scope passed 74/74 Release tests,
+  including Codex's ChatGPT-aware managed block; the product build passed
+  with zero warnings. Public commands and runtime remain unchanged.
 
-Immediate next work: decide the minimal local harness activation contract before
-wiring committed targets into read-only `status`. `status`, `backup`, and `apply`
-still follow the 1.x provider-specific file contract.
+Immediate next work: define the 2.0 generated local AEC block and its canonical
+path guidance. Keep public `status`, `backup`, and `apply` on their 1.x
+provider-specific file contract until their directional migration is coherent;
+do not add a `--shared` switch.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

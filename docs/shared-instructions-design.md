@@ -114,8 +114,19 @@ does not edit runtime, stage, commit or push. `render` still treats existing
 target directories as enrollment. An internal repository-only validator now
 checks one explicitly selected platform/provider target against the three
 committed authored sources and rejects dirty working bytes. It is not wired to
-runtime commands. A pulled target is not proof that its harness is installed
-on the local machine; local activation remains a separate decision.
+runtime commands. An internal read-only status helper now requires an explicit
+local provider home, checks any runtime instruction file's AEC repository
+binding, and compares it byte-for-byte with the committed target plus the
+generated local control block. A missing runtime instruction file reports
+`missing`; a missing provider home or wrong binding stops. It never treats a
+pulled target as proof that its harness is installed, and it is not wired to
+the public `status` command.
+
+The helper currently uses the supported Codex or Copilot control-block
+generator, retaining Codex's ChatGPT-aware block variant where present. Its
+canonical-path wording still reflects the 1.x layout. That wording must be
+updated with the 2.0 control-block contract before public CLI migration; the
+portable target itself never stores the machine-specific binding.
 
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
@@ -143,9 +154,13 @@ and stale baselines stop. Safe reverse mapping is **not implemented yet**.
 - Do not infer personal access permissions from installation paths.
 - Do not treat provider directory presence as final proof of local harness
   enrollment: a pulled repository can contain providers used only elsewhere.
-- Before runtime integration, decide how to establish local harness activation;
-  the internal committed-baseline validator does not provide that proof. The
-  current CLI does not yet use it for `status`, `backup`, or `apply`.
+- A selected local provider home and supported runtime AEC binding establish
+  the scope for an existing runtime file. An absent runtime file is `missing`,
+  not evidence of activation; an absent home or wrong binding stops. Repository
+  target presence alone never establishes local installation.
+- Keep the public `status` on the 1.x source until directional commands can
+  migrate coherently. Changing `status` alone would report drift that the
+  current `apply` could not fix; `backup` also still writes the legacy source.
 - Platform policy is sufficient for the current single-machine case. Different
   machines on the same platform may need distinct access roots; defer their
   storage contract until required, rather than claiming platform equals machine.
@@ -160,8 +175,9 @@ flowchart LR
     Sections --> Render[Repository-only render]
     Render --> Enrollment[Opt-in target enrollment]
     Enrollment --> Validation[Committed target validation helper]
-    Validation -.->|next decision| Local[Local harness activation]
-    Local -.->|later| Directional[Status, backup and apply integration]
+    Validation --> Local[Explicit local home and runtime binding]
+    Local --> Inspect[Internal read-only target status]
+    Inspect -.->|later| Directional[Coherent CLI migration]
 ```
 
 A small .NET BCL composition function accepts explicitly supplied shared,
@@ -183,5 +199,7 @@ reverse mapping through `backup` remain separate increments.
 The approved rendered Codex/Copilot example confirms that shared approval and
 access policy are retained while provider-only instructions stay scoped. The
 internal validator checks a selected target's committed files and exact rendered
-bytes without reading runtime. Existing provider-specific canonical files remain
-the deployment source until local activation and migration are approved.
+bytes without reading runtime. The internal status helper can compare that
+target with a selected local runtime but does not alter public `status` or
+`apply`. Existing provider-specific canonical files remain the active CLI
+source until a reviewed directional migration.
