@@ -103,11 +103,20 @@
   stops. The focused new and legacy status scope passed 74/74 Release tests,
   including Codex's ChatGPT-aware managed block; the product build passed
   with zero warnings. Public commands and runtime remain unchanged.
+- [x] Add in-memory 2.0 generated local control blocks: Codex versions 7/8
+  retain the ordinary/ChatGPT-aware distinction, and Copilot version 2 names
+  its selected platform target. Strict binding recognition rejects altered
+  target paths and unsupported platforms; the internal status helper compares
+  these versions while public 1.x generators remain unchanged. Focused block
+  and status tests passed 72/72; adjacent init, enrollment, and uninstall tests
+  passed 40/40, plus 6/6 focused Codex init compatibility cases. The product
+  build passed with zero warnings. No runtime file or public command was changed.
 
-Immediate next work: define the 2.0 generated local AEC block and its canonical
-path guidance. Keep public `status`, `backup`, and `apply` on their 1.x
-provider-specific file contract until their directional migration is coherent;
-do not add a `--shared` switch.
+Immediate next work: plan the smallest internal 2.0 apply path using the
+committed target and generated local block, without switching public commands.
+Keep public `status`, `backup`, and `apply` on their 1.x provider-specific file
+contract until their directional migration is coherent; do not add a `--shared`
+switch.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

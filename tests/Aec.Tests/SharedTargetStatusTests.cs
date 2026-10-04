@@ -56,6 +56,25 @@ public sealed class SharedTargetStatusTests
     }
 
     [Theory]
+    [InlineData("codex", false)]
+    [InlineData("codex", true)]
+    [InlineData("copilot", false)]
+    public void PortableManagedBlockAndCommittedTargetAreInSync(
+        string provider,
+        bool includeChatGptGuidance)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance,
+            portableBlock: true);
+
+        var result = SharedTargetStatus.Inspect(
+            layout.Repository, provider, layout.ProviderHome);
+
+        Assert.Equal("in_sync", result);
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
     [InlineData("codex")]
     [InlineData("copilot")]
     public void MissingRuntimeIsReportedWithoutAssumingLocalEnrollment(string provider)
@@ -200,15 +219,23 @@ public sealed class SharedTargetStatusTests
                 "-c", "commit.gpgsign=false", "commit", "-m", "Changed shared source");
         }
 
-        public void WriteRuntime(string? boundRepository = null, bool codexChatGptBlock = false)
+        public void WriteRuntime(
+            string? boundRepository = null,
+            bool codexChatGptBlock = false,
+            bool portableBlock = false)
         {
             var repository = boundRepository ?? Repository;
             var target = File.ReadAllBytes(TargetPath);
+            var platform = RenderCommand.CurrentPlatform();
             var runtime = Provider switch
             {
+                "codex" when portableBlock => AecInstructionBlock.MergeForPortableTarget(
+                    target, repository, platform, codexChatGptBlock),
                 "codex" when codexChatGptBlock =>
                     AecInstructionBlock.MergeForChatGptProvider(target, repository),
                 "codex" => AecInstructionBlock.Merge(target, repository),
+                "copilot" when portableBlock => CopilotInstructionBlock.MergeForPortableTarget(
+                    target, repository, platform),
                 _ => CopilotInstructionBlock.Merge(target, repository)
             };
             File.WriteAllBytes(RuntimePath, runtime);

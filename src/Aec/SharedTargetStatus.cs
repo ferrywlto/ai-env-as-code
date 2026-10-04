@@ -32,8 +32,8 @@ internal static class SharedTargetStatus
 
         // Repository presence is not local enrollment. The explicitly selected
         // local runtime must exist and, when present, bind to this repository.
-        var target = CommittedTargetValidator.Read(
-            repository, RenderCommand.CurrentPlatform(), provider);
+        var platform = RenderCommand.CurrentPlatform();
+        var target = CommittedTargetValidator.Read(repository, platform, provider);
         var runtime = AecApplication.ReadOptionalTextFile(
             Path.Combine(providerHome, fileName), "Provider runtime instructions");
         if (runtime is null)
@@ -47,6 +47,9 @@ internal static class SharedTargetStatus
         var binding = provider == "codex"
             ? codexBinding?.Repository
             : CopilotInstructionBlock.ReadRepositoryBinding(runtime);
+        var copilotVersion = provider == "copilot"
+            ? CopilotInstructionBlock.ReadManagedVersion(runtime)
+            : null;
         if (binding is null ||
             !AecInstructionBlock.RepositoryPathsEqual(binding, repository))
         {
@@ -60,9 +63,14 @@ internal static class SharedTargetStatus
         // will use, then compare the complete runtime file byte-for-byte.
         var expected = provider switch
         {
+            "codex" when codexBinding?.Version is 7 or 8 =>
+                AecInstructionBlock.MergeForPortableTarget(
+                    target, repository, platform, codexBinding.Version == 8),
             "codex" when codexBinding?.Version is 4 or 6 =>
                 AecInstructionBlock.MergeForChatGptProvider(target, repository),
             "codex" => AecInstructionBlock.Merge(target, repository),
+            "copilot" when copilotVersion == 2 =>
+                CopilotInstructionBlock.MergeForPortableTarget(target, repository, platform),
             _ => CopilotInstructionBlock.Merge(target, repository)
         };
         return runtime.AsSpan().SequenceEqual(expected) ? "in_sync" : "different";

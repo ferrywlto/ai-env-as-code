@@ -154,6 +154,76 @@ public sealed class AecInstructionBlockTests
         Assert.Equal(Utf8($"prefix\n{ChatGptLatestLf}\nsuffix\n"), merged);
     }
 
+    [Theory]
+    [InlineData(false, 7)]
+    [InlineData(true, 8)]
+    public void PortableBlockPointsToTheSelectedTargetAndPreservesItsVariant(
+        bool includeChatGptGuidance,
+        int expectedVersion)
+    {
+        const string platform = "macos-arm64";
+        var original = Utf8("authored instructions\n");
+
+        var managed = AecInstructionBlock.MergeForPortableTarget(
+            original, Repository, platform, includeChatGptGuidance);
+        var binding = AecInstructionBlock.ReadRepositoryBinding(managed);
+        var text = Encoding.UTF8.GetString(managed);
+
+        Assert.Equal(expectedVersion, binding?.Version);
+        Assert.Equal(Repository, binding?.Repository);
+        Assert.Equal(platform, binding?.Platform);
+        Assert.Contains(Path.Combine(Repository, "environment", "targets", platform,
+            "codex", "AGENTS.md"), text, StringComparison.Ordinal);
+        Assert.Contains("Edit the authored shared, platform, or Codex overlay source", text,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(Path.Combine(Repository, "environment", "providers", "codex",
+            "AGENTS.md"), text, StringComparison.Ordinal);
+        Assert.Equal(includeChatGptGuidance,
+            text.Contains("Manual ChatGPT instruction backups live under", StringComparison.Ordinal));
+        Assert.Equal(managed, AecInstructionBlock.MergeForPortableTarget(
+            managed, Repository, platform, includeChatGptGuidance));
+        Assert.Equal(original, AecInstructionBlock.Remove(managed).Content);
+        Assert.Throws<InvalidDataException>(() => AecInstructionBlock.Merge(managed, Repository));
+    }
+
+    [Theory]
+    [InlineData(false, 7)]
+    [InlineData(true, 8)]
+    public void PortableBlockRebindingKeepsItsVersionAndPlatform(
+        bool includeChatGptGuidance,
+        int expectedVersion)
+    {
+        var previousRepository = Path.Combine(Path.GetTempPath(), "previous data repository");
+        var managed = AecInstructionBlock.MergeForPortableTarget(
+            Utf8("authored instructions\n"), previousRepository, "windows-x64",
+            includeChatGptGuidance);
+
+        var rebound = AecInstructionBlock.RebindRepository(managed, Repository);
+        var binding = AecInstructionBlock.ReadRepositoryBinding(rebound);
+
+        Assert.Equal(expectedVersion, binding?.Version);
+        Assert.Equal("windows-x64", binding?.Platform);
+        Assert.Equal(Repository, binding?.Repository);
+        Assert.DoesNotContain(previousRepository, Encoding.UTF8.GetString(rebound),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PortableBindingRejectsTamperedTargetAndUnsupportedPlatform()
+    {
+        var managed = AecInstructionBlock.MergeForPortableTarget(
+            [], Repository, "linux-arm64", includeChatGptGuidance: false);
+        var tampered = Encoding.UTF8.GetString(managed).Replace(
+            Path.Combine("environment", "targets", "linux-arm64", "codex", "AGENTS.md"),
+            Path.Combine("environment", "targets", "linux-arm64", "copilot", "AGENTS.md"),
+            StringComparison.Ordinal);
+
+        Assert.Throws<InvalidDataException>(() =>
+            AecInstructionBlock.ReadRepositoryBinding(Utf8(tampered)));
+        Assert.Throws<ArgumentException>(() => AecInstructionBlock.MergeForPortableTarget(
+            [], Repository, "../another-platform", includeChatGptGuidance: false));
+    }
+
     [Fact]
     public void RemovesAPrependedBlockAndRestoresOriginalBytes()
     {

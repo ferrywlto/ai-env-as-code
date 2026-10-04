@@ -122,11 +122,13 @@ generated local control block. A missing runtime instruction file reports
 pulled target as proof that its harness is installed, and it is not wired to
 the public `status` command.
 
-The helper currently uses the supported Codex or Copilot control-block
-generator, retaining Codex's ChatGPT-aware block variant where present. Its
-canonical-path wording still reflects the 1.x layout. That wording must be
-updated with the 2.0 control-block contract before public CLI migration; the
-portable target itself never stores the machine-specific binding.
+In-memory 2.0 local control blocks now name the committed target for the
+selected platform and direct edits to the authored shared, platform, or
+provider source before `render` and review. Codex uses strict block versions
+7/8 (the latter retains manual ChatGPT backup guidance); Copilot uses version
+2. The read-only helper recognizes these versions and the supported 1.x blocks
+without changing the public 1.x generators. The portable target itself never
+stores the machine-specific repository binding.
 
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
@@ -176,7 +178,8 @@ flowchart LR
     Render --> Enrollment[Opt-in target enrollment]
     Enrollment --> Validation[Committed target validation helper]
     Validation --> Local[Explicit local home and runtime binding]
-    Local --> Inspect[Internal read-only target status]
+    Local --> Block[Generated local block, v2 markers]
+    Block --> Inspect[Internal read-only target status]
     Inspect -.->|later| Directional[Coherent CLI migration]
 ```
 
@@ -200,6 +203,7 @@ The approved rendered Codex/Copilot example confirms that shared approval and
 access policy are retained while provider-only instructions stay scoped. The
 internal validator checks a selected target's committed files and exact rendered
 bytes without reading runtime. The internal status helper can compare that
-target with a selected local runtime but does not alter public `status` or
-`apply`. Existing provider-specific canonical files remain the active CLI
-source until a reviewed directional migration.
+target with a selected local runtime and supports both old and new generated
+blocks. It does not alter public `status` or `apply`. Existing provider-specific
+canonical files remain the active CLI source until a reviewed directional
+migration.
