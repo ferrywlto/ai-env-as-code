@@ -111,12 +111,20 @@
   and status tests passed 72/72; adjacent init, enrollment, and uninstall tests
   passed 40/40, plus 6/6 focused Codex init compatibility cases. The product
   build passed with zero warnings. No runtime file or public command was changed.
+- [x] Add an internal 2.0 apply preview with no write path. A shared runtime
+  snapshot validates the committed target, explicit provider home, repository
+  binding, and v2 platform binding; missing or mismatched runtime stops with
+  init guidance. The preview computes v2 block plus target bytes, preserving
+  Codex's ChatGPT-aware variant, and reports `WouldReplace`. Internal status
+  now reports legacy blocks as drift against those same v2 bytes. The focused
+  block, validator, and old/new status scope passed 147/147 Release tests; the
+  product build passed with zero warnings. Public commands and config remain
+  unchanged.
 
-Immediate next work: plan the smallest internal 2.0 apply path using the
-committed target and generated local block, without switching public commands.
-Keep public `status`, `backup`, and `apply` on their 1.x provider-specific file
-contract until their directional migration is coherent; do not add a `--shared`
-switch.
+Immediate next work: review the runtime-drift conflict policy and Codex config
+preflight before implementing any 2.0 runtime writer. Keep public `status`,
+`backup`, and `apply` on their 1.x provider-specific file contract until their
+directional migration is coherent; do not add a `--shared` switch.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

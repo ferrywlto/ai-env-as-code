@@ -126,9 +126,20 @@ In-memory 2.0 local control blocks now name the committed target for the
 selected platform and direct edits to the authored shared, platform, or
 provider source before `render` and review. Codex uses strict block versions
 7/8 (the latter retains manual ChatGPT backup guidance); Copilot uses version
-2. The read-only helper recognizes these versions and the supported 1.x blocks
-without changing the public 1.x generators. The portable target itself never
-stores the machine-specific repository binding.
+2. The read-only helper recognizes these versions and the supported 1.x blocks;
+a legacy block reports drift because a future 2.0 apply would replace it. The
+public 1.x generators remain unchanged. The portable target itself never stores
+the machine-specific repository binding.
+
+An internal apply preview now shares the same committed-target and local-binding
+preflight as the read-only status helper. It builds the exact v2 instruction
+bytes in memory, preserving Codex's ChatGPT-aware variant, and reports whether
+the runtime would change. A missing runtime file, wrong repository binding, or
+wrong v2 platform binding stops and directs the user to init; a pulled target
+alone never authorizes a runtime write. The preview writes nothing and is not
+a reusable authorization token: any future apply must revalidate immediately
+before replacing runtime. Codex `config.toml` remains outside this instruction
+preview and under the existing public 1.x contract.
 
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
@@ -180,7 +191,9 @@ flowchart LR
     Validation --> Local[Explicit local home and runtime binding]
     Local --> Block[Generated local block, v2 markers]
     Block --> Inspect[Internal read-only target status]
+    Block --> Preview[Internal apply preview, no write]
     Inspect -.->|later| Directional[Coherent CLI migration]
+    Preview -.->|later| Directional
 ```
 
 A small .NET BCL composition function accepts explicitly supplied shared,
@@ -203,7 +216,8 @@ The approved rendered Codex/Copilot example confirms that shared approval and
 access policy are retained while provider-only instructions stay scoped. The
 internal validator checks a selected target's committed files and exact rendered
 bytes without reading runtime. The internal status helper can compare that
-target with a selected local runtime and supports both old and new generated
-blocks. It does not alter public `status` or `apply`. Existing provider-specific
+target with a selected local runtime; supported legacy blocks report drift
+against v2 output. The apply preview computes those same v2 bytes without
+writing. Neither changes public `status` or `apply`. Existing provider-specific
 canonical files remain the active CLI source until a reviewed directional
 migration.

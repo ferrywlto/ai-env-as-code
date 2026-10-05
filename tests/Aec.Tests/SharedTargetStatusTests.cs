@@ -11,7 +11,7 @@ public sealed class SharedTargetStatusTests
     public void ExactCommittedTargetAndBoundRuntimeAreInSyncWithoutWrites(string provider)
     {
         using var layout = new StatusLayout(provider);
-        layout.WriteRuntime();
+        layout.WriteRuntime(portableBlock: true);
         var head = layout.Head();
         var runtime = File.ReadAllBytes(layout.RuntimePath);
 
@@ -30,7 +30,7 @@ public sealed class SharedTargetStatusTests
     public void BoundRuntimeDriftIsDifferent(string provider)
     {
         using var layout = new StatusLayout(provider);
-        layout.WriteRuntime();
+        layout.WriteRuntime(portableBlock: true);
         File.AppendAllText(layout.RuntimePath, "Unreviewed runtime edit.");
         var runtime = File.ReadAllBytes(layout.RuntimePath);
 
@@ -46,12 +46,30 @@ public sealed class SharedTargetStatusTests
     public void CodexChatGptManagedBlockIsPreservedInExpectedRuntime()
     {
         using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(codexChatGptBlock: true);
+        layout.WriteRuntime(codexChatGptBlock: true, portableBlock: true);
 
         var result = SharedTargetStatus.Inspect(
             layout.Repository, "codex", layout.ProviderHome);
 
         Assert.Equal("in_sync", result);
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData("codex", false)]
+    [InlineData("codex", true)]
+    [InlineData("copilot", false)]
+    public void LegacyManagedBlockIsReadableButNeedsV2Replacement(
+        string provider,
+        bool includeChatGptGuidance)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance);
+
+        var result = SharedTargetStatus.Inspect(
+            layout.Repository, provider, layout.ProviderHome);
+
+        Assert.Equal("different", result);
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
@@ -72,6 +90,132 @@ public sealed class SharedTargetStatusTests
 
         Assert.Equal("in_sync", result);
         Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData("codex", false)]
+    [InlineData("codex", true)]
+    [InlineData("copilot", false)]
+    public void ApplyPreviewIsUnchangedForExactV2Runtime(
+        string provider,
+        bool includeChatGptGuidance)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance,
+            portableBlock: true);
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
+        var head = layout.Head();
+
+        var preview = PortableApplyPreview.Create(
+            layout.Repository, provider, layout.ProviderHome);
+
+        Assert.False(preview.WouldReplace);
+        Assert.Equal(layout.RuntimePath, preview.RuntimePath);
+        Assert.Equal(runtime, preview.DesiredRuntime);
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData("codex", false, "version=7")]
+    [InlineData("codex", true, "version=8")]
+    [InlineData("copilot", false, "version=2")]
+    public void ApplyPreviewWouldUpgradeOnlyTheLocalBlock(
+        string provider,
+        bool includeChatGptGuidance,
+        string expectedVersion)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance);
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
+
+        var preview = PortableApplyPreview.Create(
+            layout.Repository, provider, layout.ProviderHome);
+        var desired = Encoding.UTF8.GetString(preview.DesiredRuntime);
+
+        Assert.True(preview.WouldReplace);
+        Assert.Equal("different", SharedTargetStatus.Inspect(
+            layout.Repository, provider, layout.ProviderHome));
+        Assert.Contains(expectedVersion, desired, StringComparison.Ordinal);
+        Assert.Contains("<!-- AEC:SOURCE:SHARED:BEGIN -->", desired,
+            StringComparison.Ordinal);
+        Assert.Equal(includeChatGptGuidance,
+            desired.Contains("Manual ChatGPT instruction backups live under",
+                StringComparison.Ordinal));
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void ApplyPreviewReportsRuntimeEditsWithoutWriting()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.AppendAllText(layout.RuntimePath, "Unreviewed runtime edit.");
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
+
+        var preview = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        Assert.True(preview.WouldReplace);
+        Assert.DoesNotContain("Unreviewed runtime edit.",
+            Encoding.UTF8.GetString(preview.DesiredRuntime), StringComparison.Ordinal);
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+    }
+
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void ApplyPreviewStopsWhenRuntimeIsMissingOrBoundElsewhere(string provider)
+    {
+        using var layout = new StatusLayout(provider);
+        var missing = Assert.Throws<InvalidOperationException>(() =>
+            PortableApplyPreview.Create(layout.Repository, provider, layout.ProviderHome));
+        Assert.Contains("Run ordinary provider init first", missing.Message,
+            StringComparison.Ordinal);
+
+        layout.WriteRuntime(Path.Combine(layout.Root, "other-data"), portableBlock: true);
+        var wrongBinding = Assert.Throws<InvalidOperationException>(() =>
+            PortableApplyPreview.Create(layout.Repository, provider, layout.ProviderHome));
+        Assert.Contains("not bound to the selected AEC repository", wrongBinding.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void ApplyPreviewStopsForAnotherPlatformBinding(string provider)
+    {
+        using var layout = new StatusLayout(provider);
+        var otherPlatform = RenderCommand.CurrentPlatform() == "macos-arm64"
+            ? "windows-x64"
+            : "macos-arm64";
+        layout.WriteRuntime(portableBlock: true, platformOverride: otherPlatform);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableApplyPreview.Create(layout.Repository, provider, layout.ProviderHome));
+
+        Assert.Contains("different AEC platform", error.Message, StringComparison.Ordinal);
+        Assert.Throws<InvalidOperationException>(() =>
+            SharedTargetStatus.Inspect(layout.Repository, provider, layout.ProviderHome));
+    }
+
+    [Fact]
+    public void ApplyPreviewRejectsUncommittedTargetBeforeComparingRuntime()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.AppendAllText(layout.TargetPath, "Uncommitted target edit.");
+        var repositoryStatus = layout.GitStatus();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableApplyPreview.Create(layout.Repository, "codex", layout.ProviderHome));
+
+        Assert.Contains("Committed target has unstaged changes", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(repositoryStatus, layout.GitStatus());
     }
 
     [Theory]
@@ -222,11 +366,12 @@ public sealed class SharedTargetStatusTests
         public void WriteRuntime(
             string? boundRepository = null,
             bool codexChatGptBlock = false,
-            bool portableBlock = false)
+            bool portableBlock = false,
+            string? platformOverride = null)
         {
             var repository = boundRepository ?? Repository;
             var target = File.ReadAllBytes(TargetPath);
-            var platform = RenderCommand.CurrentPlatform();
+            var platform = platformOverride ?? RenderCommand.CurrentPlatform();
             var runtime = Provider switch
             {
                 "codex" when portableBlock => AecInstructionBlock.MergeForPortableTarget(

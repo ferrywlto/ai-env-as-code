@@ -43,8 +43,10 @@ public sealed class CopilotInstructionBlockTests
         var managed = CopilotInstructionBlock.MergeForPortableTarget(
             original, Repository, "windows-x64");
         var text = System.Text.Encoding.UTF8.GetString(managed);
+        var binding = CopilotInstructionBlock.ReadManagedBinding(managed);
 
-        Assert.Equal(2, CopilotInstructionBlock.ReadManagedVersion(managed));
+        Assert.Equal(2, binding?.Version);
+        Assert.Equal("windows-x64", binding?.Platform);
         Assert.Equal(Repository, CopilotInstructionBlock.ReadRepositoryBinding(managed));
         Assert.Contains(Path.Combine(Repository, "environment", "targets", "windows-x64",
             "copilot", "copilot-instructions.md"), text, StringComparison.Ordinal);

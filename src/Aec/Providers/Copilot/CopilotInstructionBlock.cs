@@ -71,16 +71,16 @@ internal static class CopilotInstructionBlock
             "Copilot instructions contain an unsupported managed AEC block.");
     }
 
-    public static string? ReadRepositoryBinding(byte[] content)
-    {
-        ValidateText(content);
-        return ReadBlock(content)?.Repository;
-    }
+    public static string? ReadRepositoryBinding(byte[] content) =>
+        ReadManagedBinding(content)?.Repository;
 
-    internal static int? ReadManagedVersion(byte[] content)
+    internal static RepositoryBinding? ReadManagedBinding(byte[] content)
     {
         ValidateText(content);
-        return ReadBlock(content)?.Version;
+        var block = ReadBlock(content);
+        return block is null
+            ? null
+            : new RepositoryBinding(block.Version, block.Repository, block.Platform);
     }
 
     private static ManagedBlock? ReadBlock(byte[] content)
@@ -160,7 +160,7 @@ internal static class CopilotInstructionBlock
             throw new InvalidDataException("Copilot instructions contain an unsupported managed AEC block.");
         }
 
-        return new ManagedBlock(start, finish, newLine, repository, version);
+        return new ManagedBlock(start, finish, newLine, repository, version, platform);
     }
 
     private static byte[] RenderBlock(
@@ -323,5 +323,8 @@ internal static class CopilotInstructionBlock
         int End,
         string NewLine,
         string Repository,
-        int Version);
+        int Version,
+        string? Platform);
+
+    internal sealed record RepositoryBinding(int Version, string Repository, string? Platform);
 }
