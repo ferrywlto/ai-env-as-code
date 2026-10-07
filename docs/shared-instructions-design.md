@@ -18,6 +18,39 @@ Git history remains the source of truth. Today, `render` only updates repository
 targets; `apply` still reads the legacy provider file. Equivalent instructions
 across harnesses do not guarantee identical model behaviour.
 
+## Check only when AEC work is requested
+
+```mermaid
+flowchart LR
+    Request{AEC write or apply?} -->|No| Skip[No AEC or Git check]
+    Request -->|Yes| Local[Inspect local runtime drift and Git state]
+    Local --> Remote{Remote configured?}
+    Remote -->|No| Warn[Warn: local-only work]
+    Remote -->|Yes| Tip[Query default-branch tip without fetching]
+    Tip -->|Same commit| Act[Continue approved operation]
+    Tip -->|Different commits| Pause[Report difference and request approval to fetch]
+    Tip -->|Unreachable| Stop[Stop and report uncertainty]
+    Pause --> Fetch[Approved fetch and classify]
+    Fetch -->|Strictly behind and clean| Forward[Fast-forward]
+    Fetch -->|Ahead, diverged, or dirty| Stop
+    Forward --> Act
+    Warn --> Act
+```
+
+`aec status` compares runtime with the local canonical source only; it cannot
+detect a commit pushed from another machine. Run local and remote preflight
+immediately before an AEC-related canonical write or runtime apply, not on
+unrelated chats or every approval reply. Skip local status for a new repository
+without a baseline. A read-only remote-tip mismatch means only that commits
+differ: local may be ahead, behind, or divergent. Fetch and any fast-forward
+require approval; never use an automatic `git pull`. An absent remote permits
+local-only work with a warning, while an unreachable configured remote leaves
+freshness unknown and stops the operation. Pre-existing worktree changes that
+could be mixed into the AEC operation require review. Manual runtime edits
+made between AEC requests are detected on the next relevant check, provided
+the managed control block remains intact and the harness follows it. No
+per-conversation check or sidecar file lock is planned for this boundary.
+
 ## Choose the authored source
 
 ```mermaid
@@ -141,6 +174,29 @@ a reusable authorization token: any future apply must revalidate immediately
 before replacing runtime. Codex `config.toml` remains outside this instruction
 preview and under the existing public 1.x contract.
 
+The internal one-file writer is still disconnected from `aec apply`:
+
+```mermaid
+flowchart LR
+    Review[Reviewed local snapshot] --> Recheck[Revalidate HEAD, target, and runtime]
+    Recheck -->|Changed| Stop[Stop without replacing runtime]
+    Recheck -->|Same| Desired[Compose v2 bytes]
+    Desired -->|Already equal| Unchanged[Unchanged]
+    Desired -->|Different| Replace[Compare before atomic replacement]
+    Replace --> Verify[Verify written bytes]
+```
+
+An explicitly requested apply may replace runtime-only drift that was present
+at review time; Git can recover committed canonical versions, not an
+uncommitted runtime-only edit. The writer changes only the selected local
+instruction file, never the data repository or Codex `config.toml`. Its final
+byte check rejects observed concurrent edits, but the existing filesystem API
+cannot make comparison and rename a cross-process atomic transaction; do not
+claim protection against an edit in that last instant. The accepted policy is
+to detect later drift at the next AEC-related preflight rather than add a
+sidecar lock or claim protection from non-cooperating manual editors. Public
+CLI migration remains blocked on the Codex config and backup contracts.
+
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
 
@@ -192,8 +248,9 @@ flowchart LR
     Local --> Block[Generated local block, v2 markers]
     Block --> Inspect[Internal read-only target status]
     Block --> Preview[Internal apply preview, no write]
+    Preview --> Writer[Internal one-file writer, isolated use only]
     Inspect -.->|later| Directional[Coherent CLI migration]
-    Preview -.->|later| Directional
+    Writer -.->|later| Directional
 ```
 
 A small .NET BCL composition function accepts explicitly supplied shared,
@@ -218,6 +275,7 @@ internal validator checks a selected target's committed files and exact rendered
 bytes without reading runtime. The internal status helper can compare that
 target with a selected local runtime; supported legacy blocks report drift
 against v2 output. The apply preview computes those same v2 bytes without
-writing. Neither changes public `status` or `apply`. Existing provider-specific
-canonical files remain the active CLI source until a reviewed directional
-migration.
+writing; an internal writer can replace only a reviewed, revalidated local
+instruction file. None changes public `status` or `apply`. Existing
+provider-specific canonical files remain the active CLI source until a
+reviewed directional migration.

@@ -34,24 +34,35 @@ choose. Never invent an automatic `sync` operation.
 
 ## Git remote preflight
 
-`--repo` selects a local data repository, not a hosting service or remote. Before
-an approved canonical write (including init, backup, render, or a manual edit)
-or runtime apply, inspect that repository's Git state. `aec status` remains a
-local-only comparison. Include any fetch or fast-forward in the plan for the
-user's approval. For an existing remote-backed repository, use the
-current branch's upstream to identify the remote; query its advertised `HEAD`
-for the default branch. Never assume `origin`, `main`, GitHub, or GitLab. If
-the upstream or default branch is ambiguous or unavailable, stop and ask. If
-either the current local branch or its upstream branch is not the advertised
-remote default branch, warn and pause for confirmation; never switch branches.
+`--repo` selects a local data repository, not a hosting service or remote.
+Run this preflight only for an AEC-related canonical write (including init,
+backup, render, or a manual edit) or runtime apply, immediately before acting;
+do not run it for unrelated conversations or every approval reply. For an
+existing enrolled provider, use `aec status` to inspect local runtime drift
+and confirm the requested data-flow direction. A new repository has no local
+baseline to inspect. `aec status` never checks the remote.
 
-With a clean worktree on the default branch, fetch and fast-forward only from
-that upstream before changing canonical data or applying it. If the worktree is
-dirty, the local branch is ahead or diverged, or the remote is unreachable,
-stop and report the state; never merge, rebase, or force-push automatically.
-If no remote exists, including before a new repository is initialized, allow
-the approved local AEC operation but warn that its commits are not available
-on another machine.
+Inspect the selected repository's Git state. For an existing remote-backed
+repository, use the current branch's upstream to identify the remote and query
+its advertised `HEAD` for the default branch. Never assume `origin`, `main`,
+GitHub, or GitLab. If the upstream or default branch is ambiguous or
+unavailable, stop and ask. If either the local branch or its upstream is not
+the advertised remote default branch, warn and pause; never switch branches.
+Stop for review if pre-existing worktree changes could be mixed into this AEC
+operation; do not silently capture or discard them.
+Compare local `HEAD` with the advertised default-branch tip without fetching.
+Equal commits need no fetch. Different commits mean only that local and remote
+differ, not that either is newer. If the remote is unreachable, stop and report
+that freshness is unknown; do not claim the repository is current.
+
+If the tips differ, include fetch and any fast-forward in the plan for the
+user's approval. Only with a clean worktree on the default branch, fetch from
+that upstream and fast-forward when the local branch is strictly behind. If
+the worktree is dirty, the local branch is ahead or diverged, or the fetched
+state is ambiguous, stop and report it. Never run an automatic `git pull`,
+merge, rebase, or force-push. If no remote exists, including before a new
+repository is initialized, allow the approved local AEC operation but warn
+that its commits are not available on another machine.
 
 After an approved canonical commit, request separate authorization to push the
 current branch to that same remote. Show its resolved push destination and ask

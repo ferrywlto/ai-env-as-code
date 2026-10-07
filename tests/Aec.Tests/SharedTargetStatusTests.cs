@@ -219,6 +219,115 @@ public sealed class SharedTargetStatusTests
     }
 
     [Theory]
+    [InlineData("codex", false)]
+    [InlineData("codex", true)]
+    [InlineData("copilot", false)]
+    public void InternalWriterAppliesReviewedDriftAndIsIdempotent(
+        string provider,
+        bool includeChatGptGuidance)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        var config = "personality = \"friendly\"\n# keep this setting\n"u8.ToArray();
+        File.WriteAllBytes(configPath, config);
+        var head = layout.Head();
+        var preview = PortableApplyPreview.Create(
+            layout.Repository, provider, layout.ProviderHome);
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, provider, layout.ProviderHome);
+
+        var applied = PortableInstructionWriter.Apply(reviewed);
+        var afterApply = PortableRuntimeSnapshot.Read(
+            layout.Repository, provider, layout.ProviderHome);
+        var repeated = PortableInstructionWriter.Apply(afterApply);
+
+        Assert.True(preview.WouldReplace);
+        Assert.Equal("applied", applied);
+        Assert.Equal("unchanged", repeated);
+        Assert.Equal(preview.DesiredRuntime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal("in_sync", SharedTargetStatus.Inspect(
+            layout.Repository, provider, layout.ProviderHome));
+        Assert.Equal(config, File.ReadAllBytes(configPath));
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void InternalWriterMayReplaceRuntimeOnlyDriftAfterReview()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.AppendAllText(layout.RuntimePath, "Runtime-only edit, not committed.\n");
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        var result = PortableInstructionWriter.Apply(reviewed);
+
+        Assert.Equal("applied", result);
+        Assert.DoesNotContain("Runtime-only edit", File.ReadAllText(layout.RuntimePath),
+            StringComparison.Ordinal);
+        Assert.Equal("in_sync", SharedTargetStatus.Inspect(
+            layout.Repository, "codex", layout.ProviderHome));
+    }
+
+    [Fact]
+    public void InternalWriterStopsWhenRuntimeChangesAfterPreflight()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime();
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "codex", layout.ProviderHome);
+        File.AppendAllText(layout.RuntimePath, "New edit after preflight.\n");
+        var changedRuntime = File.ReadAllBytes(layout.RuntimePath);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableInstructionWriter.Apply(reviewed));
+
+        Assert.Contains("changed after preflight", error.Message, StringComparison.Ordinal);
+        Assert.Equal(changedRuntime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void InternalWriterStopsWhenHeadChangesAfterPreflight()
+    {
+        using var layout = new StatusLayout("copilot");
+        layout.WriteRuntime();
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "copilot", layout.ProviderHome);
+        var originalRuntime = File.ReadAllBytes(layout.RuntimePath);
+        layout.CommitEmpty();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableInstructionWriter.Apply(reviewed));
+
+        Assert.Contains("changed after preflight", error.Message, StringComparison.Ordinal);
+        Assert.Equal(originalRuntime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void InternalWriterStopsWhenTargetChangesAfterPreflight()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime();
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "codex", layout.ProviderHome);
+        var originalRuntime = File.ReadAllBytes(layout.RuntimePath);
+        File.AppendAllText(layout.TargetPath, "Uncommitted target edit.\n");
+        var repositoryStatus = layout.GitStatus();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableInstructionWriter.Apply(reviewed));
+
+        Assert.Contains("Committed target has unstaged changes", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(originalRuntime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(repositoryStatus, layout.GitStatus());
+    }
+
+    [Theory]
     [InlineData("codex")]
     [InlineData("copilot")]
     public void MissingRuntimeIsReportedWithoutAssumingLocalEnrollment(string provider)
@@ -361,6 +470,14 @@ public sealed class SharedTargetStatusTests
             GitProcess.RunRequired(Repository, "Could not commit shared source",
                 "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
                 "-c", "commit.gpgsign=false", "commit", "-m", "Changed shared source");
+        }
+
+        public void CommitEmpty()
+        {
+            GitProcess.RunRequired(Repository, "Could not commit empty fixture change",
+                "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
+                "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m",
+                "Unrelated committed change");
         }
 
         public void WriteRuntime(

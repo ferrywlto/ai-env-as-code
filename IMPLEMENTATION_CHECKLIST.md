@@ -61,6 +61,16 @@
 - [x] Add Git-host-agnostic remote/default-branch preflight to both bundled
   skills without adding a CLI `sync` command or implicit push. Keep no-remote
   use local-only with a warning, and pause on ambiguous or divergent Git state.
+- [x] Narrow both bundled skills to AEC-action preflight: local drift and a
+  read-only remote-tip check happen before a canonical write or runtime apply,
+  never on unrelated replies. Equal commits need no fetch; differing commits
+  require an approved fetch before classifying ahead/behind/diverged. Do not
+  run an automatic `git pull` or add a conversation-start check. Both skill
+  frontmatter blocks parsed and `git diff --check` passed; the skill-creator
+  validator could not start because PyYAML is unavailable.
+- [ ] In a separate packaging slice, bump the prerelease version and recognize
+  the exact previous bundled skill bytes so installed-skill upgrade can deploy
+  this revised guidance; do not change the installed personal skill here.
 - [x] Package the skill guidance as 2.0.0-alpha.4, recognize exact alpha.3
   predecessor hashes, and pass 42/42 focused Release tests. Both skill YAML
   frontmatter blocks parse; the skill-creator validator is unavailable because
@@ -120,11 +130,23 @@
   block, validator, and old/new status scope passed 147/147 Release tests; the
   product build passed with zero warnings. Public commands and config remain
   unchanged.
+- [x] Add an internal one-file 2.0 instruction writer, disconnected from the
+  public CLI. It accepts a reviewed snapshot, revalidates HEAD, committed
+  target, and runtime, then uses compare-before-replace to write exact v2
+  bytes or report `unchanged`. Explicit apply can replace pre-existing runtime
+  drift; edits detected after preflight stop. Disposable Codex/Copilot tests
+  cover idempotence, ChatGPT-aware guidance, config preservation, changed
+  runtime, changed HEAD, and dirty target. Focused Release tests passed 52/52
+  and the product build passed with zero warnings. The filesystem helper is
+  not a cross-process atomic compare-and-swap; public CLI and real runtime
+  remain unchanged.
 
-Immediate next work: review the runtime-drift conflict policy and Codex config
-preflight before implementing any 2.0 runtime writer. Keep public `status`,
-`backup`, and `apply` on their 1.x provider-specific file contract until their
-directional migration is coherent; do not add a `--shared` switch.
+Immediate next work: plan Codex config preflight alongside 2.0 instruction
+apply. Keep the writer's rechecks and verified replacement, but accept that a
+non-cooperating manual edit can occur at the last instant; detect later drift
+on the next AEC-related preflight instead of adding a sidecar lock. Keep public
+`status`, `backup`, and `apply` on their 1.x provider-specific file contract
+until their directional migration is coherent; do not add a `--shared` switch.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

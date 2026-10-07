@@ -7,6 +7,7 @@ internal sealed record PortableRuntimeSnapshot(
     string Platform,
     string Provider,
     string RuntimePath,
+    string Commit,
     byte[] Target,
     byte[]? Runtime,
     int? BlockVersion)
@@ -31,20 +32,30 @@ internal sealed record PortableRuntimeSnapshot(
 
         repository = Path.GetFullPath(repository);
         providerHome = Path.GetFullPath(providerHome);
+        AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
+        AecApplication.EnsureRealDirectory(repository, "Repository");
         AecApplication.EnsureNoLinksInExistingPath(providerHome, "Provider home path");
         AecApplication.EnsureRealDirectory(providerHome, "Provider home");
         ApplyCommand.EnsureRuntimeOutsideRepository(
             repository, providerHome, fileName, "Provider runtime target");
 
         var platform = RenderCommand.CurrentPlatform();
+        var commit = ApplyCommand.ResolveHeadCommit(repository);
         var target = CommittedTargetValidator.Read(repository, platform, provider);
         var runtimePath = Path.Combine(providerHome, fileName);
         var runtime = AecApplication.ReadOptionalTextFile(
             runtimePath, "Provider runtime instructions");
+        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Repository HEAD changed during portable runtime preflight.");
+        }
+
         if (runtime is null)
         {
             return new PortableRuntimeSnapshot(
-                repository, platform, provider, runtimePath, target, null, null);
+                repository, platform, provider, runtimePath, commit, target, null, null);
         }
 
         var codexBinding = provider == "codex"
@@ -76,6 +87,7 @@ internal sealed record PortableRuntimeSnapshot(
             platform,
             provider,
             runtimePath,
+            commit,
             target,
             runtime,
             codexBinding?.Version ?? copilotBinding?.Version);
