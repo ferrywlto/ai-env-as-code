@@ -141,12 +141,20 @@
   not a cross-process atomic compare-and-swap; public CLI and real runtime
   remain unchanged.
 
-Immediate next work: plan Codex config preflight alongside 2.0 instruction
-apply. Keep the writer's rechecks and verified replacement, but accept that a
-non-cooperating manual edit can occur at the last instant; detect later drift
-on the next AEC-related preflight instead of adding a sidecar lock. Keep public
-`status`, `backup`, and `apply` on their 1.x provider-specific file contract
-until their directional migration is coherent; do not add a `--shared` switch.
+- [x] Approve the Codex config preflight contract for 2.0 apply in
+  [the shared-instruction design](docs/shared-instructions-design.md): one
+  committed root `personality` value, both runtime files planned before any
+  write, exact-byte freshness checks, config-first replacement, and explicit
+  partial-update reporting without automatic rollback. This is a design
+  decision only; no public command or runtime behavior changed.
+
+Immediate next work after Ferry reviews this record: implement an internal,
+read-only Codex config preflight alongside the existing 2.0 instruction
+preview, with focused missing/invalid/changed-file tests. Keep its write path
+disconnected from public commands; address the combined writer in a later
+approved slice. Public `status`, `backup`, and `apply` stay on their 1.x
+provider-specific contract until their directional migration is coherent;
+do not add a `--shared` switch or sidecar lock.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

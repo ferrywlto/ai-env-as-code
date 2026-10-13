@@ -115,8 +115,8 @@ and [Linux ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786
 runs passed. After a test-fixture cleanup fix, the
 [Windows x64 rerun](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36789513384)
 passed 41/41 focused tests, Native AOT build, and isolated smoke checks.
-Native AOT smoke does not yet directly invoke `aec render`; only local Codex
-on macOS has real-harness verification.
+All three OS-runner Native AOT smokes invoke `aec render` in isolated
+fixtures. Only local Codex on macOS has real-harness verification.
 
 ## Read more
 

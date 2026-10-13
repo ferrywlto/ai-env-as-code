@@ -64,22 +64,29 @@ flowchart TD
     Remote -->|No| Local[Warn: local-only AEC]
     Remote -->|Yes| Default{Current branch is remote default?}
     Default -->|No or unknown| Pause[Warn and ask; do not switch]
-    Default -->|Yes| Preflight[Fetch and fast-forward only when clean]
+    Default -->|Yes| Tip[Query remote tip without fetching]
+    Tip -->|Same commit| Work[Approved AEC action]
+    Tip -->|Different commits| Review[Ask before fetch]
+    Tip -->|Unreachable| Pause
+    Review --> Fetch[Approved fetch and classification]
+    Fetch -->|Strictly behind and clean| Forward[Fast-forward]
+    Fetch -->|Ahead, divergent, or dirty| Pause
+    Forward --> Work
     Local --> Work[Approved AEC action]
-    Preflight --> Work
     Work -->|If remote-backed commit created| Push[Separately approved push and verification]
 ```
 
-The CLI itself never fetches, pulls, or pushes. For a cloned data repository,
-the bundled skills identify the remote through the current branch's upstream
-and query that remote's advertised `HEAD` instead of assuming `origin`, `main`,
-GitHub, or GitLab. Missing or ambiguous tracking, an unreachable remote, a
-dirty/ahead/diverged local branch, or either local or upstream branch differing
-from the remote default pauses remote-backed changes for review. The skill never
-merges, rebases, switches branches, or force-pushes automatically. Before a
-separately approved push, it shows the resolved destination and asks if that
-differs from the fetch remote. A new repository without a remote remains usable
-locally, with an explicit warning that it is not yet shared across machines.
+The CLI itself never fetches, pulls, or pushes. The bundled skills run this
+preflight only before an AEC canonical write or runtime apply—not on every
+reply. They identify a cloned repository's remote through the current branch's
+upstream and query its advertised `HEAD`, assuming neither `origin` nor `main`.
+Equal tips need no fetch; different tips do not establish which is newer.
+Fetch and any strictly-behind fast-forward require approval. Ambiguous tracking,
+an unreachable remote, pre-existing worktree changes, or a non-default branch
+pause the operation. The skill never automatically pulls, merges, rebases,
+switches branches, or force-pushes. A new repository without a remote remains
+local-only with a warning. Before a separately approved push, show its
+destination and ask if it differs from the fetch remote.
 
 For routine source-first instruction edits, publish an approved commit before
 `aec apply` so another machine can retrieve the same canonical version. Ordinary
@@ -1118,8 +1125,9 @@ manually if no longer wanted.
 
 ## Current boundaries
 
-The tool does not implement `diff`, `verify`, `restore`, rendering, manifests,
-automatic ChatGPT capture or deployment, prebuilt binary distribution, or pushing.
+The tool does not implement `diff`, `verify`, `restore`, manifests, automatic
+ChatGPT capture/deployment, prebuilt binary distribution, or pushing. `render`
+changes repository targets only; public `apply` does not yet deploy them.
 
 Source writes and Git commits operate only on the data repository explicitly
 selected with `--repo`; they never infer or modify the engine repository.

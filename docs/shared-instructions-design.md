@@ -197,6 +197,48 @@ to detect later drift at the next AEC-related preflight rather than add a
 sidecar lock or claim protection from non-cooperating manual editors. Public
 CLI migration remains blocked on the Codex config and backup contracts.
 
+## Codex config preflight contract (approved; not implemented)
+
+The committed `environment/providers/codex/config.toml` remains the canonical
+source for one managed root setting, `personality` (`none`, `friendly`, or
+`pragmatic`). Runtime `~/.codex/config.toml` may contain unrelated settings;
+the planned apply preserves them. This contract does not manage profile or
+project overrides, or claim to determine Codex's effective personality.
+
+```mermaid
+flowchart LR
+    Review[Review committed target and config plus both runtime files] --> Plan{Both inputs valid and unchanged?}
+    Plan -->|No| Stop[Stop before writing]
+    Plan -->|Yes| Config[Replace config if needed; verify]
+    Config -->|Failure| Stop
+    Config --> Fresh{Provenance and config still current?}
+    Fresh -->|No| Partial[Report possible config-only update]
+    Fresh -->|Yes| Instructions[Replace instructions if needed; verify]
+    Instructions -->|Failure| Partial
+    Instructions -->|Success| Check[Report result; later preflight detects drift]
+```
+
+| Preflight observation | Outcome |
+|---|---|
+| Canonical config missing, dirty, uncommitted, or invalid | Stop before either runtime write. Read it from the same HEAD as the portable instruction target; require exactly one supported root `personality` and no unmanaged canonical settings. |
+| Runtime config absent or root `personality` absent | Warn and plan to insert the committed value. Do not invent a default during apply. |
+| Runtime config ambiguous or invalid under the supported parser | Stop before either runtime write. |
+| Reviewed runtime personality differs from committed value | This is expected apply drift; plan only the managed value change and preserve unrelated settings. |
+| HEAD, target, canonical config, runtime instructions, or any runtime config bytes change after review | Stop before the first write. Recheck exact config bytes even when only an unrelated setting changed, so the planned replacement cannot erase it. |
+
+Validate and plan both runtime files before writing either. Revalidate Git
+provenance and both runtime snapshots immediately before the first replacement.
+Write config first, then recheck provenance and the just-written config before
+replacing instructions. Use the existing compare-before-replace and byte
+verification for each file. If config replacement fails, leave instructions
+untouched. If the second replacement fails or a recheck detects a change,
+report which file may have changed; do not roll back automatically. Review
+the partial state and retry only after another preflight. Each file is
+individually guarded, not part of a two-file atomic transaction; the accepted
+last-instant external-edit limitation above still applies. Public 1.x
+`status`, `backup`, and `apply` remain unchanged until a separately approved
+coherent migration.
+
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
 
