@@ -219,6 +219,149 @@ public sealed class SharedTargetStatusTests
     }
 
     [Theory]
+    [InlineData("none", false)]
+    [InlineData("friendly", true)]
+    public void CodexApplyPreviewPlansOnlyManagedConfigValueWithoutWriting(
+        string runtimePersonality,
+        bool wouldReplace)
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        var runtimeConfig = Encoding.UTF8.GetBytes(
+            $"personality = \"{runtimePersonality}\"\nmodel = \"keep-me\"\n");
+        File.WriteAllBytes(configPath, runtimeConfig);
+        var head = layout.Head();
+
+        var preview = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        var config = Assert.IsType<PortableCodexConfigPreview>(preview.CodexConfig);
+        Assert.Equal(configPath, config.RuntimePath);
+        Assert.Equal(runtimeConfig, config.Runtime);
+        Assert.Equal(wouldReplace, config.WouldReplace);
+        Assert.False(config.Inserted);
+        Assert.Equal("personality = \"none\"\nmodel = \"keep-me\"\n",
+            Encoding.UTF8.GetString(config.DesiredRuntime));
+        Assert.Equal(runtimeConfig, File.ReadAllBytes(configPath));
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData(null, "personality = \"none\"\n")]
+    [InlineData("model = \"keep-me\"\n", "personality = \"none\"\nmodel = \"keep-me\"\n")]
+    public void CodexApplyPreviewPlansMissingRuntimePersonalityWithoutWriting(
+        string? runtimeText,
+        string expected)
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        if (runtimeText is not null)
+        {
+            File.WriteAllText(configPath, runtimeText);
+        }
+
+        var preview = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        var config = Assert.IsType<PortableCodexConfigPreview>(preview.CodexConfig);
+        Assert.True(config.WouldReplace);
+        Assert.True(config.Inserted);
+        Assert.Equal(expected, Encoding.UTF8.GetString(config.DesiredRuntime));
+        Assert.Equal(runtimeText is null, config.Runtime is null);
+        Assert.Equal(runtimeText is not null, File.Exists(configPath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void CodexApplyPreviewStopsForInvalidRuntimeConfig()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        var runtimeConfig = "personality = \"friendly\"\npersonality = \"none\"\n";
+        File.WriteAllText(configPath, runtimeConfig);
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            PortableApplyPreview.Create(layout.Repository, "codex", layout.ProviderHome));
+
+        Assert.Contains("more than once", error.Message, StringComparison.Ordinal);
+        Assert.Equal(runtimeConfig, File.ReadAllText(configPath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CodexApplyPreviewStopsForUncommittedCanonicalConfig(bool staged)
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.WriteAllText(layout.CanonicalConfigPath, "personality = \"friendly\"\n");
+        if (staged)
+        {
+            GitProcess.RunRequired(layout.Repository, "Could not stage fixture config",
+                "add", "--", AecApplication.ConfigSourceRelativePath);
+        }
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableApplyPreview.Create(layout.Repository, "codex", layout.ProviderHome));
+
+        Assert.Contains(staged ? "staged changes" : "unstaged changes",
+            error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CodexApplyPreviewStopsForMissingCanonicalConfig()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.Delete(layout.CanonicalConfigPath);
+
+        var error = Assert.Throws<FileNotFoundException>(() =>
+            PortableApplyPreview.Create(layout.Repository, "codex", layout.ProviderHome));
+
+        Assert.Contains("Canonical config does not exist", error.Message,
+            StringComparison.Ordinal);
+        Assert.True(File.Exists(layout.RuntimePath));
+    }
+
+    [Fact]
+    public void CodexApplyPreviewStopsForInvalidCommittedCanonicalConfig()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.WriteAllText(layout.CanonicalConfigPath, "personality = \"unknown\"\n");
+        GitProcess.RunRequired(layout.Repository, "Could not stage fixture config",
+            "add", "--", AecApplication.ConfigSourceRelativePath);
+        GitProcess.RunRequired(layout.Repository, "Could not commit fixture config",
+            "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
+            "-c", "commit.gpgsign=false", "commit", "-m", "Invalid canonical config");
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            PortableApplyPreview.Create(layout.Repository, "codex", layout.ProviderHome));
+
+        Assert.Contains("personality", error.Message, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void CopilotApplyPreviewDoesNotRequireCodexConfig()
+    {
+        using var layout = new StatusLayout("copilot");
+        layout.WriteRuntime(portableBlock: true);
+
+        var preview = PortableApplyPreview.Create(
+            layout.Repository, "copilot", layout.ProviderHome);
+
+        Assert.Null(preview.CodexConfig);
+        Assert.False(preview.WouldReplace);
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
     [InlineData("codex", false)]
     [InlineData("codex", true)]
     [InlineData("copilot", false)]
@@ -433,6 +576,8 @@ public sealed class SharedTargetStatusTests
             TargetPath = Path.Combine(Repository, "environment", "targets", platform,
                 provider, fileName);
             RuntimePath = Path.Combine(ProviderHome, fileName);
+            CanonicalConfigPath = Path.Combine(Repository,
+                AecApplication.ConfigSourceRelativePath);
 
             foreach (var path in new[] { SharedSource, policy, overlay, TargetPath, RuntimePath })
             {
@@ -445,6 +590,10 @@ public sealed class SharedTargetStatusTests
             File.WriteAllText(overlay, "Provider mechanics.\n", utf8);
             File.WriteAllText(TargetPath, InstructionSections.Render(
                 "Shared approval.\n", "Local paths.\n", "Provider mechanics.\n"), utf8);
+            if (provider == "codex")
+            {
+                File.WriteAllText(CanonicalConfigPath, "personality = \"none\"\n", utf8);
+            }
 
             GitProcess.RunRequired(Repository, "Could not initialize Git", "init", "--quiet");
             GitProcess.RunRequired(Repository, "Could not stage fixture files", "add", "--",
@@ -462,6 +611,7 @@ public sealed class SharedTargetStatusTests
         public string SharedSource { get; }
         public string TargetPath { get; }
         public string RuntimePath { get; }
+        public string CanonicalConfigPath { get; }
 
         public void CommitSource()
         {

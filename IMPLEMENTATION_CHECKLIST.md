@@ -148,13 +148,20 @@
   partial-update reporting without automatic rollback. This is a design
   decision only; no public command or runtime behavior changed.
 
-Immediate next work after Ferry reviews this record: implement an internal,
-read-only Codex config preflight alongside the existing 2.0 instruction
-preview, with focused missing/invalid/changed-file tests. Keep its write path
-disconnected from public commands; address the combined writer in a later
-approved slice. Public `status`, `backup`, and `apply` stay on their 1.x
-provider-specific contract until their directional migration is coherent;
-do not add a `--shared` switch or sidecar lock.
+- [x] Implement an internal, read-only Codex config preflight alongside the
+  2.0 instruction preview. It requires the committed canonical root
+  `personality`, plans only that runtime value, and reports missing, invalid,
+  staged, and unstaged config cases without writing. The focused shared-target
+  scope passed 49/49 Release tests; the product built with warnings as errors
+  and zero warnings. Ferry reviewed and approved this slice. Public commands
+  and personal runtime remain unchanged.
+
+Immediate next work: plan the separate internal config-plus-instructions
+writer with exact-byte freshness checks and explicit partial-update reporting.
+Seek approval before implementation. Public `status`,
+`backup`, and `apply` stay on their 1.x provider-specific contract until
+their directional migration is coherent; do not add a `--shared` switch or
+sidecar lock.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

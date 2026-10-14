@@ -5,7 +5,8 @@ namespace Aec;
 internal sealed record PortableApplyPreview(
     string RuntimePath,
     byte[] DesiredRuntime,
-    bool WouldReplace)
+    bool WouldReplace,
+    PortableCodexConfigPreview? CodexConfig)
 {
     public static PortableApplyPreview Create(
         string repository,
@@ -20,10 +21,14 @@ internal sealed record PortableApplyPreview(
         }
 
         var desired = RenderDesiredRuntime(snapshot);
+        var config = provider == "codex"
+            ? PortableCodexConfigPreview.Create(snapshot)
+            : null;
         return new PortableApplyPreview(
             snapshot.RuntimePath,
             desired,
-            !snapshot.Runtime.AsSpan().SequenceEqual(desired));
+            !snapshot.Runtime.AsSpan().SequenceEqual(desired),
+            config);
     }
 
     internal static byte[] RenderDesiredRuntime(PortableRuntimeSnapshot snapshot) =>
