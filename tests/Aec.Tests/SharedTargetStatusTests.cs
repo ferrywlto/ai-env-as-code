@@ -120,7 +120,7 @@ public sealed class SharedTargetStatusTests
     [Theory]
     [InlineData("codex", false, "version=9")]
     [InlineData("codex", true, "version=10")]
-    [InlineData("copilot", false, "version=2")]
+    [InlineData("copilot", false, "version=3")]
     public void ApplyPreviewWouldUpgradeOnlyTheLocalBlock(
         string provider,
         bool includeChatGptGuidance,

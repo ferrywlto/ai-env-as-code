@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Aec.Tests;
 
 public sealed class CopilotInstructionBlockTests
@@ -42,11 +45,13 @@ public sealed class CopilotInstructionBlockTests
         var original = "Authored instructions.\n"u8.ToArray();
         var managed = CopilotInstructionBlock.MergeForPortableTarget(
             original, Repository, "windows-x64");
-        var text = System.Text.Encoding.UTF8.GetString(managed);
+        var text = Encoding.UTF8.GetString(managed);
         var binding = CopilotInstructionBlock.ReadManagedBinding(managed);
 
-        Assert.Equal(2, binding?.Version);
+        Assert.Equal(3, binding?.Version);
         Assert.Equal("windows-x64", binding?.Platform);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(original)),
+            binding?.TargetDigest);
         Assert.Equal(Repository, CopilotInstructionBlock.ReadRepositoryBinding(managed));
         Assert.Contains(Path.Combine(Repository, "environment", "targets", "windows-x64",
             "copilot", "copilot-instructions.md"), text, StringComparison.Ordinal);
@@ -57,8 +62,67 @@ public sealed class CopilotInstructionBlockTests
         Assert.Equal(managed, CopilotInstructionBlock.MergeForPortableTarget(
             managed, Repository, "windows-x64"));
         Assert.Throws<InvalidDataException>(() => CopilotInstructionBlock.Merge(managed, Repository));
-        Assert.Contains("version=1", System.Text.Encoding.UTF8.GetString(
+        Assert.Contains("version=1", Encoding.UTF8.GetString(
             CopilotInstructionBlock.Merge(original, Repository)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StampedPortableBlockPreservesBomAndCrLfTargetBytes()
+    {
+        var original = new byte[] { 0xEF, 0xBB, 0xBF }
+            .Concat("# Existing\r\nKeep this.\r\n"u8.ToArray())
+            .ToArray();
+
+        var managed = CopilotInstructionBlock.MergeForPortableTarget(
+            original, Repository, "macos-arm64");
+        var binding = CopilotInstructionBlock.ReadManagedBinding(managed);
+
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, managed[..3]);
+        Assert.Contains("<!-- AEC:COPILOT:BEGIN version=3 -->\r\n",
+            Encoding.UTF8.GetString(managed), StringComparison.Ordinal);
+        Assert.True(managed.AsSpan().EndsWith(original.AsSpan(3)));
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(original)),
+            binding?.TargetDigest);
+        Assert.Equal(managed, CopilotInstructionBlock.MergeForPortableTarget(
+            managed, Repository, "macos-arm64"));
+    }
+
+    [Fact]
+    public void EarlierPortableBlockRemainsReadableAndCanUpgradeWithoutChangingTheBody()
+    {
+        var original = "Authored instructions.\n"u8.ToArray();
+        var stamped = CopilotInstructionBlock.MergeForPortableTarget(
+            original, Repository, "macos-arm64");
+        var digest = CopilotInstructionBlock.ReadManagedBinding(stamped)!.TargetDigest!;
+        var earlier = Encoding.UTF8.GetString(stamped)
+            .Replace("version=3", "version=2", StringComparison.Ordinal)
+            .Replace($"The last-applied target SHA-256 is `{digest}`.\n", string.Empty,
+                StringComparison.Ordinal);
+        var earlierBytes = Encoding.UTF8.GetBytes(earlier);
+
+        var earlierBinding = CopilotInstructionBlock.ReadManagedBinding(earlierBytes);
+        var upgraded = CopilotInstructionBlock.MergeForPortableTarget(
+            earlierBytes, Repository, "macos-arm64");
+
+        Assert.Equal(2, earlierBinding?.Version);
+        Assert.Null(earlierBinding?.TargetDigest);
+        Assert.Equal(stamped, upgraded);
+        Assert.Equal(original, upgraded.AsSpan(upgraded.Length - original.Length).ToArray());
+    }
+
+    [Theory]
+    [InlineData("not-a-sha256")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public void PortableBindingRejectsMalformedTargetDigest(string invalidDigest)
+    {
+        var managed = CopilotInstructionBlock.MergeForPortableTarget(
+            "Authored instructions.\n"u8.ToArray(), Repository, "macos-arm64");
+        var digest = CopilotInstructionBlock.ReadManagedBinding(managed)!.TargetDigest!;
+        var tampered = Encoding.UTF8.GetString(managed)
+            .Replace(digest, invalidDigest, StringComparison.Ordinal);
+
+        Assert.Throws<InvalidDataException>(() =>
+            CopilotInstructionBlock.ReadManagedBinding(Encoding.UTF8.GetBytes(tampered)));
     }
 
     [Fact]

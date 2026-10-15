@@ -180,9 +180,15 @@
   cases; the Release test build had zero warnings. Ferry reviewed and approved
   the slice, including the explanatory odd/even version-pair comment. Public
   commands and personal runtime remain unchanged.
+- [x] Review the Copilot portable-block target-digest slice. Newly rendered v3
+  blocks record SHA-256 of the authored target body; v1/v2 bindings remain
+  readable, and the internal renderer can upgrade v2 without changing authored
+  bytes. Focused block tests passed 9/9, shared-target tests passed 69/69, and
+  the Release build had zero warnings. Ferry reviewed and approved the slice.
+  Public commands and personal runtime remain unchanged.
 
-Immediate next work: obtain Ferry review of the Codex digest slice, then plan
-the separate Copilot digest slice and backup-preview enforcement. Public
+Immediate next work: plan a small readability pass naming the managed-block
+versions before backup-preview enforcement. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
 sidecar lock.

@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec;
@@ -8,6 +9,7 @@ internal static class CopilotInstructionBlock
 {
     private const string BeginMarkerText = "<!-- AEC:COPILOT:BEGIN version=1 -->";
     private const string PortableBeginMarkerText = "<!-- AEC:COPILOT:BEGIN version=2 -->";
+    private const string StampedBeginMarkerText = "<!-- AEC:COPILOT:BEGIN version=3 -->";
     private const string EndMarkerText = "<!-- AEC:COPILOT:END -->";
     private const string RepositoryPrefix = "The AEC data repository selected by `--repo` is `";
     private const string RepositorySuffix = "`.";
@@ -15,6 +17,8 @@ internal static class CopilotInstructionBlock
     private static readonly byte[] BeginMarker = Encoding.ASCII.GetBytes(BeginMarkerText);
     private static readonly byte[] PortableBeginMarker =
         Encoding.ASCII.GetBytes(PortableBeginMarkerText);
+    private static readonly byte[] StampedBeginMarker =
+        Encoding.ASCII.GetBytes(StampedBeginMarkerText);
     private static readonly byte[] EndMarker = Encoding.ASCII.GetBytes(EndMarkerText);
     private static readonly byte[] BeginStem = "<!-- AEC:COPILOT:BEGIN"u8.ToArray();
     private static readonly byte[] EndStem = "<!-- AEC:COPILOT:END"u8.ToArray();
@@ -24,14 +28,17 @@ internal static class CopilotInstructionBlock
     public static byte[] Merge(byte[] content, string repository) =>
         MergeVersion(content, NormalizeRepository(repository), version: 1, platform: null);
 
-    // Generate a v2 local block without changing the public 1.x merge path.
+    // Generate a stamped local block without changing the public 1.x merge path.
     internal static byte[] MergeForPortableTarget(
         byte[] content,
         string repository,
         string platform)
     {
-        var merged = MergeVersion(content, NormalizeRepository(repository), version: 2,
-            ValidatePlatform(platform));
+        ValidateText(content);
+        var target = RemoveManagedBlock(content, ReadBlock(content));
+        var targetDigest = Convert.ToHexStringLower(SHA256.HashData(target));
+        var merged = MergeVersion(content, NormalizeRepository(repository), version: 3,
+            ValidatePlatform(platform), targetDigest);
         if (merged.Length > AecApplication.MaximumTextBytes)
         {
             throw new InvalidDataException("Merged Copilot instructions exceed 1 MiB.");
@@ -44,14 +51,15 @@ internal static class CopilotInstructionBlock
         byte[] content,
         string normalizedRepository,
         int version,
-        string? platform)
+        string? platform,
+        string? targetDigest = null)
     {
         ValidateText(content);
         var block = ReadBlock(content);
         if (block is null)
         {
             return Prepend(content, RenderBlock(
-                DetectNewLine(content), normalizedRepository, version, platform));
+                DetectNewLine(content), normalizedRepository, version, platform, targetDigest));
         }
 
         if (!AecInstructionBlock.RepositoryPathsEqual(block.Repository, normalizedRepository))
@@ -60,11 +68,21 @@ internal static class CopilotInstructionBlock
                 "Copilot instructions are bound to a different data repository.");
         }
 
-        var expected = RenderBlock(block.NewLine, normalizedRepository, version, platform);
+        var expected = RenderBlock(block.NewLine, normalizedRepository, version, platform,
+            targetDigest);
         if (block.Version == version &&
             content.AsSpan(block.Start, block.End - block.Start).SequenceEqual(expected))
         {
             return content.ToArray();
+        }
+
+        if (version == 3)
+        {
+            // Only the internal portable renderer may replace a recognized older
+            // block; the public 1.x merge keeps its strict existing behavior.
+            var authored = RemoveManagedBlock(content, block);
+            return Prepend(authored, RenderBlock(DetectNewLine(authored),
+                normalizedRepository, version, platform, targetDigest));
         }
 
         throw new InvalidDataException(
@@ -80,7 +98,8 @@ internal static class CopilotInstructionBlock
         var block = ReadBlock(content);
         return block is null
             ? null
-            : new RepositoryBinding(block.Version, block.Repository, block.Platform);
+            : new RepositoryBinding(block.Version, block.Repository, block.Platform,
+                block.TargetDigest);
     }
 
     private static ManagedBlock? ReadBlock(byte[] content)
@@ -101,8 +120,14 @@ internal static class CopilotInstructionBlock
         var start = begin[0];
         var finish = end[0] + EndMarker.Length;
         var version = IsExactMarkerLine(content, start, BeginMarker) ? 1 :
-            IsExactMarkerLine(content, start, PortableBeginMarker) ? 2 : 0;
-        var beginMarker = version == 1 ? BeginMarker : PortableBeginMarker;
+            IsExactMarkerLine(content, start, PortableBeginMarker) ? 2 :
+            IsExactMarkerLine(content, start, StampedBeginMarker) ? 3 : 0;
+        var beginMarker = version switch
+        {
+            1 => BeginMarker,
+            2 => PortableBeginMarker,
+            _ => StampedBeginMarker
+        };
         if (!IsLineStart(content, start, bodyOffset) || version == 0 ||
             !IsLineStart(content, end[0], bodyOffset) ||
             !IsExactMarkerLine(content, end[0], EndMarker) ||
@@ -115,8 +140,13 @@ internal static class CopilotInstructionBlock
             ?? throw new InvalidDataException("Copilot instructions contain a malformed AEC block.");
         var text = StrictUtf8.GetString(content, start, finish - start);
         var lines = text.Split(newLine, StringSplitOptions.None);
-        if (lines.Length != (version == 1 ? 12 : 16) ||
-            lines[0] != (version == 1 ? BeginMarkerText : PortableBeginMarkerText) ||
+        if (lines.Length != (version == 1 ? 12 : version == 2 ? 16 : 17) ||
+            lines[0] != (version switch
+            {
+                1 => BeginMarkerText,
+                2 => PortableBeginMarkerText,
+                _ => StampedBeginMarkerText
+            }) ||
             lines[^1] != EndMarkerText)
         {
             throw new InvalidDataException("Copilot instructions contain an unsupported managed AEC block.");
@@ -131,7 +161,7 @@ internal static class CopilotInstructionBlock
 
         var repository = NormalizeRepository(repositoryLine[RepositoryPrefix.Length..^RepositorySuffix.Length]);
         string? platform = null;
-        if (version == 2)
+        if (version is 2 or 3)
         {
             const string platformPrefix = "The selected AEC platform is `";
             var platformLine = lines[7];
@@ -154,28 +184,51 @@ internal static class CopilotInstructionBlock
             }
         }
 
-        var expected = RenderBlock(newLine, repository, version, platform);
+        string? targetDigest = null;
+        if (version == 3)
+        {
+            const string digestPrefix = "The last-applied target SHA-256 is `";
+            var digestLine = lines[9];
+            if (!digestLine.StartsWith(digestPrefix, StringComparison.Ordinal) ||
+                !digestLine.EndsWith(RepositorySuffix, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    "Copilot instructions contain an unsupported managed AEC block.");
+            }
+
+            targetDigest = digestLine[digestPrefix.Length..^RepositorySuffix.Length];
+            if (targetDigest.Length != 64 || !targetDigest.All(character =>
+                    character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+            {
+                throw new InvalidDataException(
+                    "Copilot instructions contain an unsupported managed AEC block.");
+            }
+        }
+
+        var expected = RenderBlock(newLine, repository, version, platform, targetDigest);
         if (!content.AsSpan(start, finish - start).SequenceEqual(expected))
         {
             throw new InvalidDataException("Copilot instructions contain an unsupported managed AEC block.");
         }
 
-        return new ManagedBlock(start, finish, newLine, repository, version, platform);
+        return new ManagedBlock(start, finish, newLine, repository, version, platform,
+            targetDigest);
     }
 
     private static byte[] RenderBlock(
         string newLine,
         string repository,
         int version,
-        string? platform)
+        string? platform,
+        string? targetDigest)
     {
-        if (version == 2)
+        if (version is 2 or 3)
         {
             var target = Path.Combine(repository, "environment", "targets", platform!,
                 "copilot", "copilot-instructions.md");
             return StrictUtf8.GetBytes(string.Join(newLine,
             [
-                PortableBeginMarkerText,
+                version == 2 ? PortableBeginMarkerText : StampedBeginMarkerText,
                 "## AI Environment as Code",
                 string.Empty,
                 "Use the `/aec` skill for managed personal GitHub Copilot instructions.",
@@ -184,6 +237,9 @@ internal static class CopilotInstructionBlock
                 "Treat its Git commit history as the source of truth.",
                 $"The selected AEC platform is `{platform}`.",
                 $"The committed Copilot instruction target is `{target}`.",
+                .. targetDigest is null
+                    ? []
+                    : new[] { $"The last-applied target SHA-256 is `{targetDigest}`." },
                 "Edit the authored shared, platform, or Copilot overlay source; run `aec render`, review, and commit the generated target. Do not edit the target directly.",
                 "Preserve instructions outside this managed block; do not edit the runtime `copilot-instructions.md` as the source of truth.",
                 string.Empty,
@@ -211,6 +267,33 @@ internal static class CopilotInstructionBlock
             EndMarkerText
         ]);
         return StrictUtf8.GetBytes(text);
+    }
+
+    private static byte[] RemoveManagedBlock(byte[] content, ManagedBlock? block)
+    {
+        if (block is null)
+        {
+            return content;
+        }
+
+        var bodyOffset = content.AsSpan().StartsWith(Utf8Bom) ? Utf8Bom.Length : 0;
+        var newLine = Encoding.ASCII.GetBytes(block.NewLine);
+        var suffix = block.End;
+        if (block.Start == bodyOffset &&
+            content.AsSpan(suffix).StartsWith(newLine) &&
+            content.AsSpan(suffix + newLine.Length).StartsWith(newLine))
+        {
+            suffix += newLine.Length * 2;
+        }
+        else if (content.AsSpan(suffix).StartsWith(newLine))
+        {
+            suffix += newLine.Length;
+        }
+
+        var result = new byte[block.Start + content.Length - suffix];
+        content.AsSpan(0, block.Start).CopyTo(result);
+        content.AsSpan(suffix).CopyTo(result.AsSpan(block.Start));
+        return result;
     }
 
     private static byte[] Prepend(byte[] content, byte[] block)
@@ -324,7 +407,12 @@ internal static class CopilotInstructionBlock
         string NewLine,
         string Repository,
         int Version,
-        string? Platform);
+        string? Platform,
+        string? TargetDigest);
 
-    internal sealed record RepositoryBinding(int Version, string Repository, string? Platform);
+    internal sealed record RepositoryBinding(
+        int Version,
+        string Repository,
+        string? Platform,
+        string? TargetDigest);
 }
