@@ -3,6 +3,7 @@ namespace Aec;
 // A preview is not an authorization to write. A future apply must revalidate
 // the committed target and runtime immediately before compare-before-replace.
 internal sealed record PortableApplyPreview(
+    PortableRuntimeSnapshot Snapshot,
     string RuntimePath,
     byte[] DesiredRuntime,
     bool WouldReplace,
@@ -25,6 +26,7 @@ internal sealed record PortableApplyPreview(
             ? PortableCodexConfigPreview.Create(snapshot)
             : null;
         return new PortableApplyPreview(
+            snapshot,
             snapshot.RuntimePath,
             desired,
             !snapshot.Runtime.AsSpan().SequenceEqual(desired),

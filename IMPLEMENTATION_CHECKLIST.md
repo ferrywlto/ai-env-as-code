@@ -155,11 +155,19 @@
   scope passed 49/49 Release tests; the product built with warnings as errors
   and zero warnings. Ferry reviewed and approved this slice. Public commands
   and personal runtime remain unchanged.
+- [x] Add an internal Codex config-plus-instructions writer, disconnected from
+  public `apply`. It rechecks reviewed Git and runtime bytes, replaces config
+  first, rechecks both inputs, then replaces instructions; failures after the
+  config step report possible partial state without automatic rollback.
+  Disposable tests cover idempotence, missing config, instructions-only apply,
+  pre-write drift, and config/runtime/HEAD changes between steps. The focused
+  Release scope passed 59/59 and the test project built with warnings as errors
+  and zero warnings. Ferry reviewed and approved this slice; personal runtime
+  is untouched.
 
-Immediate next work: plan the separate internal config-plus-instructions
-writer with exact-byte freshness checks and explicit partial-update reporting.
-Seek approval before implementation. Public `status`,
-`backup`, and `apply` stay on their 1.x provider-specific contract until
+Immediate next work: plan a separate read-only single-section backup
+attribution preview and seek approval before implementation. Public
+`status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
 sidecar lock.
 

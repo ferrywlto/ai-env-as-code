@@ -361,6 +361,195 @@ public sealed class SharedTargetStatusTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
+    [Fact]
+    public void CodexCombinedWriterUpdatesConfigBeforeInstructionsAndIsIdempotent()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime();
+        var originalInstructions = File.ReadAllBytes(layout.RuntimePath);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        File.WriteAllText(configPath,
+            "personality = \"friendly\"\nmodel = \"keep-me\"\n");
+        var head = layout.Head();
+        var reviewed = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        var result = PortableCodexWriter.Apply(reviewed, () =>
+        {
+            Assert.Equal("personality = \"none\"\nmodel = \"keep-me\"\n",
+                File.ReadAllText(configPath));
+            Assert.Equal(originalInstructions, File.ReadAllBytes(layout.RuntimePath));
+        });
+        var after = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        Assert.Equal("applied", result);
+        Assert.Equal("unchanged", PortableCodexWriter.Apply(after));
+        Assert.False(after.WouldReplace);
+        Assert.False(after.CodexConfig!.WouldReplace);
+        Assert.Equal(reviewed.DesiredRuntime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void CodexCombinedWriterCreatesMissingRuntimeConfigOnly()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        var instructions = File.ReadAllBytes(layout.RuntimePath);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        var reviewed = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        var result = PortableCodexWriter.Apply(reviewed);
+
+        Assert.Equal("applied", result);
+        Assert.Equal("personality = \"none\"\n", File.ReadAllText(configPath));
+        Assert.Equal(instructions, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                File.GetUnixFileMode(configPath));
+        }
+    }
+
+    [Fact]
+    public void CodexCombinedWriterChangesInstructionsWithoutRewritingMatchingConfig()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime();
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        var config = "personality = \"none\"\nmodel = \"keep-me\"\n"u8.ToArray();
+        File.WriteAllBytes(configPath, config);
+        var reviewed = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        var result = PortableCodexWriter.Apply(reviewed);
+
+        Assert.Equal("applied", result);
+        Assert.Equal(config, File.ReadAllBytes(configPath));
+        Assert.Equal(reviewed.DesiredRuntime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CodexCombinedWriterStopsBeforeEitherWriteWhenReviewedInputChanges(
+        bool changeCanonical)
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime();
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        File.WriteAllText(configPath, "personality = \"friendly\"\n");
+        var reviewed = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+        var instructions = File.ReadAllBytes(layout.RuntimePath);
+        if (changeCanonical)
+        {
+            File.AppendAllText(layout.CanonicalConfigPath, "# new canonical edit\n");
+        }
+        else
+        {
+            File.AppendAllText(configPath, "# new runtime edit\n");
+        }
+        var changedConfig = File.ReadAllBytes(configPath);
+
+        Assert.Throws<InvalidOperationException>(() => PortableCodexWriter.Apply(reviewed));
+
+        Assert.Equal(changedConfig, File.ReadAllBytes(configPath));
+        Assert.Equal(instructions, File.ReadAllBytes(layout.RuntimePath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CodexCombinedWriterReportsPartialUpdateWhenInputChangesAfterConfig(
+        bool changeConfig)
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime();
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        File.WriteAllText(configPath, "personality = \"friendly\"\n");
+        var reviewed = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableCodexWriter.Apply(reviewed, () =>
+                File.AppendAllText(
+                    changeConfig ? configPath : layout.RuntimePath,
+                    "Concurrent edit.\n")));
+
+        Assert.Contains("after the config step", error.Message,
+            StringComparison.Ordinal);
+        Assert.Contains("no automatic rollback", error.Message,
+            StringComparison.Ordinal);
+        Assert.StartsWith("personality = \"none\"\n", File.ReadAllText(configPath),
+            StringComparison.Ordinal);
+        Assert.Equal(changeConfig,
+            File.ReadAllText(configPath).Contains("Concurrent edit.", StringComparison.Ordinal));
+        Assert.Equal(!changeConfig,
+            File.ReadAllText(layout.RuntimePath).Contains("Concurrent edit.",
+                StringComparison.Ordinal));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void CodexCombinedWriterStopsBeforeWritingWhenHeadChangesAfterReview()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime();
+        var reviewed = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+        var instructions = File.ReadAllBytes(layout.RuntimePath);
+        layout.CommitEmpty();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableCodexWriter.Apply(reviewed));
+
+        Assert.Contains("changed after preflight", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(instructions, File.ReadAllBytes(layout.RuntimePath));
+        Assert.False(File.Exists(Path.Combine(layout.ProviderHome, "config.toml")));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void CodexCombinedWriterReportsPartialUpdateWhenHeadChangesAfterConfig()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime();
+        var instructions = File.ReadAllBytes(layout.RuntimePath);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        File.WriteAllText(configPath, "personality = \"friendly\"\n");
+        var reviewed = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableCodexWriter.Apply(reviewed, layout.CommitEmpty));
+
+        Assert.Contains("after the config step", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal("personality = \"none\"\n", File.ReadAllText(configPath));
+        Assert.Equal(instructions, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void CodexCombinedWriterRejectsCopilotPreview()
+    {
+        using var layout = new StatusLayout("copilot");
+        layout.WriteRuntime(portableBlock: true);
+        var reviewed = PortableApplyPreview.Create(
+            layout.Repository, "copilot", layout.ProviderHome);
+
+        Assert.Throws<ArgumentException>(() => PortableCodexWriter.Apply(reviewed));
+
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
     [Theory]
     [InlineData("codex", false)]
     [InlineData("codex", true)]
