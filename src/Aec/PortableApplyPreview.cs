@@ -40,7 +40,7 @@ internal sealed record PortableApplyPreview(
                 snapshot.Target,
                 snapshot.Repository,
                 snapshot.Platform,
-                snapshot.BlockVersion is 4 or 6 or 8 or 10),
+                AecInstructionBlock.IncludesChatGptGuidance(snapshot.BlockVersion)),
             "copilot" => CopilotInstructionBlock.MergeForPortableTarget(
                 snapshot.Target,
                 snapshot.Repository,

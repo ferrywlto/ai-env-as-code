@@ -259,10 +259,11 @@ Exact AEC-owned delimiters distinguish shared, platform and provider text.
 Marker collisions, generated-block edits, outside text, multi-section changes,
 and stale baselines stop. Safe reverse mapping is **not implemented yet**.
 The digest is SHA-256 of the rendered target bytes, excluding the local AEC
-control block. The internal Codex and Copilot portable blocks now record it;
-explicit backup-preview enforcement is a separate slice. Older unstamped
-blocks remain readable for apply migration, but cannot prove a fresh backup
-baseline.
+control block. The internal Codex and Copilot portable blocks record it, and
+the read-only backup preview rejects missing or mismatched digests before
+attributing a runtime edit. Older unstamped blocks remain readable for apply
+migration, but cannot prove a fresh backup baseline. Public `backup` remains on
+the 1.x contract until its separately approved migration.
 
 ## Direction and boundaries
 

@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec;
@@ -21,6 +22,29 @@ internal sealed record PortableBackupAttributionPreview(
         {
             throw new InvalidOperationException(
                 "Provider runtime instructions are missing. Run ordinary provider init first.");
+        }
+
+        var lastAppliedDigest = provider switch
+        {
+            "codex" => AecInstructionBlock.ReadRepositoryBinding(snapshot.Runtime)?.TargetDigest,
+            "copilot" => CopilotInstructionBlock.ReadManagedBinding(snapshot.Runtime)?.TargetDigest,
+            _ => throw new ArgumentException($"Unsupported provider: {provider}")
+        };
+        if (lastAppliedDigest is null)
+        {
+            throw new InvalidOperationException(
+                "Runtime instructions have no last-applied target digest. " +
+                "Review runtime drift and apply the committed target before backup.");
+        }
+
+        // Repository-path binding alone cannot distinguish a local edit from a
+        // target applied before the selected repository advanced to a new commit.
+        var currentDigest = Convert.ToHexStringLower(SHA256.HashData(snapshot.Target));
+        if (!string.Equals(lastAppliedDigest, currentDigest, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Runtime instructions were last applied from an older target in this repository. " +
+                "Review runtime drift and apply the current committed target before backup.");
         }
 
         var baseline = PortableApplyPreview.RenderDesiredRuntime(snapshot);

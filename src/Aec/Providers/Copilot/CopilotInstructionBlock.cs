@@ -7,6 +7,12 @@ namespace Aec;
 // deliberately separate from the managed block AEC places in Codex AGENTS.md.
 internal static class CopilotInstructionBlock
 {
+    // Managed-block format versions, separate from AEC CLI release versions.
+    private const int LegacyVersion = 1;
+    private const int PortableVersion = 2;
+    private const int StampedPortableVersion = 3;
+    private const int UnknownVersion = 0;
+
     private const string BeginMarkerText = "<!-- AEC:COPILOT:BEGIN version=1 -->";
     private const string PortableBeginMarkerText = "<!-- AEC:COPILOT:BEGIN version=2 -->";
     private const string StampedBeginMarkerText = "<!-- AEC:COPILOT:BEGIN version=3 -->";
@@ -26,7 +32,8 @@ internal static class CopilotInstructionBlock
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     public static byte[] Merge(byte[] content, string repository) =>
-        MergeVersion(content, NormalizeRepository(repository), version: 1, platform: null);
+        MergeVersion(content, NormalizeRepository(repository), version: LegacyVersion,
+            platform: null);
 
     // Generate a stamped local block without changing the public 1.x merge path.
     internal static byte[] MergeForPortableTarget(
@@ -37,7 +44,8 @@ internal static class CopilotInstructionBlock
         ValidateText(content);
         var target = RemoveManagedBlock(content, ReadBlock(content));
         var targetDigest = Convert.ToHexStringLower(SHA256.HashData(target));
-        var merged = MergeVersion(content, NormalizeRepository(repository), version: 3,
+        var merged = MergeVersion(content, NormalizeRepository(repository),
+            version: StampedPortableVersion,
             ValidatePlatform(platform), targetDigest);
         if (merged.Length > AecApplication.MaximumTextBytes)
         {
@@ -76,7 +84,7 @@ internal static class CopilotInstructionBlock
             return content.ToArray();
         }
 
-        if (version == 3)
+        if (version == StampedPortableVersion)
         {
             // Only the internal portable renderer may replace a recognized older
             // block; the public 1.x merge keeps its strict existing behavior.
@@ -119,16 +127,17 @@ internal static class CopilotInstructionBlock
 
         var start = begin[0];
         var finish = end[0] + EndMarker.Length;
-        var version = IsExactMarkerLine(content, start, BeginMarker) ? 1 :
-            IsExactMarkerLine(content, start, PortableBeginMarker) ? 2 :
-            IsExactMarkerLine(content, start, StampedBeginMarker) ? 3 : 0;
+        var version = IsExactMarkerLine(content, start, BeginMarker) ? LegacyVersion :
+            IsExactMarkerLine(content, start, PortableBeginMarker) ? PortableVersion :
+            IsExactMarkerLine(content, start, StampedBeginMarker)
+                ? StampedPortableVersion : UnknownVersion;
         var beginMarker = version switch
         {
-            1 => BeginMarker,
-            2 => PortableBeginMarker,
+            LegacyVersion => BeginMarker,
+            PortableVersion => PortableBeginMarker,
             _ => StampedBeginMarker
         };
-        if (!IsLineStart(content, start, bodyOffset) || version == 0 ||
+        if (!IsLineStart(content, start, bodyOffset) || version == UnknownVersion ||
             !IsLineStart(content, end[0], bodyOffset) ||
             !IsExactMarkerLine(content, end[0], EndMarker) ||
             end[0] <= start)
@@ -140,11 +149,12 @@ internal static class CopilotInstructionBlock
             ?? throw new InvalidDataException("Copilot instructions contain a malformed AEC block.");
         var text = StrictUtf8.GetString(content, start, finish - start);
         var lines = text.Split(newLine, StringSplitOptions.None);
-        if (lines.Length != (version == 1 ? 12 : version == 2 ? 16 : 17) ||
+        if (lines.Length != (version == LegacyVersion ? 12 :
+                version == PortableVersion ? 16 : 17) ||
             lines[0] != (version switch
             {
-                1 => BeginMarkerText,
-                2 => PortableBeginMarkerText,
+                LegacyVersion => BeginMarkerText,
+                PortableVersion => PortableBeginMarkerText,
                 _ => StampedBeginMarkerText
             }) ||
             lines[^1] != EndMarkerText)
@@ -161,7 +171,7 @@ internal static class CopilotInstructionBlock
 
         var repository = NormalizeRepository(repositoryLine[RepositoryPrefix.Length..^RepositorySuffix.Length]);
         string? platform = null;
-        if (version is 2 or 3)
+        if (version is PortableVersion or StampedPortableVersion)
         {
             const string platformPrefix = "The selected AEC platform is `";
             var platformLine = lines[7];
@@ -185,7 +195,7 @@ internal static class CopilotInstructionBlock
         }
 
         string? targetDigest = null;
-        if (version == 3)
+        if (version == StampedPortableVersion)
         {
             const string digestPrefix = "The last-applied target SHA-256 is `";
             var digestLine = lines[9];
@@ -222,13 +232,13 @@ internal static class CopilotInstructionBlock
         string? platform,
         string? targetDigest)
     {
-        if (version is 2 or 3)
+        if (version is PortableVersion or StampedPortableVersion)
         {
             var target = Path.Combine(repository, "environment", "targets", platform!,
                 "copilot", "copilot-instructions.md");
             return StrictUtf8.GetBytes(string.Join(newLine,
             [
-                version == 2 ? PortableBeginMarkerText : StampedBeginMarkerText,
+                version == PortableVersion ? PortableBeginMarkerText : StampedBeginMarkerText,
                 "## AI Environment as Code",
                 string.Empty,
                 "Use the `/aec` skill for managed personal GitHub Copilot instructions.",

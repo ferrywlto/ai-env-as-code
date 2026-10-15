@@ -186,9 +186,17 @@
   bytes. Focused block tests passed 9/9, shared-target tests passed 69/69, and
   the Release build had zero warnings. Ferry reviewed and approved the slice.
   Public commands and personal runtime remain unchanged.
+- [x] Review the named managed-block versions and read-only stale-baseline
+  backup guard. Both providers now reject unstamped and older same-repository
+  targets before attributing a runtime edit; existing one-section edits remain
+  attributable. Focused Release tests passed 137/137, the final Copilot block
+  scope passed 9/9 after a naming-only edit, and the test build had zero
+  warnings. Ferry reviewed and approved this slice. Public `backup` and
+  personal runtime remain unchanged.
 
-Immediate next work: plan a small readability pass naming the managed-block
-versions before backup-preview enforcement. Public
+Immediate next work: plan focused rejection tests for malformed section
+markers, generated-block edits, outside text, and multiple sections; complete
+ticket #2's read-only backup rejection boundary before source writes. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
 sidecar lock.

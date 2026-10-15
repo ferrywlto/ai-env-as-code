@@ -208,6 +208,72 @@ public sealed class SharedTargetStatusTests
     }
 
     [Theory]
+    [InlineData("codex", false, 9, 7)]
+    [InlineData("codex", true, 10, 8)]
+    [InlineData("copilot", false, 3, 2)]
+    public void BackupAttributionPreviewStopsForAnUnstampedRuntimeBlock(
+        string provider,
+        bool includeChatGptGuidance,
+        int stampedVersion,
+        int earlierVersion)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance,
+            portableBlock: true);
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
+        var digest = provider == "codex"
+            ? AecInstructionBlock.ReadRepositoryBinding(runtime)!.TargetDigest!
+            : CopilotInstructionBlock.ReadManagedBinding(runtime)!.TargetDigest!;
+        var unstamped = Encoding.UTF8.GetString(runtime)
+            .Replace($"version={stampedVersion}", $"version={earlierVersion}",
+                StringComparison.Ordinal)
+            .Replace($"The last-applied target SHA-256 is `{digest}`.\n", string.Empty,
+                StringComparison.Ordinal);
+        File.WriteAllText(layout.RuntimePath, unstamped);
+        var before = File.ReadAllBytes(layout.RuntimePath);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableBackupAttributionPreview.Create(
+                layout.Repository, provider, layout.ProviderHome));
+
+        Assert.Contains("no last-applied target digest", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void BackupAttributionPreviewStopsWhenTheRepositoryTargetAdvanced(
+        string provider)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(portableBlock: true);
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
+        File.WriteAllText(layout.SharedSource, "Shared latest.\n");
+        File.WriteAllText(layout.TargetPath, File.ReadAllText(layout.TargetPath)
+            .Replace("Shared approval.", "Shared latest.", StringComparison.Ordinal));
+        GitProcess.RunRequired(layout.Repository, "Could not stage newer fixture target",
+            "add", "--", "environment/shared/instructions.md",
+            $"environment/targets/{RenderCommand.CurrentPlatform()}/{provider}/" +
+            (provider == "codex" ? "AGENTS.md" : "copilot-instructions.md"));
+        GitProcess.RunRequired(layout.Repository, "Could not commit newer fixture target",
+            "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
+            "-c", "commit.gpgsign=false", "commit", "-m", "Newer target");
+        var head = layout.Head();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PortableBackupAttributionPreview.Create(
+                layout.Repository, provider, layout.ProviderHome));
+
+        Assert.Contains("older target", error.Message, StringComparison.Ordinal);
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
     [InlineData("codex")]
     [InlineData("copilot")]
     public void BackupAttributionPreviewStopsOnMultipleAuthoredSections(string provider)
