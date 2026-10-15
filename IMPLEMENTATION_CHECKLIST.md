@@ -193,10 +193,19 @@
   scope passed 9/9 after a naming-only edit, and the test build had zero
   warnings. Ferry reviewed and approved this slice. Public `backup` and
   personal runtime remain unchanged.
+- [x] Review the read-only backup rejection-hardening tests. Both providers
+  stop on source-marker collisions, altered section boundaries, managed
+  control-block edits, and text outside rendered sections, without changing
+  runtime or repository state. The focused Release scope passed 82/82 and the
+  test build had zero warnings. Ferry reviewed and approved this slice; no
+  production code changed.
+- [ ] Reword the five earlier unpushed slice commits with semantic `feat:`
+  subjects. Ferry approved the correction, but the first rebase attempt stopped
+  before replay because this environment denied creation of `.git/rebase-merge`;
+  HEAD and the checkout were verified unchanged. Do not retry automatically.
 
-Immediate next work: plan focused rejection tests for malformed section
-markers, generated-block edits, outside text, and multiple sections; complete
-ticket #2's read-only backup rejection boundary before source writes. Public
+Immediate next work: plan the separate authored-source writer slice. Resolve
+the semantic commit rewording when permissions permit. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
 sidecar lock.

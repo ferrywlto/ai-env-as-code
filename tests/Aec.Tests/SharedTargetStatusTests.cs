@@ -293,6 +293,50 @@ public sealed class SharedTargetStatusTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
+    [Theory]
+    [InlineData("codex", "source-marker")]
+    [InlineData("codex", "section-boundary")]
+    [InlineData("codex", "control-block")]
+    [InlineData("codex", "outside-text")]
+    [InlineData("copilot", "source-marker")]
+    [InlineData("copilot", "section-boundary")]
+    [InlineData("copilot", "control-block")]
+    [InlineData("copilot", "outside-text")]
+    public void BackupAttributionPreviewRejectsUnattributableRuntimeChanges(
+        string provider,
+        string mutation)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(portableBlock: true);
+        var runtime = File.ReadAllText(layout.RuntimePath);
+        runtime = mutation switch
+        {
+            "source-marker" => runtime.Replace("Shared approval.",
+                "Shared approval.\n<!-- AEC:SOURCE:SHARED:BEGIN -->",
+                StringComparison.Ordinal),
+            "section-boundary" => runtime.Replace(
+                "<!-- AEC:SOURCE:PLATFORM:BEGIN -->",
+                "<!-- AEC:SOURCE:PROVIDER:BEGIN -->", StringComparison.Ordinal),
+            "control-block" => runtime.Replace(
+                "Treat its Git commit history as the source of truth.",
+                "Treat its Git commit history as one source of truth.",
+                StringComparison.Ordinal),
+            "outside-text" => runtime + "\nUnowned runtime text.",
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation))
+        };
+        File.WriteAllText(layout.RuntimePath, runtime);
+        var before = File.ReadAllBytes(layout.RuntimePath);
+        var head = layout.Head();
+
+        Assert.Throws<InvalidDataException>(() =>
+            PortableBackupAttributionPreview.Create(
+                layout.Repository, provider, layout.ProviderHome));
+
+        Assert.Equal(before, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
     [Fact]
     public void ApplyPreviewReportsRuntimeEditsWithoutWriting()
     {
