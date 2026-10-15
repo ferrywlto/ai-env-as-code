@@ -337,6 +337,147 @@ public sealed class SharedTargetStatusTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
+    [Theory]
+    [InlineData("codex", "Shared approval.", "shared")]
+    [InlineData("codex", "Local paths.", "platform")]
+    [InlineData("codex", "Provider mechanics.", "provider")]
+    [InlineData("copilot", "Shared approval.", "shared")]
+    [InlineData("copilot", "Local paths.", "platform")]
+    [InlineData("copilot", "Provider mechanics.", "provider")]
+    public void InternalBackupWriterChangesOnlyTheAttributedSource(
+        string provider,
+        string original,
+        string section)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(portableBlock: true);
+        File.WriteAllText(layout.RuntimePath,
+            File.ReadAllText(layout.RuntimePath).Replace(
+                original, "Reviewed revision.", StringComparison.Ordinal));
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
+        var target = File.ReadAllBytes(layout.TargetPath);
+        var head = layout.Head();
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, provider, layout.ProviderHome);
+        var attribution = PortableBackupAttributionPreview.Create(
+            layout.Repository, provider, layout.ProviderHome);
+
+        var writtenPath = PortableBackupSourceWriter.Write(reviewed, attribution);
+
+        Assert.Equal(section, attribution.Section);
+        Assert.Equal(attribution.SourceRelativePath, writtenPath);
+        Assert.Equal("Reviewed revision.\n",
+            File.ReadAllText(Path.Combine(layout.Repository, writtenPath)));
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(target, File.ReadAllBytes(layout.TargetPath));
+        Assert.Equal(head, layout.Head());
+        Assert.Single(layout.GitStatus().Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        Assert.Contains(writtenPath, layout.GitStatus(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InternalBackupWriterStopsWhenRuntimeChangesAfterReview()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
+            .Replace("Shared approval.", "First revision.", StringComparison.Ordinal));
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "codex", layout.ProviderHome);
+        var attribution = PortableBackupAttributionPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+        File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
+            .Replace("First revision.", "Later revision.", StringComparison.Ordinal));
+        var source = File.ReadAllBytes(layout.SharedSource);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            PortableBackupSourceWriter.Write(reviewed, attribution));
+
+        Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void InternalBackupWriterStopsWhenHeadChangesAfterReview()
+    {
+        using var layout = new StatusLayout("copilot");
+        layout.WriteRuntime(portableBlock: true);
+        File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
+            .Replace("Shared approval.", "Reviewed revision.", StringComparison.Ordinal));
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "copilot", layout.ProviderHome);
+        var attribution = PortableBackupAttributionPreview.Create(
+            layout.Repository, "copilot", layout.ProviderHome);
+        layout.CommitEmpty();
+        var source = File.ReadAllBytes(layout.SharedSource);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            PortableBackupSourceWriter.Write(reviewed, attribution));
+
+        Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Fact]
+    public void InternalBackupWriterStopsWhenSourceChangesAfterReview()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
+            .Replace("Shared approval.", "Reviewed revision.", StringComparison.Ordinal));
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "codex", layout.ProviderHome);
+        var attribution = PortableBackupAttributionPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+        File.WriteAllText(layout.SharedSource, "Concurrent source edit.\n");
+        var source = File.ReadAllBytes(layout.SharedSource);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            PortableBackupSourceWriter.Write(reviewed, attribution));
+
+        Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
+        Assert.Contains("environment/shared/instructions.md", layout.GitStatus(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InternalBackupWriterStopsWhenTargetChangesAfterReview()
+    {
+        using var layout = new StatusLayout("copilot");
+        layout.WriteRuntime(portableBlock: true);
+        File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
+            .Replace("Shared approval.", "Reviewed revision.", StringComparison.Ordinal));
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "copilot", layout.ProviderHome);
+        var attribution = PortableBackupAttributionPreview.Create(
+            layout.Repository, "copilot", layout.ProviderHome);
+        File.AppendAllText(layout.TargetPath, "Concurrent target edit.\n");
+        var source = File.ReadAllBytes(layout.SharedSource);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            PortableBackupSourceWriter.Write(reviewed, attribution));
+
+        Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
+        Assert.Contains("environment/targets/", layout.GitStatus(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InternalBackupWriterRequiresAnAttributedChange()
+    {
+        using var layout = new StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        var reviewed = PortableRuntimeSnapshot.Read(
+            layout.Repository, "codex", layout.ProviderHome);
+        var attribution = PortableBackupAttributionPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            PortableBackupSourceWriter.Write(reviewed, attribution));
+
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
     [Fact]
     public void ApplyPreviewReportsRuntimeEditsWithoutWriting()
     {

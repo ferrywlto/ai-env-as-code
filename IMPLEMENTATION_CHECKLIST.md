@@ -203,8 +203,17 @@
   subjects. Ferry approved the correction, but the first rebase attempt stopped
   before replay because this environment denied creation of `.git/rebase-merge`;
   HEAD and the checkout were verified unchanged. Do not retry automatically.
+- [x] Review the internal authored-source writer substep of ticket #2 slice 5.
+  It rechecks the reviewed runtime, HEAD, target, attribution, and clean source
+  before replacing exactly one authored source in the repository. It does not
+  render targets, commit, touch personal runtime, or change public `backup`.
+  Disposable Codex/Copilot tests passed 93/93 in the affected Release scope;
+  the warning-as-error build had zero warnings. Ferry reviewed and approved
+  this substep. Slice 5 stays incomplete until affected enrolled targets are
+  rendered and reviewed.
 
-Immediate next work: plan the separate authored-source writer slice. Resolve
+Immediate next work: implement guarded rendering of affected enrolled targets
+as the remainder of ticket #2 slice 5. Resolve
 the semantic commit rewording when permissions permit. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
