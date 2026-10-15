@@ -244,7 +244,9 @@ instruction editing:
 
 ```mermaid
 flowchart TD
-    Drift[Runtime differs from committed rendered baseline] --> Check{Exactly one authored section changed?}
+    Drift[Runtime differs from committed rendered baseline] --> Bound{Repository binding and last-applied target digest match?}
+    Bound -->|No| Stop[Stop for review; do not guess a source]
+    Bound -->|Yes| Check{Exactly one authored section changed?}
     Check -->|No| Stop[Stop for review; do not guess a source]
     Check -->|Yes| Fresh{Baseline still current?}
     Fresh -->|No| Stop
@@ -256,6 +258,11 @@ flowchart TD
 Exact AEC-owned delimiters distinguish shared, platform and provider text.
 Marker collisions, generated-block edits, outside text, multi-section changes,
 and stale baselines stop. Safe reverse mapping is **not implemented yet**.
+The digest is SHA-256 of the rendered target bytes, excluding the local AEC
+control block. The internal Codex portable block now records it; Copilot
+stamping and explicit backup-preview enforcement are separate slices. An older
+unstamped block remains readable for apply migration, but cannot prove a fresh
+backup baseline.
 
 ## Direction and boundaries
 

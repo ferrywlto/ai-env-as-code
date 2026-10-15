@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec.Tests;
@@ -155,8 +156,8 @@ public sealed class AecInstructionBlockTests
     }
 
     [Theory]
-    [InlineData(false, 7)]
-    [InlineData(true, 8)]
+    [InlineData(false, 9)]
+    [InlineData(true, 10)]
     public void PortableBlockPointsToTheSelectedTargetAndPreservesItsVariant(
         bool includeChatGptGuidance,
         int expectedVersion)
@@ -172,6 +173,8 @@ public sealed class AecInstructionBlockTests
         Assert.Equal(expectedVersion, binding?.Version);
         Assert.Equal(Repository, binding?.Repository);
         Assert.Equal(platform, binding?.Platform);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(original)),
+            binding?.TargetDigest);
         Assert.Contains(Path.Combine(Repository, "environment", "targets", platform,
             "codex", "AGENTS.md"), text, StringComparison.Ordinal);
         Assert.Contains("Edit the authored shared, platform, or Codex overlay source", text,
@@ -187,8 +190,8 @@ public sealed class AecInstructionBlockTests
     }
 
     [Theory]
-    [InlineData(false, 7)]
-    [InlineData(true, 8)]
+    [InlineData(false, 9)]
+    [InlineData(true, 10)]
     public void PortableBlockRebindingKeepsItsVersionAndPlatform(
         bool includeChatGptGuidance,
         int expectedVersion)
@@ -204,6 +207,8 @@ public sealed class AecInstructionBlockTests
         Assert.Equal(expectedVersion, binding?.Version);
         Assert.Equal("windows-x64", binding?.Platform);
         Assert.Equal(Repository, binding?.Repository);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(
+            Utf8("authored instructions\n"))), binding?.TargetDigest);
         Assert.DoesNotContain(previousRepository, Encoding.UTF8.GetString(rebound),
             StringComparison.Ordinal);
     }
@@ -222,6 +227,46 @@ public sealed class AecInstructionBlockTests
             AecInstructionBlock.ReadRepositoryBinding(Utf8(tampered)));
         Assert.Throws<ArgumentException>(() => AecInstructionBlock.MergeForPortableTarget(
             [], Repository, "../another-platform", includeChatGptGuidance: false));
+    }
+
+    [Theory]
+    [InlineData("not-a-sha256")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public void PortableBindingRejectsMalformedTargetDigest(string invalidDigest)
+    {
+        var managed = AecInstructionBlock.MergeForPortableTarget(
+            Utf8("authored instructions\n"), Repository, "macos-arm64",
+            includeChatGptGuidance: false);
+        var digest = AecInstructionBlock.ReadRepositoryBinding(managed)!.TargetDigest!;
+        var tampered = Encoding.UTF8.GetString(managed)
+            .Replace(digest, invalidDigest, StringComparison.Ordinal);
+
+        Assert.Throws<InvalidDataException>(() =>
+            AecInstructionBlock.ReadRepositoryBinding(Utf8(tampered)));
+    }
+
+    [Theory]
+    [InlineData(false, 9, 7)]
+    [InlineData(true, 10, 8)]
+    public void EarlierPortableBlockRemainsReadableWithoutADigest(
+        bool includeChatGptGuidance,
+        int stampedVersion,
+        int earlierVersion)
+    {
+        var stamped = AecInstructionBlock.MergeForPortableTarget(
+            Utf8("authored instructions\n"), Repository, "macos-arm64",
+            includeChatGptGuidance);
+        var digest = AecInstructionBlock.ReadRepositoryBinding(stamped)!.TargetDigest!;
+        var earlier = Encoding.UTF8.GetString(stamped)
+            .Replace($"version={stampedVersion}", $"version={earlierVersion}",
+                StringComparison.Ordinal)
+            .Replace($"The last-applied target SHA-256 is `{digest}`.\n", string.Empty,
+                StringComparison.Ordinal);
+
+        var binding = AecInstructionBlock.ReadRepositoryBinding(Utf8(earlier));
+
+        Assert.Equal(earlierVersion, binding?.Version);
+        Assert.Null(binding?.TargetDigest);
     }
 
     [Fact]

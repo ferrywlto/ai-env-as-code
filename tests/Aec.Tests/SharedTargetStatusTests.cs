@@ -118,8 +118,8 @@ public sealed class SharedTargetStatusTests
     }
 
     [Theory]
-    [InlineData("codex", false, "version=7")]
-    [InlineData("codex", true, "version=8")]
+    [InlineData("codex", false, "version=9")]
+    [InlineData("codex", true, "version=10")]
     [InlineData("copilot", false, "version=2")]
     public void ApplyPreviewWouldUpgradeOnlyTheLocalBlock(
         string provider,

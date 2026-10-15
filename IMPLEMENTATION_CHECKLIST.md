@@ -172,9 +172,17 @@
   project built with warnings as errors and zero warnings. Ferry reviewed and
   approved this slice. No public command, repository source, or personal runtime
   was changed.
+- [x] Review the Codex portable-block target-digest slice. Newly rendered
+  standard and ChatGPT-aware Codex blocks record SHA-256 of the authored target
+  body, and their parser exposes that last-applied digest. Earlier portable
+  blocks remain readable. The focused managed-block and shared-target scopes
+  passed 121/121, then 54/54 managed-block tests after adding compatibility
+  cases; the Release test build had zero warnings. Ferry reviewed and approved
+  the slice, including the explanatory odd/even version-pair comment. Public
+  commands and personal runtime remain unchanged.
 
-Immediate next work: obtain Ferry review of the read-only backup attribution
-preview, then plan the separate rejection-hardening slice. Public
+Immediate next work: obtain Ferry review of the Codex digest slice, then plan
+the separate Copilot digest slice and backup-preview enforcement. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
 sidecar lock.
