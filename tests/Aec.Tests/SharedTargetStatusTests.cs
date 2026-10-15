@@ -147,6 +147,86 @@ public sealed class SharedTargetStatusTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void BackupAttributionPreviewReportsNoChangeWithoutWriting(string provider)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(portableBlock: true);
+        var original = File.ReadAllBytes(layout.RuntimePath);
+        var head = layout.Head();
+
+        var preview = PortableBackupAttributionPreview.Create(
+            layout.Repository, provider, layout.ProviderHome);
+
+        Assert.Null(preview.Section);
+        Assert.Null(preview.SourceRelativePath);
+        Assert.Null(preview.ProposedContent);
+        Assert.Equal(original, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData("codex", "Shared approval.", "Shared revision.", "shared",
+        "environment/shared/instructions.md")]
+    [InlineData("codex", "Local paths.", "Local revision.", "platform", "platform")]
+    [InlineData("codex", "Provider mechanics.", "Provider revision.", "provider",
+        "environment/providers/codex/overlay.md")]
+    [InlineData("copilot", "Shared approval.", "Shared revision.", "shared",
+        "environment/shared/instructions.md")]
+    [InlineData("copilot", "Local paths.", "Local revision.", "platform", "platform")]
+    [InlineData("copilot", "Provider mechanics.", "Provider revision.", "provider",
+        "environment/providers/copilot/overlay.md")]
+    public void BackupAttributionPreviewIdentifiesOneAuthoredSection(
+        string provider,
+        string original,
+        string replacement,
+        string section,
+        string expectedPath)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(portableBlock: true);
+        var runtime = File.ReadAllText(layout.RuntimePath);
+        File.WriteAllText(layout.RuntimePath,
+            runtime.Replace(original, replacement, StringComparison.Ordinal));
+        var edited = File.ReadAllBytes(layout.RuntimePath);
+        var head = layout.Head();
+
+        var preview = PortableBackupAttributionPreview.Create(
+            layout.Repository, provider, layout.ProviderHome);
+
+        Assert.Equal(section, preview.Section);
+        Assert.Equal(expectedPath == "platform"
+            ? $"environment/platforms/{RenderCommand.CurrentPlatform()}/policy.md"
+            : expectedPath, preview.SourceRelativePath);
+        Assert.Equal(replacement + "\n", preview.ProposedContent);
+        Assert.Equal(edited, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void BackupAttributionPreviewStopsOnMultipleAuthoredSections(string provider)
+    {
+        using var layout = new StatusLayout(provider);
+        layout.WriteRuntime(portableBlock: true);
+        var runtime = File.ReadAllText(layout.RuntimePath)
+            .Replace("Shared approval.", "Shared revision.", StringComparison.Ordinal)
+            .Replace("Local paths.", "Local revision.", StringComparison.Ordinal);
+        File.WriteAllText(layout.RuntimePath, runtime);
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            PortableBackupAttributionPreview.Create(
+                layout.Repository, provider, layout.ProviderHome));
+
+        Assert.Contains("multiple", error.Message, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
     [Fact]
     public void ApplyPreviewReportsRuntimeEditsWithoutWriting()
     {

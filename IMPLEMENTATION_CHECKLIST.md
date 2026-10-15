@@ -164,9 +164,17 @@
   Release scope passed 59/59 and the test project built with warnings as errors
   and zero warnings. Ferry reviewed and approved this slice; personal runtime
   is untouched.
+- [x] Review the internal read-only single-section backup attribution preview.
+  It separates the exact local AEC control-block prefix from the committed
+  rendered target, compares shared/platform/provider sections, and reports one
+  changed authored source path or stops on multiple changes. Disposable
+  Codex/Copilot tests passed 69/69 in the focused Release scope, and the test
+  project built with warnings as errors and zero warnings. Ferry reviewed and
+  approved this slice. No public command, repository source, or personal runtime
+  was changed.
 
-Immediate next work: plan a separate read-only single-section backup
-attribution preview and seek approval before implementation. Public
+Immediate next work: obtain Ferry review of the read-only backup attribution
+preview, then plan the separate rejection-hardening slice. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
 sidecar lock.
