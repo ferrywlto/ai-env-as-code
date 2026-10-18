@@ -659,7 +659,7 @@ internal static class BackupCommand
             expectedParent);
     }
 
-    private static void CommitStagedIndex(
+    internal static void CommitStagedIndex(
         string repository,
         string commitMessage,
         IReadOnlyList<(string RelativePath, string Blob)> expectedFiles,

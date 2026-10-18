@@ -201,7 +201,7 @@ public sealed class PortableBackupTargetWriterTests
         }
     }
 
-    private sealed class Layout : IDisposable
+    internal sealed class Layout : IDisposable
     {
         private readonly string root;
 
@@ -251,6 +251,12 @@ public sealed class PortableBackupTargetWriterTests
             }
 
             GitProcess.RunRequired(Repository, "Could not initialize fixture Git", "init", "--quiet");
+            GitProcess.RunRequired(Repository, "Could not set fixture Git author",
+                "config", "--local", "user.name", "AEC Test");
+            GitProcess.RunRequired(Repository, "Could not set fixture Git email",
+                "config", "--local", "user.email", "aec-test@example.invalid");
+            GitProcess.RunRequired(Repository, "Could not disable fixture commit signing",
+                "config", "--local", "commit.gpgsign", "false");
             GitProcess.RunRequired(Repository, "Could not stage fixture", "add", "--", "environment");
             GitProcess.RunRequired(Repository, "Could not commit fixture",
                 "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",

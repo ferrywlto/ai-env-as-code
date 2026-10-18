@@ -220,9 +220,17 @@
   Disposable focused tests passed 11/11 across all three supported platform
   paths; the existing public-render tests passed 4/4 and the warning-as-error
   build had zero warnings. Ferry reviewed and approved this substep.
+- [x] Review ticket #2 slice 6's internal exact-path backup commit step. It
+  rechecks the rendered enrolled target set and runtime, refuses unrelated
+  staged changes, stages only the reviewed source and affected targets, and
+  reuses the pinned-tree Git commit guard. It is not connected to public
+  `backup`, does not touch personal runtime or data, and does not push. Focused
+  commit tests passed 7/7, existing renderer tests passed 11/11, and the
+  warning-as-error Release build had zero warnings. Ferry reviewed and approved
+  this slice.
 
-Immediate next work: implement ticket #2 slice 6's exact-path staging and
-separately approved Git commit. Resolve
+Immediate next work: plan ticket #2 slice 7's internal 2.0 status for both
+providers, including Codex managed personality. Resolve
 the semantic commit rewording when permissions permit. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or

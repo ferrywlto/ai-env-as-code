@@ -260,7 +260,11 @@ Marker collisions, generated-block edits, outside text, multi-section changes,
 and stale baselines stop. The internal backup renderer selects all affected
 committed enrollments across supported platforms, regardless of which harnesses
 are installed on the rendering machine. Public `aec render` remains scoped to
-the current platform. The full backup flow is **not implemented yet**.
+the current platform. An internal commit step rechecks the complete rendered
+target set and runtime, refuses an already-staged index, stages only the one
+authored source and its affected targets, then pins and verifies their Git tree
+before advancing the branch. It requires a separate approval to call and does
+not fetch or push. The public 2.0 backup flow is **not implemented yet**.
 The digest is SHA-256 of the rendered target bytes, excluding the local AEC
 control block. The internal Codex and Copilot portable blocks record it, and
 the read-only backup preview rejects missing or mismatched digests before

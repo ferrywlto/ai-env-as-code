@@ -12,6 +12,20 @@ internal static class PortableBackupTargetWriter
     public static IReadOnlyList<string> Render(
         PortableRuntimeSnapshot reviewed,
         PortableBackupAttributionPreview attribution)
+        => Process(reviewed, attribution, null);
+
+    // The commit step calls the same enrollment/render calculation after the
+    // writes, so a caller cannot omit an affected platform or provider target.
+    internal static IReadOnlyList<string> VerifyRendered(
+        PortableRuntimeSnapshot reviewed,
+        PortableBackupAttributionPreview attribution,
+        IReadOnlyList<string> renderedPaths)
+        => Process(reviewed, attribution, renderedPaths);
+
+    private static string[] Process(
+        PortableRuntimeSnapshot reviewed,
+        PortableBackupAttributionPreview attribution,
+        IReadOnlyList<string>? renderedPaths)
     {
         ArgumentNullException.ThrowIfNull(reviewed);
         ArgumentNullException.ThrowIfNull(attribution);
@@ -81,8 +95,11 @@ internal static class PortableBackupTargetWriter
             var targetPath = Path.Combine(reviewed.Repository, path);
             AecApplication.EnsureNoLinksInExistingPath(
                 Path.GetDirectoryName(targetPath)!, "Rendered target path");
-            var current = ApplyCommand.ReadCommittedFile(
-                reviewed.Repository, reviewed.Commit, path, "Rendered target");
+            var current = renderedPaths is null
+                ? ApplyCommand.ReadCommittedFile(
+                    reviewed.Repository, reviewed.Commit, path, "Rendered target")
+                : GitProcess.RunRequiredBytes(reviewed.Repository,
+                    "Could not read committed rendered target", "show", $"{reviewed.Commit}:{path}");
             if (!current.AsSpan().SequenceEqual(baseline))
             {
                 throw new InvalidDataException(
@@ -98,6 +115,25 @@ internal static class PortableBackupTargetWriter
         if (changes.Count == 0)
         {
             throw new InvalidOperationException("No enrolled target consumes the reviewed backup edit.");
+        }
+
+        if (renderedPaths is not null)
+        {
+            var expected = changes.Select(change => change.RelativePath).ToArray();
+            if (!expected.SequenceEqual(renderedPaths, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Rendered target paths do not match all affected committed enrollments.");
+            }
+
+            foreach (var change in changes)
+            {
+                AecApplication.EnsureNoLinksInExistingPath(
+                    Path.GetDirectoryName(change.Path)!, "Rendered target path");
+            }
+
+            VerifyInputs(changes);
+            return expected;
         }
 
         VerifyInputs([]);
