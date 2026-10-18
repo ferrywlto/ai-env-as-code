@@ -6,9 +6,10 @@ Shell commands with relative paths assume the engine repository root unless
 their section says otherwise.
 
 Version 2.0.0-alpha.4 adds host-agnostic Git remote preflight guidance to the
-bundled skills. `aec render` and enrollment are repository-only. Ordinary `init`,
-`status`, `backup`, and `apply` still use their 1.x canonical files; runtime
-deployment of portable targets is a later 2.0 increment. See the
+bundled skills. `aec render` and enrollment are repository-only. On the
+development branch, ordinary `apply` and `status` now use committed portable
+targets; `init` and `backup` retain their 1.x flows until separate migration
+slices. These development changes are not yet a released binary. See the
 [approved design](shared-instructions-design.md). Copilot remains alpha
 and is not verified against the real harness on any platform.
 
@@ -699,10 +700,15 @@ Read-only Copilot status uses the same selected repository and home:
 aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 ```
 
-It compares the canonical and runtime `copilot-instructions.md` bytes exactly and
-writes `in_sync`, `different`, or `missing`. It returns 0 for `in_sync`, 2 for
-drift or a missing runtime file, and 1 for validation failure without partial
-output. The command does not write files, stage, commit, push, or invoke Copilot.
+It validates the current-platform enrolled target against its committed shared,
+platform, and Copilot-authored sources, then compares the target plus local AEC
+block with runtime `copilot-instructions.md`. A legacy runtime block reports
+`different`; a missing runtime file reports `missing`. A missing or dirty
+target, wrong repository/platform binding, or missing provider home is an
+error—there is no fallback to the legacy canonical file. It returns 0 for
+`in_sync`, 2 for drift or missing runtime instructions, and 1 for validation
+failure without partial output. The command does not write files, stage,
+commit, push, or invoke Copilot.
 
 Copilot backup is the explicit runtime-to-repository direction:
 
@@ -747,10 +753,14 @@ The `status` command is read-only:
 aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 ```
 
-`--repo` identifies these canonical sources:
+`--repo` identifies the committed current-platform target and its authored
+inputs, plus the managed Codex config source:
 
 ```text
-<repo>/environment/providers/codex/AGENTS.md
+<repo>/environment/shared/instructions.md
+<repo>/environment/platforms/<current-platform>/policy.md
+<repo>/environment/providers/codex/overlay.md
+<repo>/environment/targets/<current-platform>/codex/AGENTS.md
 <repo>/environment/providers/codex/config.toml
 ```
 
@@ -762,7 +772,9 @@ is treated as the data repository. Repository and runtime paths must not contain
 symbolic-link or reparse-point ancestors, and the runtime must remain outside the
 data repository.
 
-The command compares exact `AGENTS.md` bytes. For `config.toml`, it compares only
+The command verifies the clean committed target matches the committed authored
+sources, then compares it plus the local AEC block with runtime `AGENTS.md`.
+There is no fallback to the legacy canonical `AGENTS.md`. For `config.toml`, it compares only
 the root `personality` value and ignores formatting, comments, unrelated root
 settings, and table-scoped settings. The canonical config may contain only that
 managed setting. Supported values are `none`, `friendly`, and `pragmatic`. Managed
@@ -784,7 +796,8 @@ Each line uses one of these states:
 | `different` | Managed canonical and runtime content differ | 2 |
 | `missing` | The runtime file or managed runtime value is absent | 2 |
 
-Invalid arguments, missing roots or canonical data, symbolic links, directories,
+Invalid arguments, missing roots or committed target/config data, dirty authored
+sources or target, wrong repository/platform binding, symbolic links, directories,
 files over 1 MiB, invalid UTF-8, duplicate or ambiguous managed declarations,
 unsupported personality values, and file-system failures write a diagnostic to
 standard error and return exit code 1 without partial status output.

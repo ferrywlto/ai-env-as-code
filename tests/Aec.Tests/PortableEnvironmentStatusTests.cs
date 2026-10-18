@@ -20,8 +20,8 @@ public sealed class PortableEnvironmentStatusTests
         var config = provider == "codex" ? File.ReadAllBytes(configPath) : null;
         var head = layout.Head();
 
-        Assert.Equal("in_sync", PortableEnvironmentStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome));
+        Assert.True(PortableEnvironmentStatus.Inspect(
+            layout.Repository, provider, layout.ProviderHome).InSync);
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         if (config is not null)
         {
@@ -49,16 +49,17 @@ public sealed class PortableEnvironmentStatusTests
         var edited = File.ReadAllBytes(layout.RuntimePath);
 
         Assert.Equal("different", PortableEnvironmentStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome));
+            layout.Repository, provider, layout.ProviderHome).Instructions);
         Assert.Equal(edited, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("model = \"keep-me\"\n")]
-    [InlineData("personality = \"friendly\"\nmodel = \"keep-me\"\n")]
-    public void MissingOrDifferentCodexPersonalityIsDifferent(string? runtimeConfig)
+    [InlineData(null, "missing")]
+    [InlineData("model = \"keep-me\"\n", "missing")]
+    [InlineData("personality = \"friendly\"\nmodel = \"keep-me\"\n", "different")]
+    public void MissingOrDifferentCodexPersonalityIsDifferent(
+        string? runtimeConfig, string expectedStatus)
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("codex");
         layout.WriteRuntime(portableBlock: true);
@@ -69,8 +70,8 @@ public sealed class PortableEnvironmentStatusTests
         }
 
         var runtime = File.ReadAllBytes(layout.RuntimePath);
-        Assert.Equal("different", PortableEnvironmentStatus.Inspect(
-            layout.Repository, "codex", layout.ProviderHome));
+        Assert.Equal(expectedStatus, PortableEnvironmentStatus.Inspect(
+            layout.Repository, "codex", layout.ProviderHome).Config);
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(runtimeConfig is null, !File.Exists(configPath));
         if (runtimeConfig is not null)
@@ -90,8 +91,8 @@ public sealed class PortableEnvironmentStatusTests
         var config = "personality = \"none\"\nmodel = \"different-machine-model\"\n";
         File.WriteAllText(configPath, config);
 
-        Assert.Equal("in_sync", PortableEnvironmentStatus.Inspect(
-            layout.Repository, "codex", layout.ProviderHome));
+        Assert.True(PortableEnvironmentStatus.Inspect(
+            layout.Repository, "codex", layout.ProviderHome).InSync);
         Assert.Equal(config, File.ReadAllText(configPath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
@@ -134,7 +135,7 @@ public sealed class PortableEnvironmentStatusTests
         using var layout = new SharedTargetStatusTests.StatusLayout(provider);
 
         Assert.Equal("missing", PortableEnvironmentStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome));
+            layout.Repository, provider, layout.ProviderHome).Instructions);
         Assert.False(File.Exists(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
@@ -147,8 +148,8 @@ public sealed class PortableEnvironmentStatusTests
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         File.WriteAllText(configPath, "not a TOML file");
 
-        Assert.Equal("in_sync", PortableEnvironmentStatus.Inspect(
-            layout.Repository, "copilot", layout.ProviderHome));
+        Assert.True(PortableEnvironmentStatus.Inspect(
+            layout.Repository, "copilot", layout.ProviderHome).InSync);
         Assert.Equal("not a TOML file", File.ReadAllText(configPath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }

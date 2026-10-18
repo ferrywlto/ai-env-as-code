@@ -37,7 +37,7 @@ flowchart LR
     Warn --> Act
 ```
 
-`aec status` compares runtime with the local canonical source only; it cannot
+`aec status` compares runtime with the local committed target only; it cannot
 detect a commit pushed from another machine. Run local and remote preflight
 immediately before an AEC-related canonical write or runtime apply, not on
 unrelated chats or every approval reply. Skip local status for a new repository
@@ -145,24 +145,25 @@ ordinary apply now consumes the committed rendered target for both providers.
 `init --enroll-shared` now creates the selected target after validating the
 three committed authored sources and the completed legacy AEC repository. It
 does not edit runtime, stage, commit or push. `render` still treats existing
-target directories as enrollment. An internal repository-only validator now
-checks one explicitly selected platform/provider target against the three
-committed authored sources and rejects dirty working bytes. It is not wired to
-runtime commands. An internal read-only status helper now requires an explicit
+target directories as enrollment. A repository-only validator checks one
+explicitly selected platform/provider target against the three committed
+authored sources and rejects dirty working bytes. Public status and apply use
+it without making repository writes. The read-only status helper requires an explicit
 local provider home, checks any runtime instruction file's AEC repository
 binding, and compares it byte-for-byte with the committed target plus the
 generated local control block. A missing runtime instruction file reports
 `missing`; a missing provider home or wrong binding stops. It never treats a
-pulled target as proof that its harness is installed, and it is not wired to
-the public `status` command.
+pulled target as proof that its harness is installed. Public `status` now uses
+this check for both providers.
 
-An internal 2.0 environment status now combines that instruction comparison
-with Codex's committed root `personality` value. For Codex, a missing runtime
-config or root personality reports `different` because apply can insert it;
-unrelated config settings do not count as drift. Copilot checks instructions
+The 2.0 environment status combines that instruction comparison with Codex's
+committed root `personality` value. A missing runtime config or root personality
+is drift because apply can insert it; the public per-file line retains the
+existing `missing` label. Unrelated config settings do not count as drift.
+Copilot checks instructions
 only. Missing runtime instructions report `missing`; invalid config or a wrong
-repository binding stops with an error. This remains disconnected from public
-`aec status`.
+repository binding stops with an error. Public `aec status` now uses its
+per-file report without writing either side.
 
 In-memory 2.0 local control blocks now name the committed target for the
 selected platform and direct edits to the authored shared, platform, or
@@ -183,7 +184,7 @@ alone never authorizes a runtime write. The preview writes nothing and is not
 a reusable authorization token: any future apply must revalidate immediately
 before replacing runtime. Codex `config.toml` has a separate internal preview
 included in the composite apply preview. Ordinary public Codex `apply` now
-uses both previews; public status and backup still use their 1.x sources.
+uses both previews; public backup still uses its 1.x source.
 
 The portable instruction writer is used by both guarded public apply paths:
 
@@ -250,8 +251,8 @@ the partial state and retry only after another preflight. Each file is
 individually guarded, not part of a two-file atomic transaction; the accepted
 last-instant external-edit limitation above still applies. Public Codex
 `apply` now uses this contract. Copilot `apply` uses only the instruction writer;
-public `status` and `backup` remain on their 1.x contracts until their
-separately approved migrations.
+public `status` now uses the committed target and managed config preview;
+`backup` remains on its 1.x contract until its separately approved migration.
 
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
@@ -349,6 +350,6 @@ target with a selected local runtime; supported legacy blocks report drift
 against v2 output. The apply preview computes those same v2 bytes without
 writing; an internal writer can replace only a reviewed, revalidated local
 instruction file. Public Codex `apply` now uses the combined writer, and
-Copilot `apply` uses the guarded instruction writer. Public `status` and
-`backup` still follow their 1.x paths. This is
+Copilot `apply` uses the guarded instruction writer. Public `status` reads
+the committed target; `backup` still follows its 1.x path. This is
 an intermediate development-branch state, not a coherent release contract.

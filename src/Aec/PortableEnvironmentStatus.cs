@@ -1,23 +1,36 @@
 namespace Aec;
 
-// Internal 2.0 status. Public status keeps its 1.x contract until the
-// provider-specific apply and backup migrations are ready together.
+internal sealed record PortableStatusReport(string Instructions, string? Config)
+{
+    public bool InSync => Instructions == "in_sync" && (Config is null or "in_sync");
+}
+
+// Compare only enrolled, committed target data with the selected local runtime.
+// The per-file report preserves the CLI's useful missing/different distinction.
 internal static class PortableEnvironmentStatus
 {
-    public static string Inspect(string repository, string provider, string providerHome)
+    public static PortableStatusReport Inspect(
+        string repository, string provider, string providerHome)
     {
         var snapshot = PortableRuntimeSnapshot.Read(repository, provider, providerHome);
-        if (snapshot.Runtime is null)
+        var instructions = snapshot.Runtime is null
+            ? "missing"
+            : snapshot.Runtime.AsSpan().SequenceEqual(
+                PortableApplyPreview.RenderDesiredRuntime(snapshot))
+                ? "in_sync"
+                : "different";
+
+        if (provider == "copilot")
         {
-            return "missing";
+            return new PortableStatusReport(instructions, null);
         }
 
-        var desiredInstructions = PortableApplyPreview.RenderDesiredRuntime(snapshot);
-        var instructionsDiffer = !snapshot.Runtime.AsSpan().SequenceEqual(desiredInstructions);
-        // The config preview compares only Codex's managed root personality.
-        // It validates canonical and runtime TOML without writing either file.
-        var configDiffers = provider == "codex" &&
-            PortableCodexConfigPreview.Create(snapshot).WouldReplace;
-        return instructionsDiffer || configDiffers ? "different" : "in_sync";
+        // Codex status validates the committed config even when instructions
+        // are missing, so one invalid artifact cannot hide behind another.
+        var config = PortableCodexConfigPreview.Create(snapshot);
+        var configStatus = config.Inserted
+            ? "missing"
+            : config.WouldReplace ? "different" : "in_sync";
+        return new PortableStatusReport(instructions, configStatus);
     }
 }

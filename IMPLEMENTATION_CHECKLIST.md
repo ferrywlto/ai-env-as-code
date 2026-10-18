@@ -256,11 +256,17 @@
   personal runtime or data repository was touched. Ferry reviewed and
   approved this slice.
 
-Immediate next work: plan ticket #2 slice 10's public status migration for
-both providers. Resolve the semantic commit rewording when permissions
-permit. Public `status` and `backup` remain on their 1.x paths until
-directional migration is coherent; do not add a `--shared` switch or
-sidecar lock.
+- [x] Review ticket #2 slice 10's public status migration. Codex and Copilot
+  status now validate the enrolled committed current-platform target and
+  local binding, with no 1.x source fallback. Codex compares only the managed
+  root personality; per-file `missing` labels and 0/2/1 exit codes remain.
+  Public and internal status tests passed 73/73 across focused runs, and the
+  warning-as-error Release build had zero warnings. No personal runtime or
+  data repository was touched. Ferry reviewed and approved this slice.
+
+Immediate next work: plan ticket #2 slice 11's public Codex backup migration.
+Resolve the semantic commit rewording when permissions permit. Public `backup`
+remains on its 1.x path; do not add a `--shared` switch or sidecar lock.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

@@ -106,7 +106,8 @@ public sealed class StatusTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
-        Assert.Contains("Canonical source does not exist", result.Error, StringComparison.Ordinal);
+        Assert.Contains("Authored shared instructions does not exist", result.Error,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -205,7 +206,7 @@ public sealed class StatusTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
-        Assert.Contains("Codex home does not exist", result.Error, StringComparison.Ordinal);
+        Assert.Contains("Provider home does not exist", result.Error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -449,7 +450,6 @@ public sealed class StatusTests
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
         Assert.Contains("Canonical config does not exist", result.Error, StringComparison.Ordinal);
-        Assert.Contains("supported root `personality` value", result.Error, StringComparison.Ordinal);
         Assert.DoesNotContain("aec init --repo", result.Error, StringComparison.Ordinal);
     }
 
@@ -696,6 +696,11 @@ public sealed class StatusTests
     {
         using var layout = new TemporaryLayout("same\n", "same\n");
         File.WriteAllBytes(layout.CanonicalConfig, [0xFF]);
+        GitProcess.RunRequired(layout.Repository, "Could not stage invalid config fixture",
+            "add", "--", AecApplication.ConfigSourceRelativePath);
+        GitProcess.RunRequired(layout.Repository, "Could not commit invalid config fixture",
+            "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
+            "-c", "commit.gpgsign=false", "commit", "-m", "Invalid config fixture");
 
         var result = Run(layout);
 
@@ -790,7 +795,7 @@ public sealed class StatusTests
             Root = Path.Combine(RealTemporaryDirectory(), "aec-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
             CodexHome = Path.Combine(Root, "codex-home");
-            Source = Path.Combine(Repository, "environment", "providers", "codex", "AGENTS.md");
+            Source = Path.Combine(Repository, "environment", "shared", "instructions.md");
             Target = Path.Combine(CodexHome, "AGENTS.md");
             CanonicalConfig = Path.Combine(
                 Repository,
@@ -802,19 +807,39 @@ public sealed class StatusTests
 
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
             Directory.CreateDirectory(CodexHome);
+            var platform = RenderCommand.CurrentPlatform();
+            var policy = Path.Combine(Repository, "environment", "platforms", platform,
+                "policy.md");
+            var overlay = Path.Combine(Repository, "environment", "providers", "codex",
+                "overlay.md");
+            var renderedTarget = Path.Combine(Repository, "environment", "targets", platform,
+                "codex", "AGENTS.md");
+            Directory.CreateDirectory(Path.GetDirectoryName(policy)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(overlay)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(renderedTarget)!);
+            File.WriteAllText(policy, string.Empty);
+            File.WriteAllText(overlay, string.Empty);
 
             if (source is not null)
             {
                 File.WriteAllText(Source, source, new UTF8Encoding(false));
+                File.WriteAllText(renderedTarget,
+                    InstructionSections.Render(source, string.Empty, string.Empty),
+                    new UTF8Encoding(false));
             }
 
             if (target is not null)
             {
-                File.WriteAllText(Target, target, new UTF8Encoding(false));
+                var renderedRuntime = InstructionSections.Render(
+                    target, string.Empty, string.Empty);
+                File.WriteAllBytes(Target, AecInstructionBlock.MergeForPortableTarget(
+                    Encoding.UTF8.GetBytes(renderedRuntime), Repository, platform,
+                    includeChatGptGuidance: false));
             }
 
             if (canonicalConfig is not null)
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(CanonicalConfig)!);
                 File.WriteAllText(CanonicalConfig, canonicalConfig, new UTF8Encoding(false));
             }
 
@@ -822,6 +847,14 @@ public sealed class StatusTests
             {
                 File.WriteAllText(RuntimeConfig, runtimeConfig, new UTF8Encoding(false));
             }
+
+            File.WriteAllText(Path.Combine(Repository, "README.md"), "Fixture repository.\n");
+            GitProcess.RunRequired(Repository, "Could not initialize Git", "init", "--quiet");
+            GitProcess.RunRequired(Repository, "Could not stage status fixture", "add", "--",
+                "README.md", "environment");
+            GitProcess.RunRequired(Repository, "Could not commit status fixture",
+                "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
+                "-c", "commit.gpgsign=false", "commit", "-m", "Fixture baseline");
         }
 
         public string Root { get; }

@@ -59,53 +59,21 @@ public static class AecApplication
     private static int RunStatus(ProviderRepositoryOptions options, TextWriter output)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
-
         if (options.Provider == "copilot")
         {
             var copilotHome = ResolveCopilotHome(options.CopilotHome);
-            return CopilotStatusCommand.Run(repository, copilotHome, output);
+            var status = PortableEnvironmentStatus.Inspect(
+                repository, "copilot", copilotHome);
+            output.WriteLine($"copilot/copilot-instructions.md {status.Instructions}");
+            return status.InSync ? 0 : 2;
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
-
-        EnsureNoLinksInManagedRoots(repository, codexHome);
-        ApplyCommand.EnsureRuntimeOutsideRepository(repository, codexHome);
-        EnsureRealDirectory(repository, "Repository");
-        EnsureSourceDirectories(repository);
-        EnsureRealDirectory(codexHome, "Codex home");
-
-        var sourcePath = Path.Combine(repository, SourceRelativePath);
-        var targetPath = Path.Combine(codexHome, "AGENTS.md");
-        var desired = ReadRequiredTextFile(sourcePath, "Canonical source");
-        var current = ReadOptionalTextFile(targetPath, "Runtime target");
-        var agentsStatus = CompareExactBytes(desired, current);
-
-        var canonicalConfigPath = Path.Combine(repository, ConfigSourceRelativePath);
-        var canonicalConfig = ReadOptionalTextFile(canonicalConfigPath, "Canonical config")
-            ?? throw new FileNotFoundException(
-                "Canonical config does not exist: " + canonicalConfigPath +
-                ". Create it with only a supported root `personality` value " +
-                "(`none`, `friendly`, or `pragmatic`) before running status.");
-        var desiredPersonality = CodexPersonalityConfig.ReadCanonical(
-            canonicalConfig,
-            canonicalConfigPath);
-
-        var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
-        var runtimeConfig = ReadOptionalTextFile(runtimeConfigPath, "Runtime config");
-        var currentPersonality = runtimeConfig is null
-            ? null
-            : CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath);
-        var configStatus = currentPersonality is null
-            ? "missing"
-            : currentPersonality == desiredPersonality
-                ? "in_sync"
-                : "different";
-
-        // Validate both artifacts before writing so an invalid config never leaves
-        // callers with a misleading partial status report.
-        output.WriteLine($"codex/AGENTS.md   {agentsStatus}");
-        output.WriteLine($"codex/config.toml {configStatus}");
-        return agentsStatus == "in_sync" && configStatus == "in_sync" ? 0 : 2;
+        var codexStatus = PortableEnvironmentStatus.Inspect(
+            repository, "codex", codexHome);
+        output.WriteLine($"codex/AGENTS.md   {codexStatus.Instructions}");
+        output.WriteLine($"codex/config.toml {codexStatus.Config}");
+        return codexStatus.InSync ? 0 : 2;
     }
 
     private static int RunVersion(string[] args, TextWriter output)
