@@ -1078,7 +1078,7 @@ public sealed class SharedTargetStatusTests
             SharedTargetStatus.Inspect(layout.Repository, "codex", layout.ProviderHome));
     }
 
-    private sealed class StatusLayout : IDisposable
+    internal sealed class StatusLayout : IDisposable
     {
         public StatusLayout(string provider)
         {

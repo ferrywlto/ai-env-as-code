@@ -155,6 +155,14 @@ generated local control block. A missing runtime instruction file reports
 pulled target as proof that its harness is installed, and it is not wired to
 the public `status` command.
 
+An internal 2.0 environment status now combines that instruction comparison
+with Codex's committed root `personality` value. For Codex, a missing runtime
+config or root personality reports `different` because apply can insert it;
+unrelated config settings do not count as drift. Copilot checks instructions
+only. Missing runtime instructions report `missing`; invalid config or a wrong
+repository binding stops with an error. This remains disconnected from public
+`aec status`.
+
 In-memory 2.0 local control blocks now name the committed target for the
 selected platform and direct edits to the authored shared, platform, or
 provider source before `render` and review. Codex uses strict block versions
@@ -171,8 +179,9 @@ the runtime would change. A missing runtime file, wrong repository binding, or
 wrong v2 platform binding stops and directs the user to init; a pulled target
 alone never authorizes a runtime write. The preview writes nothing and is not
 a reusable authorization token: any future apply must revalidate immediately
-before replacing runtime. Codex `config.toml` remains outside this instruction
-preview and under the existing public 1.x contract.
+before replacing runtime. Codex `config.toml` has a separate internal preview
+included in the composite apply preview; public commands remain on their 1.x
+contract.
 
 The internal one-file writer is still disconnected from `aec apply`:
 
@@ -197,7 +206,7 @@ to detect later drift at the next AEC-related preflight rather than add a
 sidecar lock or claim protection from non-cooperating manual editors. Public
 CLI migration remains blocked on the Codex config and backup contracts.
 
-## Codex config preflight contract (approved; not implemented)
+## Codex config preflight contract (approved; internal only)
 
 The committed `environment/providers/codex/config.toml` remains the canonical
 source for one managed root setting, `personality` (`none`, `friendly`, or

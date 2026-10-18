@@ -228,9 +228,17 @@
   commit tests passed 7/7, existing renderer tests passed 11/11, and the
   warning-as-error Release build had zero warnings. Ferry reviewed and approved
   this slice.
+- [x] Review ticket #2 slice 7's internal 2.0 environment status. It compares
+  committed rendered instructions for both providers and, for Codex only,
+  compares the managed root personality without treating unrelated config as
+  drift. Missing instructions report `missing`; missing personality reports
+  `different`; invalid config or binding stops. It does not change public
+  `status` or write runtime. Focused tests passed 14/14, existing status/config
+  preview smoke tests passed 4/4, and the warning-as-error Release build had
+  zero warnings. Ferry reviewed and approved this slice.
 
-Immediate next work: plan ticket #2 slice 7's internal 2.0 status for both
-providers, including Codex managed personality. Resolve
+Immediate next work: plan ticket #2 slice 8's public Codex apply migration.
+Resolve
 the semantic commit rewording when permissions permit. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
