@@ -168,8 +168,9 @@ selected platform and direct edits to the authored shared, platform, or
 provider source before `render` and review. Codex uses strict block versions
 7/8 (the latter retains manual ChatGPT backup guidance); Copilot uses version
 2. The read-only helper recognizes these versions and the supported 1.x blocks;
-a legacy block reports drift because a future 2.0 apply would replace it. The
-public 1.x generators remain unchanged. The portable target itself never stores
+a legacy block reports drift against the portable target. Public Codex apply
+now replaces it; Copilot migration is still pending. The
+public 1.x init generators remain unchanged. The portable target never stores
 the machine-specific repository binding.
 
 An internal apply preview now shares the same committed-target and local-binding
@@ -180,10 +181,10 @@ wrong v2 platform binding stops and directs the user to init; a pulled target
 alone never authorizes a runtime write. The preview writes nothing and is not
 a reusable authorization token: any future apply must revalidate immediately
 before replacing runtime. Codex `config.toml` has a separate internal preview
-included in the composite apply preview; public commands remain on their 1.x
-contract.
+included in the composite apply preview. Ordinary public Codex `apply` now
+uses both previews; public status and backup still use their 1.x sources.
 
-The internal one-file writer is still disconnected from `aec apply`:
+The portable instruction writer is used by the guarded Codex apply path:
 
 ```mermaid
 flowchart LR
@@ -244,9 +245,9 @@ untouched. If the second replacement fails or a recheck detects a change,
 report which file may have changed; do not roll back automatically. Review
 the partial state and retry only after another preflight. Each file is
 individually guarded, not part of a two-file atomic transaction; the accepted
-last-instant external-edit limitation above still applies. Public 1.x
-`status`, `backup`, and `apply` remain unchanged until a separately approved
-coherent migration.
+last-instant external-edit limitation above still applies. Public Codex
+`apply` now uses this contract. Public `status`, `backup`, and Copilot `apply`
+remain on their 1.x contracts until their separately approved migrations.
 
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
@@ -293,9 +294,10 @@ the 1.x contract until its separately approved migration.
   the scope for an existing runtime file. An absent runtime file is `missing`,
   not evidence of activation; an absent home or wrong binding stops. Repository
   target presence alone never establishes local installation.
-- Keep the public `status` on the 1.x source until directional commands can
-  migrate coherently. Changing `status` alone would report drift that the
-  current `apply` could not fix; `backup` also still writes the legacy source.
+- Public Codex `apply` now consumes the enrolled committed target and managed
+  config, without falling back to the 1.x source. `status` and `backup` still
+  use 1.x sources; this development branch is not release-ready until those
+  directions migrate coherently.
 - Platform policy is sufficient for the current single-machine case. Different
   machines on the same platform may need distinct access roots; defer their
   storage contract until required, rather than claiming platform equals machine.
@@ -314,8 +316,8 @@ flowchart LR
     Local --> Block[Generated local block, v2 markers]
     Block --> Inspect[Internal read-only target status]
     Block --> Preview[Internal apply preview, no write]
-    Preview --> Writer[Internal one-file writer, isolated use only]
-    Inspect -.->|later| Directional[Coherent CLI migration]
+    Preview --> Writer[Public Codex apply: config then instructions]
+    Inspect -.->|later| Directional[Status and backup CLI migration]
     Writer -.->|later| Directional
 ```
 
@@ -342,6 +344,6 @@ bytes without reading runtime. The internal status helper can compare that
 target with a selected local runtime; supported legacy blocks report drift
 against v2 output. The apply preview computes those same v2 bytes without
 writing; an internal writer can replace only a reviewed, revalidated local
-instruction file. None changes public `status` or `apply`. Existing
-provider-specific canonical files remain the active CLI source until a
-reviewed directional migration.
+instruction file. Public Codex `apply` now uses the combined writer; public
+`status`, `backup`, and Copilot `apply` still follow their 1.x paths. This is
+an intermediate development-branch state, not a coherent release contract.

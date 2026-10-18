@@ -231,13 +231,18 @@ public static class AecApplication
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
+        // Ordinary apply now consumes the enrolled rendered target. Init and
+        // attachment retain their checkpointed legacy writer separately.
+        var preview = PortableApplyPreview.Create(repository, "codex", codexHome);
+        if (preview.CodexConfig?.Inserted == true)
+        {
+            warning.WriteLine(
+                "warning: runtime config does not declare root `personality`; " +
+                "the committed value will be added.");
+        }
 
-        EnsureNoLinksInManagedRoots(repository, codexHome);
-        EnsureRealDirectory(repository, "Repository");
-        EnsureSourceDirectories(repository);
-        EnsureRealDirectory(codexHome, "Codex home");
-
-        return ApplyCommand.Run(repository, codexHome, output, warning);
+        output.WriteLine(PortableCodexWriter.Apply(preview));
+        return 0;
     }
 
     private static RepositoryOptions ParseRepositoryArguments(string[] args, string command)

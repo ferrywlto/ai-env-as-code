@@ -800,12 +800,18 @@ public sealed class ApplyTests
     [Fact]
     public void UsesCodexHomeFromEnvironmentWhenFlagIsAbsent()
     {
-        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
+        using var layout = new SharedTargetStatusTests.StatusLayout("codex");
+        layout.WriteRuntime(portableBlock: true);
+        File.AppendAllText(layout.RuntimePath, "Unreviewed instruction edit.\n");
+        File.WriteAllText(Path.Combine(layout.ProviderHome, "config.toml"),
+            "personality = \"none\"\n");
+        var desired = PortableApplyPreview.Create(
+            layout.Repository, "codex", layout.ProviderHome).DesiredRuntime;
         var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
 
         try
         {
-            Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
+            Environment.SetEnvironmentVariable("CODEX_HOME", layout.ProviderHome);
             var output = new StringWriter();
             var error = new StringWriter();
 
@@ -816,7 +822,7 @@ public sealed class ApplyTests
 
             Assert.Equal(0, exitCode);
             Assert.Equal($"applied{Environment.NewLine}", output.ToString());
-            Assert.Equal("desired\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
+            Assert.Equal(desired, File.ReadAllBytes(layout.RuntimePath));
         }
         finally
         {
@@ -869,12 +875,25 @@ public sealed class ApplyTests
 
     private static CommandResult Run(ApplyLayout layout)
     {
-        return TestApplication.Run(
-            "apply",
-            "--repo",
-            layout.Repository,
-            "--codex-home",
-            layout.CodexHome);
+        // Ordinary public apply now uses the 2.0 rendered target. These
+        // fixtures still exercise the 1.x writer retained by init/attachment.
+        var output = new StringWriter();
+        var error = new StringWriter();
+        try
+        {
+            AecApplication.EnsureNoLinksInExistingPath(layout.Repository, "Repository path");
+            AecApplication.EnsureNoLinksInExistingPath(layout.CodexHome, "Codex home path");
+            AecApplication.EnsureRealDirectory(layout.Repository, "Repository");
+            AecApplication.EnsureSourceDirectories(layout.Repository);
+            AecApplication.EnsureRealDirectory(layout.CodexHome, "Codex home");
+            var exitCode = ApplyCommand.Run(layout.Repository, layout.CodexHome, output, error);
+            return new CommandResult(exitCode, output.ToString(), error.ToString());
+        }
+        catch (Exception exception)
+        {
+            error.WriteLine($"error: {exception.Message}");
+            return new CommandResult(1, output.ToString(), error.ToString());
+        }
     }
 
     private static void AssertNoTemporaryFiles(ApplyLayout layout)

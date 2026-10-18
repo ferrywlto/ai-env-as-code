@@ -236,13 +236,21 @@
   `status` or write runtime. Focused tests passed 14/14, existing status/config
   preview smoke tests passed 4/4, and the warning-as-error Release build had
   zero warnings. Ferry reviewed and approved this slice.
+- [x] Review ticket #2 slice 8's public Codex apply migration. Ordinary Codex
+  `aec apply` now requires an enrolled committed target and uses the reviewed
+  config-first portable writer; it has no 1.x source fallback. Init/attachment
+  still use their checkpointed legacy writer, Copilot apply is unchanged, and
+  no personal runtime or data repository was touched. Public command tests
+  passed 12/12; retained legacy apply tests passed 46/46, Copilot apply tests
+  12/12, guarded writer tests 10/10, focused init lifecycle tests 3/3, and
+  the warning-as-error Release build had zero warnings. Ferry reviewed and
+  approved this slice.
 
-Immediate next work: plan ticket #2 slice 8's public Codex apply migration.
-Resolve
-the semantic commit rewording when permissions permit. Public
-`status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
-their directional migration is coherent; do not add a `--shared` switch or
-sidecar lock.
+Immediate next work: plan ticket #2 slice 9's public Copilot apply migration.
+Resolve the semantic commit rewording when permissions
+permit. Public `status`, `backup`, and Copilot `apply` remain on their 1.x
+paths until directional migration is coherent; do not add a `--shared` switch
+or sidecar lock.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 
