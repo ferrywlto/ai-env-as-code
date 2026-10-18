@@ -1,7 +1,7 @@
 namespace Aec;
 
-// This is deliberately disconnected from the public CLI. A reviewed preflight
-// snapshot permits one instruction-file replacement, never a repository write.
+// A reviewed preflight snapshot permits one instruction-file replacement,
+// never a repository write. Public provider apply routes through this guard.
 internal static class PortableInstructionWriter
 {
     public static string Apply(PortableRuntimeSnapshot reviewed)

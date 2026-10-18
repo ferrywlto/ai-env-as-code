@@ -227,7 +227,17 @@ public static class AecApplication
         if (options.Provider == "copilot")
         {
             var copilotHome = ResolveCopilotHome(options.CopilotHome);
-            return CopilotApplyCommand.Run(repository, copilotHome, output);
+            // Ordinary apply consumes the enrolled, committed rendered target;
+            // provider init retains its separate first-installation flow.
+            var copilotPreview = PortableApplyPreview.Create(repository, "copilot", copilotHome);
+            var result = PortableInstructionWriter.Apply(copilotPreview.Snapshot);
+            if (PortableApplyPreview.Create(repository, "copilot", copilotHome).WouldReplace)
+            {
+                throw new IOException("Copilot runtime instructions differ after apply.");
+            }
+
+            output.WriteLine(result);
+            return 0;
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
@@ -473,11 +483,6 @@ public static class AecApplication
 
                 enrollShared = true;
                 continue;
-            }
-
-            if (argument.StartsWith("--", StringComparison.Ordinal))
-            {
-                throw new ArgumentException($"Unknown argument: {argument}");
             }
 
             throw new ArgumentException($"Unknown argument: {argument}");

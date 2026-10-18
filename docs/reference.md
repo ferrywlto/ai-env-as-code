@@ -722,9 +722,14 @@ Copilot apply is the explicit committed repository-to-runtime direction:
 aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 ```
 
-It requires the canonical path's working bytes to match one regular file committed
-at `HEAD`, validates the selected repository binding, and atomically replaces only
-runtime `copilot-instructions.md`. Equal bytes report `unchanged` without a rewrite.
+It requires a clean, enrolled rendered target for the current platform that
+matches the committed authored sources, plus an existing runtime file bound to
+the selected repository and, when recorded, current platform. A missing
+runtime file directs the user to provider `init`; there is no fallback to the
+legacy canonical file. Apply revalidates the committed target and runtime
+bytes, atomically replaces only runtime `copilot-instructions.md` when needed,
+then checks the result. Equal
+bytes report `unchanged` without a rewrite.
 It never captures runtime changes, changes canonical data, stages, commits, pushes,
 manages `config.json`, or installs/upgrades the skill.
 
@@ -1127,7 +1132,8 @@ manually if no longer wanted.
 
 The tool does not implement `diff`, `verify`, `restore`, manifests, automatic
 ChatGPT capture/deployment, prebuilt binary distribution, or pushing. `render`
-changes repository targets only; public `apply` does not yet deploy them.
+changes repository targets only; public `apply` deploys an enrolled committed
+target for the selected provider and current platform.
 
 Source writes and Git commits operate only on the data repository explicitly
 selected with `--repo`; they never infer or modify the engine repository.

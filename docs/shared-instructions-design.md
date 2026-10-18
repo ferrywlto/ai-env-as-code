@@ -9,14 +9,14 @@ flowchart LR
     Platform[Selected platform policy] --> Render
     Provider[Enrolled provider overlays] --> Render
     Render --> Target[Portable canonical target]
-    Target -.->|future integration| Apply["aec apply"]
-    Legacy[Committed 1.x provider file] --> Apply
+    Target --> Apply["aec apply"]
     Apply --> Runtime[Local harness]
 ```
 
-Git history remains the source of truth. Today, `render` only updates repository
-targets; `apply` still reads the legacy provider file. Equivalent instructions
-across harnesses do not guarantee identical model behaviour.
+Git history remains the source of truth. `render` updates repository targets;
+`apply` deploys the committed selected target to an initialized local harness.
+Equivalent instructions across harnesses do not guarantee identical model
+behaviour.
 
 ## Check only when AEC work is requested
 
@@ -130,8 +130,8 @@ sequenceDiagram
 
 Both installed skills use the same source decision; the binary validates and
 renders it. `render` reports changed paths but never commits, applies, pushes,
-or writes runtime. After future integration, an explicit `apply` will deploy
-committed targets and `status` will compare them with runtime. There is no
+or writes runtime. Explicit `apply` now deploys committed targets; public
+`status` has not yet migrated to compare them with runtime. There is no
 automatic `sync`.
 
 The v2 target path is
@@ -139,7 +139,8 @@ The v2 target path is
 portable authored sections. AEC's machine-specific repository binding and
 command guidance belong in a generated local runtime block, not the portable
 target. Existing `environment/providers/<provider>/<instruction-file>` files
-remain the active canonical paths until a reviewed migration.
+remain the active canonical paths for unmigrated status and backup commands;
+ordinary apply now consumes the committed rendered target for both providers.
 
 `init --enroll-shared` now creates the selected target after validating the
 three committed authored sources and the completed legacy AEC repository. It
@@ -165,11 +166,11 @@ repository binding stops with an error. This remains disconnected from public
 
 In-memory 2.0 local control blocks now name the committed target for the
 selected platform and direct edits to the authored shared, platform, or
-provider source before `render` and review. Codex uses strict block versions
-7/8 (the latter retains manual ChatGPT backup guidance); Copilot uses version
-2. The read-only helper recognizes these versions and the supported 1.x blocks;
-a legacy block reports drift against the portable target. Public Codex apply
-now replaces it; Copilot migration is still pending. The
+provider source before `render` and review. The latest stamped Codex blocks
+use versions 9/10 (the latter retains manual ChatGPT backup guidance), and
+Copilot uses version 3. The read-only helper also recognizes earlier portable
+and supported 1.x blocks; a legacy block reports drift against the portable
+target. Public apply now replaces it for both providers. The
 public 1.x init generators remain unchanged. The portable target never stores
 the machine-specific repository binding.
 
@@ -184,7 +185,7 @@ before replacing runtime. Codex `config.toml` has a separate internal preview
 included in the composite apply preview. Ordinary public Codex `apply` now
 uses both previews; public status and backup still use their 1.x sources.
 
-The portable instruction writer is used by the guarded Codex apply path:
+The portable instruction writer is used by both guarded public apply paths:
 
 ```mermaid
 flowchart LR
@@ -199,13 +200,15 @@ flowchart LR
 An explicitly requested apply may replace runtime-only drift that was present
 at review time; Git can recover committed canonical versions, not an
 uncommitted runtime-only edit. The writer changes only the selected local
-instruction file, never the data repository or Codex `config.toml`. Its final
-byte check rejects observed concurrent edits, but the existing filesystem API
-cannot make comparison and rename a cross-process atomic transaction; do not
+instruction file, never the data repository or Codex `config.toml`. Public
+Copilot apply verifies the resulting runtime bytes after this writer returns.
+The writer's final byte check rejects observed concurrent edits, but the
+existing filesystem API cannot make comparison and rename a cross-process
+atomic transaction; do not
 claim protection against an edit in that last instant. The accepted policy is
 to detect later drift at the next AEC-related preflight rather than add a
 sidecar lock or claim protection from non-cooperating manual editors. Public
-CLI migration remains blocked on the Codex config and backup contracts.
+status and backup still await their separate migration slices.
 
 ## Codex config preflight contract (approved; internal only)
 
@@ -246,8 +249,9 @@ report which file may have changed; do not roll back automatically. Review
 the partial state and retry only after another preflight. Each file is
 individually guarded, not part of a two-file atomic transaction; the accepted
 last-instant external-edit limitation above still applies. Public Codex
-`apply` now uses this contract. Public `status`, `backup`, and Copilot `apply`
-remain on their 1.x contracts until their separately approved migrations.
+`apply` now uses this contract. Copilot `apply` uses only the instruction writer;
+public `status` and `backup` remain on their 1.x contracts until their
+separately approved migrations.
 
 Planned reverse mapping for `backup` is deliberately narrower than free-form
 instruction editing:
@@ -344,6 +348,7 @@ bytes without reading runtime. The internal status helper can compare that
 target with a selected local runtime; supported legacy blocks report drift
 against v2 output. The apply preview computes those same v2 bytes without
 writing; an internal writer can replace only a reviewed, revalidated local
-instruction file. Public Codex `apply` now uses the combined writer; public
-`status`, `backup`, and Copilot `apply` still follow their 1.x paths. This is
+instruction file. Public Codex `apply` now uses the combined writer, and
+Copilot `apply` uses the guarded instruction writer. Public `status` and
+`backup` still follow their 1.x paths. This is
 an intermediate development-branch state, not a coherent release contract.

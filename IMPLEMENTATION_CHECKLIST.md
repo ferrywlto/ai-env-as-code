@@ -246,11 +246,21 @@
   the warning-as-error Release build had zero warnings. Ferry reviewed and
   approved this slice.
 
-Immediate next work: plan ticket #2 slice 9's public Copilot apply migration.
-Resolve the semantic commit rewording when permissions
-permit. Public `status`, `backup`, and Copilot `apply` remain on their 1.x
-paths until directional migration is coherent; do not add a `--shared` switch
-or sidecar lock.
+- [x] Review ticket #2 slice 9's public Copilot apply migration. Ordinary
+  Copilot `aec apply` now requires an enrolled committed current-platform
+  target and an existing, correctly bound runtime file; it has no 1.x source
+  fallback. Provider init retains its first-installation flow. Public apply
+  tests passed 14/14, adjacent init/Codex apply/shared guard tests passed
+  118/118, init-argument tests passed 3/3 after removing a redundant parser
+  branch, and the warning-as-error Release build had zero warnings. No
+  personal runtime or data repository was touched. Ferry reviewed and
+  approved this slice.
+
+Immediate next work: plan ticket #2 slice 10's public status migration for
+both providers. Resolve the semantic commit rewording when permissions
+permit. Public `status` and `backup` remain on their 1.x paths until
+directional migration is coherent; do not add a `--shared` switch or
+sidecar lock.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 
