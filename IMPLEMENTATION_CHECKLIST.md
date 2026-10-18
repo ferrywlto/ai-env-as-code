@@ -211,9 +211,18 @@
   the warning-as-error build had zero warnings. Ferry reviewed and approved
   this substep. Slice 5 stays incomplete until affected enrolled targets are
   rendered and reviewed.
+- [x] Review the internal all-platform target-rendering substep of ticket #2
+  slice 5. It uses committed enrollment paths, selects only targets consuming
+  the one changed source, checks every target's committed baseline before any
+  write, then replaces affected repository targets with freshness checks and
+  explicit partial-state reporting. It does not detect installed harnesses,
+  create unused targets, commit, write runtime, or change public commands.
+  Disposable focused tests passed 11/11 across all three supported platform
+  paths; the existing public-render tests passed 4/4 and the warning-as-error
+  build had zero warnings. Ferry reviewed and approved this substep.
 
-Immediate next work: implement guarded rendering of affected enrolled targets
-as the remainder of ticket #2 slice 5. Resolve
+Immediate next work: implement ticket #2 slice 6's exact-path staging and
+separately approved Git commit. Resolve
 the semantic commit rewording when permissions permit. Public
 `status`, `backup`, and `apply` stay on their 1.x provider-specific contract until
 their directional migration is coherent; do not add a `--shared` switch or
