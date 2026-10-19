@@ -303,10 +303,20 @@
   as legacy; and correct four stale public-routing code comments. Ferry
   reviewed and approved this documentation slice.
 
-Immediate next work: add a read-only Copilot portable backup preflight for
-ticket #2, with focused tests; leave the public backup route and canonical
-files unchanged. Keep `docs/architecture.md` aligned with new relationships.
-Resolve the
+- [x] Review ticket #2 slice 12's read-only Copilot backup preflight. It
+  reuses the committed-target snapshot and single-section attribution, checks
+  that HEAD stays stable through the preview, and never writes or changes the
+  public Copilot backup command. Focused preview tests passed 6/6, and new
+  preview plus existing attribution tests passed 29/29; the
+  warning-as-error Release build had zero warnings. `docs/architecture.md`
+  identifies this internal preview and the still-legacy public route. No
+  personal runtime or data repository was touched. Ferry reviewed and
+  approved this slice; its unused `HasChanges` convenience property was
+  removed before commit.
+
+Immediate next work: implement the guarded Copilot repository writer as the
+next separate slice, leaving the public backup route unchanged. Keep
+`docs/architecture.md` aligned with new relationships. Resolve the
 semantic commit rewording when permissions permit. Do not add a `--shared`
 switch or sidecar lock. Run the complete suite before push or release.
 

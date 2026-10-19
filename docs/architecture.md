@@ -112,6 +112,7 @@ previews plan changes but do not authorize writes without revalidation.
 classDiagram
     class AecApplication
     class PortableApplyPreview
+    class PortableRuntimeSnapshot
     class PortableInstructionWriter {
         +Apply(reviewed)
     }
@@ -120,6 +121,9 @@ classDiagram
     }
     class PortableCodexBackupPreview {
         +Create(repository, codexHome)
+    }
+    class PortableCopilotBackupPreview {
+        +Create(repository, copilotHome)
     }
     class PortableBackupAttributionPreview {
         +Create(snapshot)
@@ -146,6 +150,8 @@ classDiagram
     PortableCodexWriter --> PortableInstructionWriter : instruction step
     AecApplication --> PortableCodexBackupPreview : Codex backup preflight
     PortableCodexBackupPreview --> PortableBackupAttributionPreview : attribute one section
+    PortableCopilotBackupPreview --> PortableRuntimeSnapshot : read committed target and binding
+    PortableCopilotBackupPreview --> PortableBackupAttributionPreview : attribute one section
     AecApplication --> PortableCodexBackupWriter : Codex backup
     PortableCodexBackupWriter --> PortableBackupSourceWriter : changed authored source
     PortableCodexBackupWriter --> PortableBackupTargetWriter : affected enrolled targets
@@ -157,5 +163,7 @@ The Codex backup writer rechecks runtime inputs and Git state before replacing
 canonical files, then commits only the affected paths. An interrupted
 multi-file write can leave partial uncommitted changes, so it reports the need
 to inspect rather than rolling back automatically. Copilot `status` and
-`apply` use the portable target, but Copilot `backup` still uses the older
-single-provider-file flow; migrating it is the next separately reviewed slice.
+`apply` use the portable target. An internal, read-only Copilot backup preview
+now shares the snapshot and one-section attribution rules, but public Copilot
+`backup` still uses the older single-provider-file flow. Its guarded writer
+and public migration remain separate review slices.
