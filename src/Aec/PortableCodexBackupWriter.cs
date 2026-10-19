@@ -14,6 +14,10 @@ internal static class PortableCodexBackupWriter
             throw new InvalidOperationException("Codex backup has no reviewed changes.");
         }
 
+        // A detached or non-local symbolic HEAD cannot receive the commit.
+        // Check it before replacing any canonical source.
+        PortableBackupCommitter.RequireLocalBranch(current.Snapshot.Repository);
+
         // Refuse an existing index before any source replacement, not only at
         // the final commit, so unrelated staged work is never mixed into it.
         var staged = GitProcess.Run(current.Snapshot.Repository,

@@ -22,8 +22,8 @@ flowchart LR
 deploys committed repository content to runtime. `status` only inspects drift.
 The commands have separate directions; there is no automatic `sync`.
 
-The 2.0.0-alpha.4 development branch adds **repository-only** enrollment and
-rendering plus Git-remote guidance in the bundled skills:
+The 2.0 development branch adds portable target enrollment and rendering,
+plus Git-remote guidance in the bundled skills:
 
 ```mermaid
 flowchart LR
@@ -31,14 +31,16 @@ flowchart LR
     Platform[Current platform policy] --> Render
     Provider[Enrolled provider overlays] --> Render
     Render --> Targets[Portable canonical targets]
-    Targets -.->|not yet connected to apply| Runtime[Local harness]
+    Targets -->|aec apply| Runtime[Local harness]
 ```
 
 `render` changes neither runtime nor Git history. The new
 `init --enroll-shared` creates one selected target from reviewed, committed
-sources without changing runtime or committing. Ordinary `init`, `status`,
-`backup`, and `apply` still use their 1.x provider-specific canonical files;
-runtime integration remains a later increment.
+sources without changing runtime or committing. Codex and Copilot `status`
+and `apply` use enrolled committed targets. Codex `backup` attributes at most
+one changed instruction section to an authored source and/or captures its
+managed root personality in one commit. Copilot `backup` and ordinary provider
+`init` still use their existing provider-specific flows.
 
 ## Where should an instruction go?
 

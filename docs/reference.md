@@ -7,9 +7,10 @@ their section says otherwise.
 
 Version 2.0.0-alpha.4 adds host-agnostic Git remote preflight guidance to the
 bundled skills. `aec render` and enrollment are repository-only. On the
-development branch, ordinary `apply` and `status` now use committed portable
-targets; `init` and `backup` retain their 1.x flows until separate migration
-slices. These development changes are not yet a released binary. See the
+development branch, ordinary `apply` and `status` use committed portable
+targets. Codex `backup` now captures portable authored sources; ordinary
+`init` and Copilot `backup` retain their provider-specific flows. These
+development changes are not yet a released binary. See the
 [approved design](shared-instructions-design.md). Copilot remains alpha
 and is not verified against the real harness on any platform.
 
@@ -276,30 +277,26 @@ aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 `apply` has the opposite data-flow direction from `backup`:
 
 ```text
-committed <repo>/environment/providers/codex/AGENTS.md
-  -> <codex-home>/AGENTS.md
+committed <repo>/environment/targets/<platform>/codex/AGENTS.md
+  + local AEC control block -> existing <codex-home>/AGENTS.md
 committed <repo>/environment/providers/codex/config.toml personality
   -> <codex-home>/config.toml personality
 ```
 
 The repository must be the exact root of a non-bare Git working tree with a
 committed `HEAD`. Detached HEAD is accepted because `apply` does not create a commit.
-Both canonical paths must be committed regular Git files with no staged or unstaged
-changes, and their raw working bytes must exactly match their committed blobs. This
-rejects line-ending, clean/smudge, and other Git filters that could make visibly
-different bytes appear clean. Unrelated repository changes are ignored and untouched.
-
-When the committed canonical source contains a supported v3 through v6 AEC block,
-`apply` checks its recorded repository path before reading runtime state. A path
-mismatch displays both paths, returns an error without mutation, and directs the
-caller to ordinary `aec init`. Malformed or unsupported AEC markers also fail
-closed. `apply` never accepts `--force-path-change`.
+The enrolled target, its three authored sources, and canonical config must match
+their committed bytes. An existing runtime `AGENTS.md` must carry a supported
+binding to the selected repository and platform; a missing runtime file or path
+mismatch stops and directs the caller to ordinary `aec init`. Malformed or
+unsupported markers also fail closed. `apply` never accepts
+`--force-path-change`. Unrelated repository changes are ignored and untouched.
 
 The managed configuration decision is intentionally non-interactive:
 
 ```mermaid
 flowchart TD
-    Start["Run aec apply with an explicit --repo"] --> Validate["Validate committed canonical files<br/>and both observed runtime files"]
+    Start["Run aec apply with an explicit --repo"] --> Validate["Validate committed target, authored sources, config<br/>and bound runtime files"]
     Validate --> Valid{"Are all inputs valid?"}
     Valid -->|"No"| Stop["Stop without changing runtime"]
     Valid -->|"Yes"| Present{"Does runtime have a root personality?"}
@@ -314,7 +311,7 @@ flowchart TD
     Replace --> Agents
     Insert --> Agents
     Create --> Agents
-    Agents -->|"Yes"| ApplyAgents["Apply committed AGENTS.md bytes"]
+    Agents -->|"Yes"| ApplyAgents["Apply committed target with local AEC block"]
     Agents -->|"No"| KeepAgents["Leave AGENTS.md unchanged"]
     ApplyAgents --> Changed{"Did either runtime file change?"}
     KeepAgents --> Changed
@@ -349,56 +346,37 @@ There is no separate backup, receipt, Git mutation, commit, or push.
 aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
 ```
 
-`backup` has one explicit data-flow direction:
+`backup` has one explicit runtime-to-repository direction:
 
-```text
-<codex-home>/AGENTS.md
-  -> <repo>/environment/providers/codex/AGENTS.md
-<codex-home>/config.toml personality
-  -> <repo>/environment/providers/codex/config.toml personality
-both canonical paths
-  -> one Git commit in <repo>
+```mermaid
+flowchart LR
+    Runtime[Bound runtime AGENTS.md] -->|one attributable section| Source[Shared, platform, or Codex source]
+    Source --> Render[Affected enrolled targets]
+    Config[Runtime root personality] --> Canonical[Canonical config.toml]
+    Render --> Commit[One exact-path Git commit]
+    Canonical --> Commit
 ```
 
-The repository must be the exact root of a non-bare Git working tree on a symbolic
-branch. Repository and runtime paths must not contain symbolic-link or reparse-point
-ancestors, and the runtime must remain outside the data repository. Before changing
-canonical data, the command rejects staged, unstaged, or untracked changes outside
-the two fixed managed paths. Pending changes at either managed path are allowed so a
-rerun can resume after an interrupted write or failed commit.
+The selected repository must have a symbolic local branch and a committed,
+clean, enrolled target for the current platform and Codex. Runtime instructions
+must be bound to that
+repository and stamped with the current target digest. Backup accepts zero or
+one changed authored instruction section, and an independent managed root
+personality change; a config-only change is valid. Control-block edits,
+multiple changed sections, missing enrollment, wrong binding, or a stale
+target digest stop before writing. Missing runtime `config.toml` or root
+`personality` warns and stops. Invalid TOML stops with an error.
 
-Both runtime files and any existing canonical config are read and validated before
-either canonical file changes. A missing runtime `config.toml` or missing root
-`personality` prints a warning on standard error and returns exit code 1 without
-changing or staging repository data. Invalid, duplicate, ambiguous, or unsupported
-values also stop before capture.
-
-`AGENTS.md` is captured byte-for-byte. If canonical `config.toml` is absent, backup
-creates its minimal normalized managed value. Otherwise it replaces only the value
-token when its meaning differs, preserving canonical comments, spacing, line
-endings, and an optional UTF-8 byte-order mark. Unrelated runtime settings are never
-copied or changed.
-
-Each changed canonical file is replaced through its own flushed sibling temporary
-file, compare-before-replace check, and post-write verification. Two files cannot
-form one portable atomic filesystem transaction; interruption between them leaves
-only recognizable managed working changes that another `backup` can resume. The
-command stages only the two fixed canonical paths and creates one commit with this
-subject:
-
-```text
-Backup Codex environment
-```
-
-Git filters that would change either file's bytes while staging are rejected before
-commit. Git replacement objects are disabled throughout backup inspection, commit,
-and verification so validation always observes the raw repository objects.
-Configured Git hooks are isolated from the backup commit so they cannot alter the
-verified bytes or fixed subject; both managed blobs and the subject are checked
-again after the commit. On success, the command writes
-`committed <full-sha>`. When both managed values, working files, index, and current
-commit already agree, it writes `unchanged`. Both outcomes return exit code 0;
-validation and Git failures return exit code 1.
+Before writing, backup rechecks the runtime inputs and refuses an already
+staged index. It replaces only changed canonical sources and regenerates every
+affected committed target, including enrolled targets for other platforms.
+The managed personality update preserves canonical formatting and does not
+copy unrelated runtime TOML. Exact changed paths form one commit with subject
+`Backup portable Codex environment`. The command writes `committed <full-sha>`
+or `unchanged`; both return exit code 0. Validation and Git failures return 1.
+If a later step fails after a file replacement, inspect the uncommitted
+repository state before any retry; files are individually guarded, not one
+filesystem transaction.
 
 There is no separate backup directory or backup manifest. Git commit history is the
 source of truth. `backup` does not push or write runtime state; `apply` remains the

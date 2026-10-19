@@ -32,18 +32,6 @@ public sealed class CopilotBackupTests
                 "-r",
                 "HEAD").Output.Trim());
         Assert.Empty(Git(layout, "status", "--porcelain").Output);
-
-        var status = TestApplication.Run(
-            "status",
-            "--repo",
-            layout.Repository,
-            "--provider=copilot",
-            "--copilot-home",
-            layout.CopilotHome);
-        Assert.Equal(0, status.ExitCode);
-        Assert.Equal(
-            $"copilot/copilot-instructions.md in_sync{Environment.NewLine}",
-            status.Output);
     }
 
     [Fact]

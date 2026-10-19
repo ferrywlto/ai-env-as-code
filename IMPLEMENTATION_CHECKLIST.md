@@ -30,7 +30,8 @@
   (zero warnings/errors), whitespace checks, and both skill YAML frontmatter
   blocks. The skill-creator validator could not run because PyYAML is absent
   from the installed Python runtimes.
-- [ ] Integrate committed target validation with `status`, `backup`, and `apply`.
+- [ ] Complete committed-target backup migration for Copilot. Both providers'
+  public `status` and `apply`, and Codex public `backup`, now use committed targets.
 - [x] Enroll only the explicitly used platform and harness; preserve existing
   enrolled data and manual ChatGPT files.
 - [x] Add focused composition, section, and `render` xUnit tests to each
@@ -283,10 +284,23 @@
   warning-as-error Release build had zero warnings. No personal runtime or
   data repository was touched. Ferry reviewed and approved this checkpoint.
 
-Immediate next work: after Ferry reviews the guarded writer, plan ticket #2
-slice 11's public Codex `backup` route migration. Resolve the semantic commit
-rewording when permissions permit. Public `backup` remains on its 1.x path;
-do not add a `--shared` switch or sidecar lock.
+- [x] Review ticket #2 slice 11's public Codex backup migration. It requires a
+  current enrolled target and stamped runtime binding, captures config-only
+  or one instruction section plus config in one exact-path commit, warns and
+  stops on missing personality, and rejects a detached branch before writing.
+  There is no 1.x fallback. Retained initialization backup tests run directly
+  against the legacy helper; public path-safety tests now use portable fixtures.
+  Public backup/committer tests passed 24/24; legacy backup tests 28/28;
+  affected public backup, skill-upgrade, and Copilot backup tests 52/52; public
+  Copilot status tests 9/9. The warning-as-error Release build had zero
+  warnings. Skill frontmatter parsed successfully with Ruby; the skill-creator
+  validator could not start because PyYAML is absent. No personal runtime or
+  data repository was touched. Ferry reviewed and approved this slice.
+
+Immediate next work: document current component and class relationships with
+diagrams, then plan ticket #2's Copilot portable backup slice. Resolve the
+semantic commit rewording when permissions permit. Do not add a `--shared`
+switch or sidecar lock. Run the complete suite before push or release.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

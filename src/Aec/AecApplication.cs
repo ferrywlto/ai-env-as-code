@@ -137,14 +137,27 @@ public static class AecApplication
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
+        PortableCodexBackupPreview preview;
+        try
+        {
+            preview = PortableCodexBackupPreview.Create(repository, codexHome);
+        }
+        catch (MissingRuntimePersonalityException missing)
+        {
+            warning.WriteLine($"warning: {missing.Message}");
+            return 1;
+        }
 
-        EnsureNoLinksInManagedRoots(repository, codexHome);
-        ApplyCommand.EnsureRuntimeOutsideRepository(repository, codexHome);
-        EnsureRealDirectory(repository, "Repository");
-        EnsureSourceDirectories(repository);
-        EnsureRealDirectory(codexHome, "Codex home");
+        PortableBackupCommitter.RequireLocalBranch(repository);
+        if (!preview.HasChanges)
+        {
+            output.WriteLine("unchanged");
+            return 0;
+        }
 
-        return BackupCommand.Run(repository, codexHome, output, warning);
+        var commit = PortableCodexBackupWriter.WriteAndCommit(preview);
+        output.WriteLine($"committed {commit}");
+        return 0;
     }
 
     private static int RunInit(

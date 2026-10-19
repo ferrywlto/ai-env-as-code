@@ -33,8 +33,8 @@ internal sealed record PortableCodexBackupPreview(
         if (runtime is null ||
             CodexPersonalityConfig.ReadRuntime(runtime, runtimePath) is not { } personality)
         {
-            throw new InvalidOperationException(
-                "Runtime config does not declare root `personality`; " +
+            throw new MissingRuntimePersonalityException(
+                "runtime config does not declare root `personality`; " +
                 "backup stopped without changing the repository.");
         }
 
@@ -57,3 +57,6 @@ internal sealed record PortableCodexBackupPreview(
             update.Changed);
     }
 }
+
+internal sealed class MissingRuntimePersonalityException(string message)
+    : InvalidOperationException(message);

@@ -17,9 +17,9 @@ from the AEC commands below.
 - `aec help` lists supported command forms without changing state.
 - Run exactly `aec version` without options, not `aec --version`.
 - `aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` is read-only.
-  It compares exact `AGENTS.md` bytes and the managed root `personality`
-  semantically, ignoring unrelated runtime TOML. `different` and `missing`
-  mean drift, not command failure.
+  It compares the enrolled committed target with local instructions and the
+  managed root `personality` semantically, ignoring unrelated runtime TOML.
+  `different` and `missing` mean drift, not command failure.
 
 If the requested data-flow direction is unclear, run `status` and ask the user to
 choose. Never invent an automatic `sync` operation.
@@ -71,8 +71,9 @@ Enrollment creates only the portable target: no runtime write, commit, or
 push. Review it before a separate commit. For later approved source changes,
 show affected targets, run `aec render --repo ABSOLUTE_PATH`, then review and
 separately approve the source/target commit. `render` does not touch runtime
-or Git history. Current `backup`/`apply` still use 1.x canonical files; do
-not claim a rendered target was deployed. Stop if v2 enrollment is absent.
+or Git history. Codex `status`, `backup`, and `apply` now require the enrolled
+committed target. Stop if v2 enrollment is absent; do not fall back to the
+1.x canonical instruction file.
 
 ## Upgrade installed skill guidance
 
@@ -174,17 +175,21 @@ and skill upgrade are unavailable. Do not substitute Codex flags.
 ## Back up runtime to Git
 
 Run `aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` only with
-approval for the repository write and commit. It copies exact runtime
-instructions and a supported root personality, then commits changed canonical
-files as `Backup Codex environment`. Missing runtime personality warns and
-stops. It never writes runtime, captures unrelated TOML, or pushes.
+approval for the repository write and commit. It attributes at most one changed
+instruction section to its authored source, regenerates affected enrolled
+targets, and/or captures a changed supported root personality. It makes one
+exact-path commit for the changes. Missing runtime personality warns and stops;
+stale target digests, ambiguous instruction edits, and wrong repository binding
+also stop. Review those cases rather than guessing a source. Backup never
+writes runtime, captures unrelated TOML, or pushes.
 
 ## Apply Git to runtime
 
 Run `aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]` only with
-approval to replace runtime. It writes exact committed `AGENTS.md` (creating
-it if missing) and adds/updates only the committed root personality (creating
-`config.toml` if missing). It preserves unrelated runtime TOML and warns
-before adding a missing managed value. It never captures runtime, changes
-Git, commits, or pushes. On a committed-path mismatch, stop and suggest
-ordinary `aec init`.
+approval to replace runtime. It deploys the enrolled committed target into an
+existing, correctly bound runtime `AGENTS.md`; use ordinary init if that file
+is missing. It adds/updates only the committed root personality (creating
+`config.toml` if missing), preserves unrelated runtime TOML, and warns before
+adding a missing managed value. It never captures runtime, changes Git,
+commits, or pushes. On a committed-path mismatch, stop and suggest ordinary
+`aec init`.

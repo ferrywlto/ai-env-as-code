@@ -104,7 +104,8 @@ environment/
 
 The current opt-in requires these files to exist in a completed repository
 and match committed `HEAD`. It does not create or classify them. Existing Codex
-`AGENTS.md` and managed `config.toml` remain the active legacy files;
+`AGENTS.md` remains in ordinary init's legacy lifecycle; managed
+`config.toml` remains the canonical personality source;
 initializing Copilot or another platform enrolls only the selected target.
 CI coverage does not enroll anything in the user's data repository.
 
@@ -125,13 +126,13 @@ sequenceDiagram
     Skill->>User: Show source and rendered diff
     User->>Skill: Approve commit separately
     Skill->>Repo: Commit reviewed files
-    Note over User,CLI: Runtime apply remains a later 2.0 increment
+    Note over User,CLI: A separate approved aec apply deploys the commit
 ```
 
 Both installed skills use the same source decision; the binary validates and
 renders it. `render` reports changed paths but never commits, applies, pushes,
 or writes runtime. Explicit `apply` now deploys committed targets; public
-`status` has not yet migrated to compare them with runtime. There is no
+`status` compares them with runtime. There is no
 automatic `sync`.
 
 The v2 target path is
@@ -139,8 +140,9 @@ The v2 target path is
 portable authored sections. AEC's machine-specific repository binding and
 command guidance belong in a generated local runtime block, not the portable
 target. Existing `environment/providers/<provider>/<instruction-file>` files
-remain the active canonical paths for unmigrated status and backup commands;
-ordinary apply now consumes the committed rendered target for both providers.
+remain in ordinary init and Copilot backup. Ordinary status and apply consume
+committed rendered targets for both providers; Codex backup captures portable
+authored sources.
 
 `init --enroll-shared` now creates the selected target after validating the
 three committed authored sources and the completed legacy AEC repository. It
@@ -184,7 +186,7 @@ alone never authorizes a runtime write. The preview writes nothing and is not
 a reusable authorization token: any future apply must revalidate immediately
 before replacing runtime. Codex `config.toml` has a separate internal preview
 included in the composite apply preview. Ordinary public Codex `apply` now
-uses both previews; public backup still uses its 1.x source.
+uses both previews; public Codex backup uses the reverse portable preflight.
 
 The portable instruction writer is used by both guarded public apply paths:
 
@@ -209,9 +211,10 @@ atomic transaction; do not
 claim protection against an edit in that last instant. The accepted policy is
 to detect later drift at the next AEC-related preflight rather than add a
 sidecar lock or claim protection from non-cooperating manual editors. Public
-status and backup still await their separate migration slices.
+status and Codex backup now use the committed portable target; Copilot backup
+remains a separate migration slice.
 
-## Codex config preflight contract (approved; internal only)
+## Codex config preflight contract
 
 The committed `environment/providers/codex/config.toml` remains the canonical
 source for one managed root setting, `personality` (`none`, `friendly`, or
@@ -252,9 +255,10 @@ individually guarded, not part of a two-file atomic transaction; the accepted
 last-instant external-edit limitation above still applies. Public Codex
 `apply` now uses this contract. Copilot `apply` uses only the instruction writer;
 public `status` now uses the committed target and managed config preview;
-`backup` remains on its 1.x contract until its separately approved migration.
+Codex `backup` uses the reverse portable preflight. Copilot backup migration
+remains separate.
 
-Planned reverse mapping for `backup` is deliberately narrower than free-form
+Reverse mapping for Codex `backup` is deliberately narrower than free-form
 instruction editing:
 
 ```mermaid
@@ -288,15 +292,14 @@ which harnesses are installed on the rendering machine. Public `aec render`
 remains scoped to the current platform. The internal commit step rechecks the
 exact changed paths and both runtime files, pins and verifies their Git tree,
 and makes one commit. A failure after a replacement may leave earlier files
-uncommitted; inspect before retrying. This internal writer is not called by
-public `backup`, and it does not fetch or push. The public 2.0 backup flow is
-**not implemented yet**.
+uncommitted; inspect before retrying. Public Codex `backup` calls this guarded
+writer; it does not fetch or push.
 The digest is SHA-256 of the rendered target bytes, excluding the local AEC
 control block. The internal Codex and Copilot portable blocks record it, and
 the read-only backup preview rejects missing or mismatched digests before
 attributing a runtime edit. Older unstamped blocks remain readable for apply
-migration, but cannot prove a fresh backup baseline. Public `backup` remains on
-the 1.x contract until its separately approved migration.
+migration, but cannot prove a fresh backup baseline. Public Codex `backup`
+requires a stamped, current baseline; Copilot backup migration is separate.
 
 ## Direction and boundaries
 
@@ -310,10 +313,10 @@ the 1.x contract until its separately approved migration.
   the scope for an existing runtime file. An absent runtime file is `missing`,
   not evidence of activation; an absent home or wrong binding stops. Repository
   target presence alone never establishes local installation.
-- Public Codex `apply` now consumes the enrolled committed target and managed
-  config, without falling back to the 1.x source. `status` and `backup` still
-  use 1.x sources; this development branch is not release-ready until those
-  directions migrate coherently.
+- Public Codex `status`, `backup`, and `apply` consume the enrolled committed
+  target without falling back to the 1.x instruction source. Codex backup
+  also captures the managed root personality. Copilot backup still awaits
+  portable migration; this development branch is not release-ready yet.
 - Platform policy is sufficient for the current single-machine case. Different
   machines on the same platform may need distinct access roots; defer their
   storage contract until required, rather than claiming platform equals machine.
@@ -330,11 +333,11 @@ flowchart LR
     Enrollment --> Validation[Committed target validation helper]
     Validation --> Local[Explicit local home and runtime binding]
     Local --> Block[Generated local block, v2 markers]
-    Block --> Inspect[Internal read-only target status]
-    Block --> Preview[Internal apply preview, no write]
-    Preview --> Writer[Public Codex apply: config then instructions]
-    Inspect -.->|later| Directional[Status and backup CLI migration]
-    Writer -.->|later| Directional
+    Block --> Inspect[Public read-only target status]
+    Block --> Preview[Apply preview]
+    Preview --> Writer[Public Codex and Copilot apply]
+    Block --> Backup[Public Codex portable backup]
+    Backup -.->|later| Copilot[Copilot backup migration]
 ```
 
 A small .NET BCL composition function accepts explicitly supplied shared,
@@ -350,8 +353,8 @@ omitted; whitespace-only content is retained. It adds no final newline. Optional
 platform/provider text may be absent. The caller supplies the generated block;
 this function neither validates that block nor interprets Markdown or resolves
 policy conflicts. The repository-only render command now wraps authored sections
-with exact markers and validates strict UTF-8. Runtime integration and safe
-reverse mapping through `backup` remain separate increments.
+with exact markers and validates strict UTF-8. Copilot backup reverse mapping
+remains a separate increment.
 
 The approved rendered Codex/Copilot example confirms that shared approval and
 access policy are retained while provider-only instructions stay scoped. The
@@ -362,5 +365,6 @@ against v2 output. The apply preview computes those same v2 bytes without
 writing; an internal writer can replace only a reviewed, revalidated local
 instruction file. Public Codex `apply` now uses the combined writer, and
 Copilot `apply` uses the guarded instruction writer. Public `status` reads
-the committed target; `backup` still follows its 1.x path. This is
-an intermediate development-branch state, not a coherent release contract.
+the committed target; Codex `backup` now follows the guarded portable path,
+while Copilot backup remains provider-specific. This is an intermediate
+development-branch state, not a coherent release contract.

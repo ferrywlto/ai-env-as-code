@@ -49,9 +49,7 @@ internal static class PortableBackupCommitter
         }
 
         var repository = reviewed.Repository;
-        var branch = GitProcess.RunRequired(repository,
-            "Could not identify the backup branch", "symbolic-ref", "--quiet", "HEAD")
-            .Output.Trim();
+        var branch = RequireLocalBranch(repository);
         EnsureHeadAndRuntime();
         // Refuse a mixed index before staging anything. Other unstaged files
         // remain untouched; only the paths returned by rendering are added.
@@ -210,5 +208,24 @@ internal static class PortableBackupCommitter
                     "Backup HEAD or runtime changed after review; commit stopped.");
             }
         }
+    }
+
+    internal static string RequireLocalBranch(string repository)
+    {
+        var result = GitProcess.Run(repository, "symbolic-ref", "--quiet", "HEAD");
+        if (result.ExitCode == 1)
+        {
+            throw new InvalidOperationException(
+                "Backup requires a symbolic local Git branch; detached HEAD is not supported.");
+        }
+
+        var branch = result.Output.Trim();
+        if (result.ExitCode != 0 || !branch.StartsWith("refs/heads/", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Backup requires HEAD to reference a local Git branch under refs/heads/.");
+        }
+
+        return branch;
     }
 }
