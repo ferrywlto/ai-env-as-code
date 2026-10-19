@@ -1,8 +1,7 @@
 namespace Aec;
 
-// The public Copilot backup command is not routed here yet. Recheck a reviewed
-// preview before touching canonical files, then commit only the attributed
-// source and its affected enrolled targets.
+// Public Copilot backup rechecks its reviewed preview before touching canonical
+// files, then commits only the attributed source and affected enrolled targets.
 internal static class PortableCopilotBackupWriter
 {
     public static string WriteAndCommit(PortableCopilotBackupPreview reviewed)

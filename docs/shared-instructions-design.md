@@ -140,9 +140,8 @@ The v2 target path is
 portable authored sections. AEC's machine-specific repository binding and
 command guidance belong in a generated local runtime block, not the portable
 target. Existing `environment/providers/<provider>/<instruction-file>` files
-remain in ordinary init and Copilot backup. Ordinary status and apply consume
-committed rendered targets for both providers; Codex backup captures portable
-authored sources.
+remain in ordinary init. Ordinary status, backup, and apply consume committed
+rendered targets for both providers; backup captures portable authored sources.
 
 `init --enroll-shared` now creates the selected target after validating the
 three committed authored sources and the completed legacy AEC repository. It
@@ -211,8 +210,7 @@ atomic transaction; do not
 claim protection against an edit in that last instant. The accepted policy is
 to detect later drift at the next AEC-related preflight rather than add a
 sidecar lock or claim protection from non-cooperating manual editors. Public
-status and Codex backup now use the committed portable target; Copilot backup
-remains a separate migration slice.
+status and both backup commands now use committed portable targets.
 
 ## Codex config preflight contract
 
@@ -255,8 +253,8 @@ individually guarded, not part of a two-file atomic transaction; the accepted
 last-instant external-edit limitation above still applies. Public Codex
 `apply` now uses this contract. Copilot `apply` uses only the instruction writer;
 public `status` now uses the committed target and managed config preview;
-Codex `backup` uses the reverse portable preflight. Copilot backup migration
-remains separate.
+Both backup commands use reverse portable preflight; Codex also captures the
+managed personality.
 
 Reverse mapping for Codex `backup` is deliberately narrower than free-form
 instruction editing:
@@ -299,7 +297,7 @@ control block. The internal Codex and Copilot portable blocks record it, and
 the read-only backup preview rejects missing or mismatched digests before
 attributing a runtime edit. Older unstamped blocks remain readable for apply
 migration, but cannot prove a fresh backup baseline. Public Codex `backup`
-requires a stamped, current baseline; Copilot backup migration is separate.
+and Copilot `backup` require a stamped, current baseline.
 
 ## Direction and boundaries
 
@@ -313,10 +311,10 @@ requires a stamped, current baseline; Copilot backup migration is separate.
   the scope for an existing runtime file. An absent runtime file is `missing`,
   not evidence of activation; an absent home or wrong binding stops. Repository
   target presence alone never establishes local installation.
-- Public Codex `status`, `backup`, and `apply` consume the enrolled committed
-  target without falling back to the 1.x instruction source. Codex backup
-  also captures the managed root personality. Copilot backup still awaits
-  portable migration; this development branch is not release-ready yet.
+- Public Codex and Copilot `status`, `backup`, and `apply` consume enrolled
+  committed targets without a 1.x instruction-source fallback. Codex backup
+  also captures the managed root personality; this development branch is not
+  release-ready yet.
 - Platform policy is sufficient for the current single-machine case. Different
   machines on the same platform may need distinct access roots; defer their
   storage contract until required, rather than claiming platform equals machine.
@@ -336,8 +334,7 @@ flowchart LR
     Block --> Inspect[Public read-only target status]
     Block --> Preview[Apply preview]
     Preview --> Writer[Public Codex and Copilot apply]
-    Block --> Backup[Public Codex portable backup]
-    Backup -.->|later| Copilot[Copilot backup migration]
+    Block --> Backup[Public Codex and Copilot portable backup]
 ```
 
 A small .NET BCL composition function accepts explicitly supplied shared,
@@ -353,8 +350,8 @@ omitted; whitespace-only content is retained. It adds no final newline. Optional
 platform/provider text may be absent. The caller supplies the generated block;
 this function neither validates that block nor interprets Markdown or resolves
 policy conflicts. The repository-only render command now wraps authored sections
-with exact markers and validates strict UTF-8. Copilot backup reverse mapping
-remains a separate increment.
+with exact markers and validates strict UTF-8. Both public backup commands
+now use guarded reverse mapping from one runtime section.
 
 The approved rendered Codex/Copilot example confirms that shared approval and
 access policy are retained while provider-only instructions stay scoped. The
@@ -365,6 +362,6 @@ against v2 output. The apply preview computes those same v2 bytes without
 writing; an internal writer can replace only a reviewed, revalidated local
 instruction file. Public Codex `apply` now uses the combined writer, and
 Copilot `apply` uses the guarded instruction writer. Public `status` reads
-the committed target; Codex `backup` now follows the guarded portable path,
-while Copilot backup remains provider-specific. This is an intermediate
+the committed target; both `backup` commands now follow guarded portable
+paths. This is an intermediate
 development-branch state, not a coherent release contract.

@@ -8,8 +8,8 @@ their section says otherwise.
 Version 2.0.0-alpha.4 adds host-agnostic Git remote preflight guidance to the
 bundled skills. `aec render` and enrollment are repository-only. On the
 development branch, ordinary `apply` and `status` use committed portable
-targets. Codex `backup` now captures portable authored sources; ordinary
-`init` and Copilot `backup` retain their provider-specific flows. These
+targets. Both providers' `backup` commands now capture portable authored
+sources; ordinary `init` retains its provider-specific flow. These
 development changes are not yet a released binary. See the
 [approved design](shared-instructions-design.md). Copilot remains alpha
 and is not verified against the real harness on any platform.
@@ -669,8 +669,8 @@ instruction files are changed.
 The command does not manage `config.json`, which is Copilot application state rather
 than the user-authored instruction contract. It does not stage, commit, push, or
 invoke Copilot. Review and commit the canonical instruction file after initialization
-so Git history becomes its source of truth, either manually or with the explicit
-Copilot `backup` command documented below.
+so Git history becomes its source of truth. Portable `backup` requires a later
+completed enrollment and stamped runtime baseline; it does not initialize one.
 
 Read-only Copilot status uses the same selected repository and home:
 
@@ -694,11 +694,16 @@ Copilot backup is the explicit runtime-to-repository direction:
 aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 ```
 
-It requires supported managed blocks bound to the selected repository in both
-runtime and canonical files. It rejects unrelated repository changes, captures
-the exact runtime bytes into the canonical path, stages only that path, and creates
-the fixed `Backup Copilot instructions` commit. It writes `unchanged` when the
-same bytes are already committed. It never changes runtime instructions or pushes.
+It requires a committed current-platform enrolled target and a stamped runtime
+block bound to this repository and target digest. It attributes exactly one
+changed shared, platform, or Copilot section; control-block edits, a stale
+target, or changes to multiple sections stop before writing. The writer
+rechecks runtime and Git state, refuses a detached HEAD or existing staged
+changes, then commits only the authored source and every affected enrolled
+target as `Backup portable instructions`. No attributable drift reports
+`unchanged`. It never changes runtime instructions or pushes. A failed
+multi-file write may leave partial uncommitted repository changes; inspect
+them before retrying.
 
 Copilot apply is the explicit committed repository-to-runtime direction:
 

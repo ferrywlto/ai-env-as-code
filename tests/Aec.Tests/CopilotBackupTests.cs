@@ -1,7 +1,7 @@
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
-public sealed class CopilotBackupTests
+public sealed class LegacyCopilotBackupCommandTests
 {
     [Fact]
     public void CapturesRuntimeInstructionsInOneCommitWithoutChangingRuntime()
@@ -11,7 +11,7 @@ public sealed class CopilotBackupTests
         var runtimeTimestamp = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
         File.SetLastWriteTimeUtc(layout.RuntimeInstructions, runtimeTimestamp);
 
-        var result = Run(layout);
+        var result = RunLegacy(layout);
 
         Assert.Equal(0, result.ExitCode);
         Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
@@ -40,7 +40,7 @@ public sealed class CopilotBackupTests
         using var layout = new CopilotBackupLayout("Same.\n", "Same.\n");
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
 
-        var result = Run(layout);
+        var result = RunLegacy(layout);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
@@ -57,7 +57,7 @@ public sealed class CopilotBackupTests
             "Same.\n",
             commitCanonical: false);
 
-        var result = Run(layout);
+        var result = RunLegacy(layout);
 
         Assert.Equal(0, result.ExitCode);
         Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
@@ -85,7 +85,7 @@ public sealed class CopilotBackupTests
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
         File.WriteAllText(Path.Combine(layout.Repository, "unrelated.txt"), "preserve\n");
 
-        var result = Run(layout);
+        var result = RunLegacy(layout);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -102,7 +102,7 @@ public sealed class CopilotBackupTests
         var canonicalBefore = File.ReadAllBytes(layout.CanonicalInstructions);
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
 
-        var result = Run(layout);
+        var result = RunLegacy(layout);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -123,7 +123,7 @@ public sealed class CopilotBackupTests
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
         File.WriteAllText(layout.RuntimeInstructions, "Unmanaged runtime.\n");
 
-        var result = Run(layout);
+        var result = RunLegacy(layout);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -143,7 +143,7 @@ public sealed class CopilotBackupTests
             layout.RuntimeInstructions,
             CopilotInstructionBlock.Merge("Runtime.\n"u8.ToArray(), anotherRepository));
 
-        var result = Run(layout);
+        var result = RunLegacy(layout);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -193,14 +193,23 @@ public sealed class CopilotBackupTests
             StringComparison.Ordinal);
     }
 
-    private static CommandResult Run(CopilotBackupLayout layout) =>
-        TestApplication.Run(
-            "backup",
-            "--repo",
-            layout.Repository,
-            "--provider=copilot",
-            "--copilot-home",
-            layout.CopilotHome);
+    // Retain the 1.x helper contract for its own tests while the public route
+    // moves to enrolled portable targets; these no longer assert CLI behavior.
+    private static CommandResult RunLegacy(CopilotBackupLayout layout)
+    {
+        using var output = new StringWriter();
+        try
+        {
+            var exitCode = CopilotBackupCommand.Run(
+                layout.Repository, layout.CopilotHome, output);
+            return new CommandResult(exitCode, output.ToString(), string.Empty);
+        }
+        catch (Exception error)
+        {
+            return new CommandResult(1, output.ToString(),
+                $"error: {error.Message}{Environment.NewLine}");
+        }
+    }
 
     private static GitResult Git(CopilotBackupLayout layout, params string[] arguments) =>
         TestGit.Run(layout.Repository, arguments);

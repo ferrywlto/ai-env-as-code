@@ -39,8 +39,9 @@ flowchart LR
 sources without changing runtime or committing. Codex and Copilot `status`
 and `apply` use enrolled committed targets. Codex `backup` attributes at most
 one changed instruction section to an authored source and/or captures its
-managed root personality in one commit. Copilot `backup` and ordinary provider
-`init` still use their existing provider-specific flows.
+managed root personality in one commit. Copilot `backup` now captures one
+attributed instruction section and affected enrolled targets in one commit.
+Ordinary provider `init` retains its provider-specific flow.
 
 See the [architecture diagrams](docs/architecture.md) for current component
 boundaries and class relationships.

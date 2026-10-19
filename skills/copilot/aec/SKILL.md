@@ -55,8 +55,8 @@ Enrollment creates only the portable target: no runtime write, commit, or
 push. Review it before a separate commit. For later approved source changes,
 show affected targets, run `aec render --repo ABSOLUTE_PATH`, then review and
 separately approve the source/target commit. `render` does not touch runtime
-or Git history. Current `backup`/`apply` still use 1.x canonical files; do
-not claim a rendered target was deployed. Stop if v2 enrollment is absent.
+or Git history. Ordinary `status`/`backup`/`apply` require the enrolled,
+committed target; stop if enrollment is absent.
 
 Ordinary Copilot initialization:
 
@@ -68,7 +68,8 @@ Copilot home resolves from `--copilot-home`, absolute `COPILOT_HOME`, then
 `~/.copilot`. Init reconciles only native/canonical
 `copilot-instructions.md` and this skill, not `config.json`.
 
-Read-only exact-byte comparison:
+Read-only comparison with the committed current-platform target and local AEC
+block:
 
 ```text
 aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
@@ -83,10 +84,12 @@ Only with approval for runtime-to-repository capture and commit:
 aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 ```
 
-Backup validates the block and binding, changes only the canonical Copilot
-instructions, and commits changed bytes as `Backup Copilot instructions`.
-If already committed with runtime bytes, it reports `unchanged`. It never
-writes runtime or pushes.
+Backup requires a stamped runtime block bound to the selected repository and
+current target digest. It attributes one changed shared, platform, or Copilot
+section, then commits only that authored source and all affected enrolled
+targets. A stale digest, edited control block, or multi-section drift stops.
+No attributable drift reports `unchanged`. It never writes runtime or pushes;
+inspect the repository before retrying after a partial write failure.
 
 Only with approval for committed repository-to-runtime deployment:
 
@@ -94,9 +97,10 @@ Only with approval for committed repository-to-runtime deployment:
 aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 ```
 
-Apply requires a committed canonical file and matching repository binding,
-then atomically replaces only runtime `copilot-instructions.md`; matching
-runtime reports `unchanged`. It never captures runtime, commits, pushes,
+Apply requires the clean, committed current-platform target and matching
+repository/platform runtime binding, then replaces only runtime
+`copilot-instructions.md`; matching runtime reports `unchanged`. It never
+captures runtime, commits, pushes,
 manages `config.json`, or installs/upgrades the skill.
 
 Copilot support is alpha; uninstall and skill upgrade are unavailable. Do

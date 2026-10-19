@@ -3,8 +3,7 @@ using System.Text;
 namespace Aec;
 
 // Commit only the reviewed changed source, affected enrolled targets, and
-// (for Codex) managed config. Public Codex backup uses this flow; Copilot's
-// guarded writer remains internal until its public command migrates.
+// (for Codex) managed config. Both public backup routes use this flow.
 internal static class PortableBackupCommitter
 {
     private const string CommitMessage = "Backup portable instructions";

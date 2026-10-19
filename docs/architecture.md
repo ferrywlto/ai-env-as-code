@@ -144,9 +144,6 @@ classDiagram
         +Commit(reviewed, renderedPaths)
         +Commit(snapshot, attribution, renderedPaths)
     }
-    class CopilotBackupCommand {
-        +Run(repository, copilotHome, output)
-    }
 
     AecApplication --> PortableApplyPreview : Codex and Copilot apply
     AecApplication --> PortableCodexWriter : Codex apply
@@ -160,20 +157,20 @@ classDiagram
     PortableCodexBackupWriter --> PortableBackupSourceWriter : changed authored source
     PortableCodexBackupWriter --> PortableBackupTargetWriter : affected enrolled targets
     PortableCodexBackupWriter --> PortableBackupCommitter : exact-path commit
+    AecApplication --> PortableCopilotBackupPreview : Copilot backup preflight
+    AecApplication --> PortableCopilotBackupWriter : Copilot backup
     PortableCopilotBackupWriter --> PortableCopilotBackupPreview : recheck inputs
     PortableCopilotBackupWriter --> PortableBackupSourceWriter : one authored source
     PortableCopilotBackupWriter --> PortableBackupTargetWriter : affected enrolled targets
     PortableCopilotBackupWriter --> PortableBackupCommitter : exact-path commit
-    AecApplication --> CopilotBackupCommand : legacy backup
 ```
 
 The Codex backup writer rechecks runtime inputs and Git state before replacing
 canonical files, then commits only the affected paths. An interrupted
 multi-file write can leave partial uncommitted changes, so it reports the need
 to inspect rather than rolling back automatically. Copilot `status` and
-`apply` use the portable target. An internal, read-only Copilot backup preview
-now shares the snapshot and one-section attribution rules, but public Copilot
-`backup` still uses the older single-provider-file flow. The internal
-Copilot writer now rechecks the preview, refuses pre-existing staged changes,
-and commits one attributed source plus affected targets. Public routing is a
-separate review slice.
+`apply` use the portable target. Public Copilot `backup` now uses the same
+snapshot and one-section attribution rules. Its writer rechecks the preview,
+refuses pre-existing staged changes, and commits one attributed source plus
+affected targets. The retained 1.x Copilot backup helper is not routed from
+the public command.

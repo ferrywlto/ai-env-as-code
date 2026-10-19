@@ -323,8 +323,22 @@
   internal writer and still-legacy public route. No personal runtime or data
   repository was touched. Ferry reviewed and approved this slice.
 
-Immediate next work: migrate the public Copilot backup route in a separate
-slice, with focused public-command tests and no 1.x fallback. Keep
+- [x] Review ticket #2 slice 12's public Copilot backup migration. It requires
+  a current enrolled committed target and stamped runtime binding, attributes
+  one changed instruction section, and commits only its source plus affected
+  targets. There is no 1.x public fallback. The old single-file helper tests
+  now invoke that helper directly; new tests cover the public portable route.
+  All Copilot backup-focused tests passed 29/29; adjacent Copilot init tests
+  passed 13/13; the warning-as-error Release build had zero warnings. The
+  bundled Copilot skill frontmatter parsed with Ruby; the skill-creator
+  validator could not start because PyYAML is absent. README, reference,
+  design notes, and architecture diagrams reflect the new route. No personal
+  runtime or data repository was touched. Ferry reviewed and approved this
+  slice.
+
+Immediate next work: test ticket #2's pulled repository at a different local
+path, confirm explicit rebinding and absent-harness behavior, then fix only
+any demonstrated gap. Keep
 `docs/architecture.md` aligned with new relationships. Resolve the
 semantic commit rewording when permissions permit. Do not add a `--shared`
 switch or sidecar lock. Run the complete suite before push or release.

@@ -133,7 +133,17 @@ public static class AecApplication
         if (options.Provider == "copilot")
         {
             var copilotHome = ResolveCopilotHome(options.CopilotHome);
-            return CopilotBackupCommand.Run(repository, copilotHome, output);
+            var copilotPreview = PortableCopilotBackupPreview.Create(repository, copilotHome);
+            PortableBackupCommitter.RequireLocalBranch(repository);
+            if (copilotPreview.Instructions.Section is null)
+            {
+                output.WriteLine("unchanged");
+                return 0;
+            }
+
+            var copilotCommit = PortableCopilotBackupWriter.WriteAndCommit(copilotPreview);
+            output.WriteLine($"committed {copilotCommit}");
+            return 0;
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
