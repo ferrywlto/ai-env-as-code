@@ -314,8 +314,17 @@
   approved this slice; its unused `HasChanges` convenience property was
   removed before commit.
 
-Immediate next work: implement the guarded Copilot repository writer as the
-next separate slice, leaving the public backup route unchanged. Keep
+- [x] Review ticket #2 slice 12's internal guarded Copilot backup writer. It
+  rechecks the read-only preview, rejects a detached HEAD or staged index
+  before canonical writes, and uses the shared source, affected-target, and
+  exact-path commit steps. Public Copilot `backup` remains unchanged. Writer,
+  preview, and shared committer tests passed 19/19; the warning-as-error
+  Release build had zero warnings. `docs/architecture.md` identifies the
+  internal writer and still-legacy public route. No personal runtime or data
+  repository was touched. Ferry reviewed and approved this slice.
+
+Immediate next work: migrate the public Copilot backup route in a separate
+slice, with focused public-command tests and no 1.x fallback. Keep
 `docs/architecture.md` aligned with new relationships. Resolve the
 semantic commit rewording when permissions permit. Do not add a `--shared`
 switch or sidecar lock. Run the complete suite before push or release.

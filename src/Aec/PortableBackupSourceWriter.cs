@@ -2,7 +2,7 @@ using System.Text;
 
 namespace Aec;
 
-// The public Codex backup writer uses this step for one attributed source.
+// Portable Codex and Copilot backup writers use this step for one attributed source.
 // Target regeneration and the commit remain separate guarded steps.
 internal static class PortableBackupSourceWriter
 {

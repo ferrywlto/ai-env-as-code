@@ -2,9 +2,9 @@ using System.Text;
 
 namespace Aec;
 
-// This is an internal, explicit approval boundary. It commits only the one
-// reviewed source and its complete set of affected enrolled targets. Public
-// backup is not wired to this flow yet.
+// Commit only the reviewed changed source, affected enrolled targets, and
+// (for Codex) managed config. Public Codex backup uses this flow; Copilot's
+// guarded writer remains internal until its public command migrates.
 internal static class PortableBackupCommitter
 {
     private const string CommitMessage = "Backup portable instructions";

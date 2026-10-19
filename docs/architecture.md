@@ -131,6 +131,9 @@ classDiagram
     class PortableCodexBackupWriter {
         +WriteAndCommit(reviewed)
     }
+    class PortableCopilotBackupWriter {
+        +WriteAndCommit(reviewed)
+    }
     class PortableBackupSourceWriter {
         +Write(snapshot, attribution)
     }
@@ -139,6 +142,7 @@ classDiagram
     }
     class PortableBackupCommitter {
         +Commit(reviewed, renderedPaths)
+        +Commit(snapshot, attribution, renderedPaths)
     }
     class CopilotBackupCommand {
         +Run(repository, copilotHome, output)
@@ -156,6 +160,10 @@ classDiagram
     PortableCodexBackupWriter --> PortableBackupSourceWriter : changed authored source
     PortableCodexBackupWriter --> PortableBackupTargetWriter : affected enrolled targets
     PortableCodexBackupWriter --> PortableBackupCommitter : exact-path commit
+    PortableCopilotBackupWriter --> PortableCopilotBackupPreview : recheck inputs
+    PortableCopilotBackupWriter --> PortableBackupSourceWriter : one authored source
+    PortableCopilotBackupWriter --> PortableBackupTargetWriter : affected enrolled targets
+    PortableCopilotBackupWriter --> PortableBackupCommitter : exact-path commit
     AecApplication --> CopilotBackupCommand : legacy backup
 ```
 
@@ -165,5 +173,7 @@ multi-file write can leave partial uncommitted changes, so it reports the need
 to inspect rather than rolling back automatically. Copilot `status` and
 `apply` use the portable target. An internal, read-only Copilot backup preview
 now shares the snapshot and one-section attribution rules, but public Copilot
-`backup` still uses the older single-provider-file flow. Its guarded writer
-and public migration remain separate review slices.
+`backup` still uses the older single-provider-file flow. The internal
+Copilot writer now rechecks the preview, refuses pre-existing staged changes,
+and commits one attributed source plus affected targets. Public routing is a
+separate review slice.
