@@ -3,7 +3,8 @@ using System.Text;
 namespace Aec;
 
 // Render only committed enrollments affected by one reviewed backup source edit.
-// This repository-only step is not connected to the public render or backup CLI.
+// Codex backup uses this repository-only step to regenerate affected targets;
+// the public render command has a separate all-enrolled-targets path.
 internal static class PortableBackupTargetWriter
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);

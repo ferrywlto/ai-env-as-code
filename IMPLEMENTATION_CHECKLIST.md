@@ -297,8 +297,16 @@
   validator could not start because PyYAML is absent. No personal runtime or
   data repository was touched. Ferry reviewed and approved this slice.
 
-Immediate next work: document current component and class relationships with
-diagrams, then plan ticket #2's Copilot portable backup slice. Resolve the
+- [x] Review the current 2.0 component and class diagrams in
+  `docs/architecture.md`. They distinguish the engine, selected data repo,
+  local runtime, and skill-controlled remote operations; mark Copilot backup
+  as legacy; and correct four stale public-routing code comments. Ferry
+  reviewed and approved this documentation slice.
+
+Immediate next work: add a read-only Copilot portable backup preflight for
+ticket #2, with focused tests; leave the public backup route and canonical
+files unchanged. Keep `docs/architecture.md` aligned with new relationships.
+Resolve the
 semantic commit rewording when permissions permit. Do not add a `--shared`
 switch or sidecar lock. Run the complete suite before push or release.
 

@@ -42,6 +42,9 @@ one changed instruction section to an authored source and/or captures its
 managed root personality in one commit. Copilot `backup` and ordinary provider
 `init` still use their existing provider-specific flows.
 
+See the [architecture diagrams](docs/architecture.md) for current component
+boundaries and class relationships.
+
 ## Where should an instruction go?
 
 ```mermaid

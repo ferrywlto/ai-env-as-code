@@ -1,6 +1,6 @@
 namespace Aec;
 
-// Internal 2.0 writer only. Public apply still uses the committed 1.x files.
+// Public Codex apply uses this writer for the committed portable target and config.
 internal static class PortableCodexWriter
 {
     public static string Apply(

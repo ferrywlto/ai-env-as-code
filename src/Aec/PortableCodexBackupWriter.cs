@@ -1,6 +1,6 @@
 namespace Aec;
 
-// Internal 2.0 backup step. The public Codex backup command is not routed here.
+// Public Codex backup uses this guarded 2.0 writer after read-only preflight.
 // Each file is guarded individually; a failed later step may leave earlier
 // canonical replacements uncommitted, so callers must inspect before retrying.
 internal static class PortableCodexBackupWriter

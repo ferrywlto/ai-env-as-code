@@ -2,8 +2,8 @@ using System.Text;
 
 namespace Aec;
 
-// This internal step writes only one attributed source. Targets and the backup
-// commit remain separate steps; it is not connected to the public backup CLI.
+// The public Codex backup writer uses this step for one attributed source.
+// Target regeneration and the commit remain separate guarded steps.
 internal static class PortableBackupSourceWriter
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
