@@ -18,17 +18,22 @@ internal sealed record PortableBackupAttributionPreview(
         string providerHome)
     {
         var snapshot = PortableRuntimeSnapshot.Read(repository, provider, providerHome);
+        return Create(snapshot);
+    }
+
+    internal static PortableBackupAttributionPreview Create(PortableRuntimeSnapshot snapshot)
+    {
         if (snapshot.Runtime is null)
         {
             throw new InvalidOperationException(
                 "Provider runtime instructions are missing. Run ordinary provider init first.");
         }
 
-        var lastAppliedDigest = provider switch
+        var lastAppliedDigest = snapshot.Provider switch
         {
             "codex" => AecInstructionBlock.ReadRepositoryBinding(snapshot.Runtime)?.TargetDigest,
             "copilot" => CopilotInstructionBlock.ReadManagedBinding(snapshot.Runtime)?.TargetDigest,
-            _ => throw new ArgumentException($"Unsupported provider: {provider}")
+            _ => throw new ArgumentException($"Unsupported provider: {snapshot.Provider}")
         };
         if (lastAppliedDigest is null)
         {
@@ -75,7 +80,7 @@ internal sealed record PortableBackupAttributionPreview(
             baselineParts.Shared, runtimeParts.Shared);
         AddIfChanged("platform", $"environment/platforms/{snapshot.Platform}/policy.md",
             baselineParts.Platform!, runtimeParts.Platform!);
-        AddIfChanged("provider", $"environment/providers/{provider}/overlay.md",
+        AddIfChanged("provider", $"environment/providers/{snapshot.Provider}/overlay.md",
             baselineParts.Provider!, runtimeParts.Provider!);
 
         return changes.Count switch

@@ -264,9 +264,29 @@
   warning-as-error Release build had zero warnings. No personal runtime or
   data repository was touched. Ferry reviewed and approved this slice.
 
-Immediate next work: plan ticket #2 slice 11's public Codex backup migration.
-Resolve the semantic commit rewording when permissions permit. Public `backup`
-remains on its 1.x path; do not add a `--shared` switch or sidecar lock.
+- [x] Review ticket #2 slice 11's first, read-only Codex backup checkpoint.
+  It combines exact instruction attribution with a managed root-personality
+  proposal against one committed HEAD. Config-only and one-section-plus-config
+  drift are previewable; missing personality and ambiguous instructions stop.
+  It does not write or change public `backup`. Focused tests passed 7/7,
+  adjacent attribution tests passed 23/23, and the warning-as-error Release
+  build had zero warnings. No personal runtime or data repository was touched.
+  Ferry reviewed and approved this checkpoint.
+- [x] Review ticket #2 slice 11's internal guarded Codex backup writer. It
+  rechecks the combined preview and refuses a staged index before writing.
+  Config-only drift commits only canonical `config.toml`; one attributed
+  instruction section plus config drift commits the source, affected target,
+  and config together. The writer compares reviewed HEAD and runtime inputs,
+  then uses a fresh validated proposal rather than duplicating comparisons of
+  derived fields. Public `backup` remains unchanged. New writer tests passed
+  6/6, preview tests 7/7, existing committer tests 7/7, and the
+  warning-as-error Release build had zero warnings. No personal runtime or
+  data repository was touched. Ferry reviewed and approved this checkpoint.
+
+Immediate next work: after Ferry reviews the guarded writer, plan ticket #2
+slice 11's public Codex `backup` route migration. Resolve the semantic commit
+rewording when permissions permit. Public `backup` remains on its 1.x path;
+do not add a `--shared` switch or sidecar lock.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

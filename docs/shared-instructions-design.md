@@ -261,25 +261,36 @@ instruction editing:
 flowchart TD
     Drift[Runtime differs from committed rendered baseline] --> Bound{Repository binding and last-applied target digest match?}
     Bound -->|No| Stop[Stop for review; do not guess a source]
-    Bound -->|Yes| Check{Exactly one authored section changed?}
-    Check -->|No| Stop[Stop for review; do not guess a source]
-    Check -->|Yes| Fresh{Baseline still current?}
+    Bound -->|Yes| Check{Zero or one authored instruction section changed?}
+    Check -->|No| Stop
+    Check -->|Yes| Config{If Codex, managed root personality present and valid?}
+    Config -->|No| Stop
+    Config -->|Yes| Fresh{Baseline still current?}
     Fresh -->|No| Stop
-    Fresh -->|Yes| Source[Update that section's authored source]
-    Source --> Render[Regenerate every enrolled consuming target]
-    Render --> Commit[Review and approve the backup commit]
+    Fresh -->|Yes| Changes{Instruction or personality change?}
+    Changes -->|No| Done[Nothing to back up]
+    Changes -->|Yes| Source[Update only changed canonical sources]
+    Source --> Render[Regenerate affected enrolled targets if instructions changed]
+    Render --> Commit[Review and approve one backup commit]
 ```
 
 Exact AEC-owned delimiters distinguish shared, platform and provider text.
 Marker collisions, generated-block edits, outside text, multi-section changes,
-and stale baselines stop. The internal backup renderer selects all affected
-committed enrollments across supported platforms, regardless of which harnesses
-are installed on the rendering machine. Public `aec render` remains scoped to
-the current platform. An internal commit step rechecks the complete rendered
-target set and runtime, refuses an already-staged index, stages only the one
-authored source and its affected targets, then pins and verifies their Git tree
-before advancing the branch. It requires a separate approval to call and does
-not fetch or push. The public 2.0 backup flow is **not implemented yet**.
+missing runtime personality, and stale baselines stop. The internal Codex
+backup preflight now observes instruction attribution and managed root
+personality against one repository HEAD without writing. A config-only change
+is valid, and one instruction section plus personality may differ together.
+The preview itself never writes. The separate internal Codex writer rechecks it
+and refuses a staged index before replacing canonical config, then the optional
+attributed instruction source and its affected targets. The renderer selects
+all affected committed enrollments across supported platforms, regardless of
+which harnesses are installed on the rendering machine. Public `aec render`
+remains scoped to the current platform. The internal commit step rechecks the
+exact changed paths and both runtime files, pins and verifies their Git tree,
+and makes one commit. A failure after a replacement may leave earlier files
+uncommitted; inspect before retrying. This internal writer is not called by
+public `backup`, and it does not fetch or push. The public 2.0 backup flow is
+**not implemented yet**.
 The digest is SHA-256 of the rendered target bytes, excluding the local AEC
 control block. The internal Codex and Copilot portable blocks record it, and
 the read-only backup preview rejects missing or mismatched digests before

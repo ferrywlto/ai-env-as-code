@@ -8,20 +8,44 @@ namespace Aec;
 internal static class PortableBackupCommitter
 {
     private const string CommitMessage = "Backup portable instructions";
+    private const string CodexCommitMessage = "Backup portable Codex environment";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     public static string Commit(
         PortableRuntimeSnapshot reviewed,
         PortableBackupAttributionPreview attribution,
         IReadOnlyList<string> renderedPaths)
+        => CommitCore(reviewed, attribution, renderedPaths, null);
+
+    public static string Commit(
+        PortableCodexBackupPreview reviewed,
+        IReadOnlyList<string> renderedPaths)
     {
         ArgumentNullException.ThrowIfNull(reviewed);
-        ArgumentNullException.ThrowIfNull(attribution);
+        return CommitCore(reviewed.Snapshot,
+            reviewed.Instructions.Section is null ? null : reviewed.Instructions,
+            renderedPaths, reviewed);
+    }
+
+    private static string CommitCore(
+        PortableRuntimeSnapshot reviewed,
+        PortableBackupAttributionPreview? attribution,
+        IReadOnlyList<string> renderedPaths,
+        PortableCodexBackupPreview? codex)
+    {
+        ArgumentNullException.ThrowIfNull(reviewed);
         ArgumentNullException.ThrowIfNull(renderedPaths);
-        if (attribution.SourceRelativePath is null || attribution.ProposedContent is null ||
-            reviewed.Runtime is null)
+        if (reviewed.Runtime is null ||
+            (attribution is null && codex?.ConfigWouldChange != true) ||
+            (attribution is not null &&
+             (attribution.SourceRelativePath is null || attribution.ProposedContent is null)))
         {
-            throw new InvalidOperationException("Backup commit requires one reviewed runtime edit.");
+            throw new InvalidOperationException("Backup commit requires a reviewed runtime change.");
+        }
+
+        if (codex is not null && reviewed.Provider != "codex")
+        {
+            throw new InvalidOperationException("Codex backup commit requires a Codex snapshot.");
         }
 
         var repository = reviewed.Repository;
@@ -38,8 +62,15 @@ internal static class PortableBackupCommitter
                 "The repository already has staged changes; backup commit stopped before staging.");
         }
 
-        PortableBackupTargetWriter.VerifyRendered(reviewed, attribution, renderedPaths);
-        var paths = new[] { attribution.SourceRelativePath }.Concat(renderedPaths).ToArray();
+        VerifyReviewedFiles();
+        var paths = (attribution is null
+                ? Enumerable.Empty<string>()
+                : [attribution.SourceRelativePath!])
+            .Concat(renderedPaths)
+            .Concat(codex?.ConfigWouldChange == true
+                ? [AecApplication.ConfigSourceRelativePath]
+                : [])
+            .ToArray();
         var expected = new List<(string RelativePath, string Blob)>(paths.Length);
         var reviewedBlobs = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var path in paths)
@@ -48,10 +79,16 @@ internal static class PortableBackupCommitter
             AecApplication.EnsureNoLinksInExistingPath(
                 Path.GetDirectoryName(absolute)!, "Backup commit path");
             var bytes = AecApplication.ReadRequiredTextFile(absolute, "Backup commit file");
-            if (path == attribution.SourceRelativePath &&
-                !bytes.AsSpan().SequenceEqual(StrictUtf8.GetBytes(attribution.ProposedContent)))
+            if (path == attribution?.SourceRelativePath &&
+                !bytes.AsSpan().SequenceEqual(StrictUtf8.GetBytes(attribution.ProposedContent!)))
             {
                 throw new InvalidOperationException("Authored source changed before staging.");
+            }
+
+            if (path == AecApplication.ConfigSourceRelativePath && codex is not null &&
+                !bytes.AsSpan().SequenceEqual(codex.ProposedCanonicalConfig))
+            {
+                throw new InvalidOperationException("Canonical config changed before staging.");
             }
 
             reviewedBlobs.Add(path, GitProcess.RunRequired(repository,
@@ -61,7 +98,7 @@ internal static class PortableBackupCommitter
 
         // A target could change between its first validation and hashing. This
         // second pass binds every captured blob to the reviewed render.
-        PortableBackupTargetWriter.VerifyRendered(reviewed, attribution, renderedPaths);
+        VerifyReviewedFiles();
         EnsureHeadAndRuntime();
         GitProcess.RunRequired(repository, "Could not stage reviewed backup files",
             ["add", "--", .. paths]);
@@ -87,7 +124,8 @@ internal static class PortableBackupCommitter
         // The shared commit helper pins and verifies the index tree, checks the
         // exact path set, and updates the branch only if its parent is unchanged.
         BackupCommand.CommitStagedIndex(
-            repository, CommitMessage, expected, branch, reviewed.Commit);
+            repository, codex is null ? CommitMessage : CodexCommitMessage,
+            expected, branch, reviewed.Commit);
         var commit = ApplyCommand.ResolveHeadCommit(repository);
         var parent = GitProcess.RunRequired(repository,
             "Could not inspect backup commit parent", "rev-parse", "HEAD^").Output.Trim();
@@ -109,13 +147,64 @@ internal static class PortableBackupCommitter
 
         return commit;
 
+        void VerifyReviewedFiles()
+        {
+            if (attribution is not null)
+            {
+                PortableBackupTargetWriter.VerifyRendered(reviewed, attribution, renderedPaths);
+            }
+            else if (renderedPaths.Count != 0)
+            {
+                throw new InvalidOperationException(
+                    "A config-only backup must not stage rendered instruction targets.");
+            }
+
+            if (codex is not null)
+            {
+                var canonicalPath = Path.Combine(
+                    repository, AecApplication.ConfigSourceRelativePath);
+                AecApplication.EnsureNoLinksInExistingPath(
+                    Path.GetDirectoryName(canonicalPath)!, "Canonical config path");
+                var committed = GitProcess.RunRequiredBytes(repository,
+                    "Could not read committed canonical config", "show",
+                    $"{reviewed.Commit}:{AecApplication.ConfigSourceRelativePath}");
+                var personality = CodexPersonalityConfig.ReadRuntime(
+                    codex.RuntimeConfig, codex.RuntimeConfigPath)
+                    ?? throw new InvalidOperationException(
+                        "Reviewed runtime config has no managed root personality.");
+                var planned = CodexPersonalityConfig.PlanCanonicalUpdate(
+                    codex.CanonicalConfig, canonicalPath, personality);
+                if (!committed.AsSpan().SequenceEqual(codex.CanonicalConfig) ||
+                    !planned.Content.AsSpan().SequenceEqual(codex.ProposedCanonicalConfig) ||
+                    planned.Changed != codex.ConfigWouldChange)
+                {
+                    throw new InvalidOperationException(
+                        "Reviewed Codex config no longer matches its committed baseline.");
+                }
+
+                var expected = codex.ConfigWouldChange
+                    ? codex.ProposedCanonicalConfig
+                    : codex.CanonicalConfig;
+                if (!AecApplication.ReadRequiredTextFile(canonicalPath, "Canonical config")
+                        .AsSpan().SequenceEqual(expected))
+                {
+                    throw new InvalidOperationException(
+                        "Canonical config changed after Codex backup review.");
+                }
+            }
+        }
+
         void EnsureHeadAndRuntime()
         {
             if (!string.Equals(ApplyCommand.ResolveHeadCommit(repository), reviewed.Commit,
                     StringComparison.Ordinal) ||
                 !AecApplication.ReadRequiredTextFile(
                     reviewed.RuntimePath, "Provider runtime instructions")
-                    .AsSpan().SequenceEqual(reviewed.Runtime))
+                    .AsSpan().SequenceEqual(reviewed.Runtime) ||
+                codex is not null &&
+                !AecApplication.ReadRequiredTextFile(
+                    codex.RuntimeConfigPath, "Runtime config")
+                    .AsSpan().SequenceEqual(codex.RuntimeConfig))
             {
                 throw new InvalidOperationException(
                     "Backup HEAD or runtime changed after review; commit stopped.");
