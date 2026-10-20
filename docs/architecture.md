@@ -17,7 +17,8 @@ flowchart LR
     subgraph Engine[AEC engine repository and installed binary]
         CLI --> Route[AecApplication]
         Route --> Compose[Enrollment and render]
-        Route --> Attach[Codex init attachment]
+        Route --> Guard[Implicit-home binding check]
+        Guard --> Attach[Codex init attachment]
         Route --> Inspect[Status and previews]
         Route --> Writers[Backup and apply writers]
     end
@@ -37,6 +38,7 @@ flowchart LR
     History --> Inspect
     History -->|committed Codex source/config| Attach
     Attach -->|machine-local path binding; no path-only commit| Runtime[Local Codex or Copilot runtime]
+    Runtime -->|read other implicit harness binding| Guard
     Inspect --> Writers
     Writers -->|backup: changed source| Sources
     Writers -->|backup: affected targets| Targets
@@ -55,6 +57,9 @@ approved Git operations. Codex also manages root `personality` in
 `config.toml`; Copilot currently manages only its instruction file.
 Confirmed Codex attachment of a clone at a new local path changes only its
 runtime binding; it does not commit a machine-specific path to shared history.
+Ordinary init checks the other harness's implicit home before writes and stops
+on a different repository binding. Explicit custom homes are outside that
+cross-harness check in this 2.0 alpha slice.
 
 ## Classes: source composition and runtime inspection
 

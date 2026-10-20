@@ -404,6 +404,14 @@ waits until both initialization commits succeed before adding it to runtime. A
 completed pulled repository may create either missing runtime file from committed
 canonical state.
 
+During ordinary Codex or Copilot init without an explicit home flag, AEC reads
+the other harness's implicit home (`CODEX_HOME`/`COPILOT_HOME`, then
+`~/.codex`/`~/.copilot`). If its managed runtime block names a different data
+repository, init stops before writing, even with `--force-path-change`.
+No other-harness home is created. This 2.0 alpha guard does **not** discover
+explicit custom homes; those flags still work, but users must keep both
+harnesses on one checkout themselves.
+
 Ordinary `init` also installs these bundled skill metadata files:
 
 ```text

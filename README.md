@@ -99,6 +99,12 @@ and default branch before a canonical change or runtime apply.
 For pulled repositories, path changes, other providers, custom install paths,
 and uninstallation, use the [detailed reference](docs/reference.md).
 
+2.0 alpha checks that the *implicit* Codex and Copilot homes select the same
+data repository during ordinary init. These homes resolve through their
+environment variables, then `~/.codex` and `~/.copilot`. Explicit custom-home
+flags remain available, but cross-harness conflict detection does not cover
+them; use the same `--repo` checkout for both harnesses yourself.
+
 ## What has been verified
 
 | Local harness | macOS ARM64 | Windows x64 | Linux ARM64 |

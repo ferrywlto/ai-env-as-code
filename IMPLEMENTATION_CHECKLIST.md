@@ -353,11 +353,22 @@
   repository was touched. Ferry reviewed and approved this slice; committed as
   `d28249f`.
 
-Immediate next work: enforce the approved one-checkout-per-machine rule so a
-confirmed path change cannot leave Codex and Copilot bound to different data
-repositories on one machine. Then address Copilot's pulled-repository path
-attachment separately; its parser currently rejects `--force-path-change`.
-Neither provider may make a machine-specific path-only commit. Migrate legacy
+- [ ] Review ticket #2 slice 14's implicit-home conflict guard. Ordinary Codex
+  and Copilot init now read the other harness's effective implicit home
+  (`CODEX_HOME`/`COPILOT_HOME`, then the user-profile default) before mutation.
+  A different AEC repository binding stops both providers, including confirmed
+  Codex `--force-path-change`. Explicit custom-home flags remain available but
+  are outside this cross-harness guarantee; README, reference, bundled skills,
+  and architecture diagram state that 2.0 alpha limitation. Disposable tests
+  used temporary environment homes rather than personal runtime, and covered
+  both conflict directions plus same-path/no-other-harness behavior. Focused
+  init and skill-upgrade tests passed 45/45; warning-as-error Release build
+  had zero warnings; `git diff --check` passed. No personal runtime or data
+  repository was touched.
+
+Immediate next work: address Copilot's pulled-repository path attachment
+separately; its parser currently rejects `--force-path-change`. Neither
+provider may make a machine-specific path-only commit. Migrate legacy
 canonical blocks toward path-free repository data in a later reviewed slice.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.

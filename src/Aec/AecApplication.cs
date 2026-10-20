@@ -196,16 +196,66 @@ public static class AecApplication
         if (options.Provider == "copilot")
         {
             var copilotHome = ResolveCopilotHome(options.CopilotHome);
+            if (options.CopilotHome is null)
+            {
+                EnsureOtherImplicitHarnessUsesRepository(repository, "codex");
+            }
+
             return CopilotInitCommand.Run(repository, copilotHome, output);
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
+        if (options.CodexHome is null)
+        {
+            EnsureOtherImplicitHarnessUsesRepository(repository, "copilot");
+        }
+
         return InitCommand.Run(
             repository,
             codexHome,
             options.ForcePathChange,
             output,
             warning);
+    }
+
+    private static void EnsureOtherImplicitHarnessUsesRepository(
+        string repository,
+        string otherProvider)
+    {
+        // Explicit custom homes are outside this guard: there is no safe way to
+        // discover an arbitrary other-harness directory on the same machine.
+        var otherHome = otherProvider == "codex"
+            ? ResolveCodexHome(null)
+            : ResolveCopilotHome(null);
+        EnsureNoLinksInExistingPath(otherHome, $"{otherProvider} home path");
+        if (!Directory.Exists(otherHome))
+        {
+            return;
+        }
+
+        EnsureRealDirectory(otherHome, $"{otherProvider} home");
+        var runtimePath = Path.Combine(otherHome,
+            otherProvider == "codex" ? "AGENTS.md" : "copilot-instructions.md");
+        var runtime = ReadOptionalTextFile(runtimePath,
+            $"{otherProvider} runtime instructions");
+        if (runtime is null)
+        {
+            return;
+        }
+
+        var recordedRepository = otherProvider == "codex"
+            ? AecInstructionBlock.ReadRepositoryBinding(runtime)?.Repository
+            : CopilotInstructionBlock.ReadRepositoryBinding(runtime);
+        if (recordedRepository is not null &&
+            !AecInstructionBlock.RepositoryPathsEqual(recordedRepository, repository))
+        {
+            throw new InvalidOperationException(
+                $"Default {otherProvider} runtime is bound to a different AEC data repository. " +
+                $"Recorded repository: {recordedRepository}. " +
+                $"Selected repository: {repository}. " +
+                "Resolve both default harnesses to one checkout before initializing; " +
+                "--force-path-change cannot override this conflict.");
+        }
     }
 
     private static int RunApply(

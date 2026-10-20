@@ -94,10 +94,12 @@ public sealed class CopilotInitTests
     {
         using var layout = new CopilotLayout();
         var previous = Environment.GetEnvironmentVariable("COPILOT_HOME");
+        var previousCodexHome = Environment.GetEnvironmentVariable("CODEX_HOME");
 
         try
         {
             Environment.SetEnvironmentVariable("COPILOT_HOME", layout.CopilotHome);
+            Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
 
             var result = TestApplication.Run(
                 "init",
@@ -111,6 +113,43 @@ public sealed class CopilotInitTests
         finally
         {
             Environment.SetEnvironmentVariable("COPILOT_HOME", previous);
+            Environment.SetEnvironmentVariable("CODEX_HOME", previousCodexHome);
+        }
+    }
+
+    [Fact]
+    public void ImplicitCopilotHomeRejectsConflictingCodexBinding()
+    {
+        using var layout = new CopilotLayout();
+        var pulled = Path.Combine(layout.Root, "second checkout");
+        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Repository,
+            pulled).ExitCode);
+        var runtimeBefore = File.ReadAllBytes(layout.RuntimeInstructions);
+        var originalHead = TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim();
+        var previousCodexHome = Environment.GetEnvironmentVariable("CODEX_HOME");
+        var previousCopilotHome = Environment.GetEnvironmentVariable("COPILOT_HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", layout.CopilotHome);
+            var result = TestApplication.Run("init", "--repo", pulled,
+                "--provider=copilot");
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains(layout.Repository, result.Error, StringComparison.Ordinal);
+            Assert.Contains(pulled, result.Error, StringComparison.Ordinal);
+            Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.RuntimeInstructions));
+            Assert.False(File.Exists(Path.Combine(pulled,
+                AecApplication.CopilotSourceRelativePath)));
+            Assert.False(File.Exists(layout.Skill));
+            Assert.Equal(originalHead,
+                TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", previousCodexHome);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", previousCopilotHome);
         }
     }
 

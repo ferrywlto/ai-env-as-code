@@ -67,6 +67,9 @@ aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 Copilot home resolves from `--copilot-home`, absolute `COPILOT_HOME`, then
 `~/.copilot`. Init reconciles only native/canonical
 `copilot-instructions.md` and this skill, not `config.json`.
+With an implicit home, init stops if implicit Codex is bound to another data
+checkout. An explicit custom-home flag is outside this cross-harness check;
+keep both harnesses on one checkout yourself.
 
 Read-only comparison with the committed current-platform target and local AEC
 block:

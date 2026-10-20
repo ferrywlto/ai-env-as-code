@@ -409,6 +409,48 @@ public sealed class InitTests
         Assert.Empty(TestGit.Run(pulled, "status", "--porcelain").Output);
     }
 
+    [Fact]
+    public void ImplicitCodexHomeRejectsConflictingCopilotBindingEvenWhenForced()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var pulled = Path.Combine(layout.Root, "second checkout");
+        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Target,
+            pulled).ExitCode);
+        var secondCodexHome = Path.Combine(layout.Root, "second codex home");
+        var copilotHome = Path.Combine(layout.Root, "copilot home");
+        Directory.CreateDirectory(secondCodexHome);
+        Directory.CreateDirectory(copilotHome);
+        File.WriteAllBytes(Path.Combine(copilotHome, "copilot-instructions.md"),
+            CopilotInstructionBlock.Merge([], layout.Target));
+        var originalHead = TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim();
+        var previousCodexHome = Environment.GetEnvironmentVariable("CODEX_HOME");
+        var previousCopilotHome = Environment.GetEnvironmentVariable("COPILOT_HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", secondCodexHome);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", copilotHome);
+            var result = TestApplication.Run("init", "--repo", pulled,
+                "--force-path-change");
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains(layout.Target, result.Error, StringComparison.Ordinal);
+            Assert.Contains(pulled, result.Error, StringComparison.Ordinal);
+            Assert.Contains("cannot override", result.Error, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(secondCodexHome, "AGENTS.md")));
+            Assert.False(Directory.Exists(Path.Combine(secondCodexHome, "skills")));
+            Assert.Equal(originalHead,
+                TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+            Assert.Empty(TestGit.Run(pulled, "status", "--porcelain").Output);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", previousCodexHome);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", previousCopilotHome);
+        }
+    }
+
     [Theory]
     [InlineData(false, 5, 2)]
     [InlineData(true, 6, 3)]
@@ -2116,10 +2158,13 @@ public sealed class InitProcessStateTests
         using var directory = new ProcessStateDirectory();
         var target = System.IO.Path.Combine(directory.Path, "target");
         var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
+        var previousCopilotHome = Environment.GetEnvironmentVariable("COPILOT_HOME");
 
         try
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", directory.CodexHome);
+            Environment.SetEnvironmentVariable("COPILOT_HOME",
+                System.IO.Path.Combine(directory.Path, "absent copilot home"));
             var output = new StringWriter();
             var error = new StringWriter();
 
@@ -2140,6 +2185,7 @@ public sealed class InitProcessStateTests
         finally
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", previous);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", previousCopilotHome);
         }
     }
 

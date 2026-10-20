@@ -147,6 +147,9 @@ This installs the skill and binds only the local runtime AEC block to the
 selected repository path while applying the committed Codex instructions and
 personality. It leaves canonical bytes and Git `HEAD` unchanged. Never use
 this flag for a fresh/partial repository, provider init, or `apply`.
+For implicit homes, init stops if the other harness is bound to a different
+checkout; the flag cannot override that conflict. Explicit custom-home flags
+remain available but are outside this cross-harness check.
 
 No `init` form pushes Git commits.
 
