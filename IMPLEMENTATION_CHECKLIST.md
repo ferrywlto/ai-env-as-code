@@ -336,12 +336,30 @@
   runtime or data repository was touched. Ferry reviewed and approved this
   slice.
 
-Immediate next work: test ticket #2's pulled repository at a different local
-path, confirm explicit rebinding and absent-harness behavior, then fix only
-any demonstrated gap. Keep
-`docs/architecture.md` aligned with new relationships. Resolve the
-semantic commit rewording when permissions permit. Do not add a `--shared`
-switch or sidecar lock. Run the complete suite before push or release.
+- [ ] Review ticket #2 slice 13's Codex local-path attachment. A disposable
+  two-checkout test confirms a different-path clone still requires explicit
+  `--force-path-change`, then binds only the local runtime block and verifies
+  portable apply/status without a path-only commit or invented Copilot home.
+  Canonical bytes and Git `HEAD` stay unchanged. A moved-repository test also
+  covers ChatGPT-aware block preservation and repeat attachment. The bundled
+  Codex skill, reference flow, and architecture diagram reflect the runtime-
+  only write. Fresh-init tests were corrected to expect portable `status` to
+  stop until enrollment instead of falling back to legacy canonical content.
+  Focused clone tests passed 4/4, fresh-init cases 2/2, interrupted-init
+  resume cases 4/4, and adjacent attachment/skill-upgrade tests 33/33;
+  Release build had zero warnings. The
+  wider init/apply test run was stopped after its stale fresh-init assertion
+  was identified, not counted as a full pass. No personal runtime or data
+  repository was touched.
+
+Immediate next work: enforce the approved one-checkout-per-machine rule so a
+confirmed path change cannot leave Codex and Copilot bound to different data
+repositories on one machine. Then address Copilot's pulled-repository path
+attachment separately; its parser currently rejects `--force-path-change`.
+Neither provider may make a machine-specific path-only commit. Migrate legacy
+canonical blocks toward path-free repository data in a later reviewed slice.
+Keep `docs/architecture.md` aligned, and run the complete suite before push
+or release.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

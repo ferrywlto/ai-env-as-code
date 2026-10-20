@@ -143,10 +143,10 @@ both paths and ask for explicit confirmation before any mutation. Only then run:
 aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] --force-path-change
 ```
 
-This updates a supported v3–v6 block, commits only canonical `AGENTS.md` as
-`Rebind AEC repository path`, installs the skill, and applies both committed
-files. Never use this flag for a fresh/partial repository, provider init, or
-`apply`.
+This installs the skill and binds only the local runtime AEC block to the
+selected repository path while applying the committed Codex instructions and
+personality. It leaves canonical bytes and Git `HEAD` unchanged. Never use
+this flag for a fresh/partial repository, provider init, or `apply`.
 
 No `init` form pushes Git commits.
 

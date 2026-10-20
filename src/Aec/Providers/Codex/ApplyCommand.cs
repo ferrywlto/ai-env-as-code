@@ -54,7 +54,8 @@ internal static class ApplyCommand
         CodexPersonality? expectedRuntimePersonality,
         string expectedCommit,
         byte[] expectedSource,
-        byte[] expectedConfig)
+        byte[] expectedConfig,
+        byte[]? expectedLocalRuntimeSource = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedCommit);
         ArgumentNullException.ThrowIfNull(expectedSource);
@@ -70,7 +71,8 @@ internal static class ApplyCommand
                 expectedRuntimePersonality,
                 expectedCommit,
                 expectedSource,
-                expectedConfig));
+                expectedConfig,
+                expectedLocalRuntimeSource));
     }
 
     private static int Run(
@@ -113,14 +115,25 @@ internal static class ApplyCommand
         }
 
         var binding = AecInstructionBlock.ReadRepositoryBinding(source);
+        var desiredRuntimeSource = source;
         if (binding is not null &&
             !AecInstructionBlock.RepositoryPathsEqual(binding.Repository, repository))
         {
-            throw new InvalidOperationException(
-                "Committed AEC instructions are bound to a different data repository. " +
-                $"Recorded repository: {binding.Repository}. " +
-                $"Selected repository: {repository}. " +
-                "Run `aec init` with the selected --repo path before applying it.");
+            // Only confirmed init attachment may substitute a machine-local
+            // binding. The committed bytes remain pinned and are never edited.
+            var localSource = repositoryExpectation?.LocalRuntimeSource;
+            if (localSource is null ||
+                !AecInstructionBlock.RebindRepository(source, repository)
+                    .AsSpan().SequenceEqual(localSource))
+            {
+                throw new InvalidOperationException(
+                    "Committed AEC instructions are bound to a different data repository. " +
+                    $"Recorded repository: {binding.Repository}. " +
+                    $"Selected repository: {repository}. " +
+                    "Run `aec init` with the selected --repo path before applying it.");
+            }
+
+            desiredRuntimeSource = localSource;
         }
 
         var canonicalConfig = ReadCommittedConfig(repository, commit);
@@ -174,7 +187,7 @@ internal static class ApplyCommand
             throw new InvalidOperationException("Canonical config changed during apply.");
         }
 
-        var agentsChanged = runtime is null || !runtime.AsSpan().SequenceEqual(source);
+        var agentsChanged = runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource);
         if (!agentsChanged && !configUpdate.Changed)
         {
             output.WriteLine("unchanged");
@@ -184,7 +197,7 @@ internal static class ApplyCommand
         // Init may overwrite only the exact runtime bytes captured by its baseline commit.
         if (initialization is not null &&
             (runtime is null || !runtime.AsSpan().SequenceEqual(initialization.Runtime)) &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(source)))
+            (runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource)))
         {
             throw new InvalidOperationException(
                 "Runtime target changed after the initialization backup; committed source was not applied.");
@@ -200,11 +213,11 @@ internal static class ApplyCommand
         }
 
         // Attachment uses the runtime snapshot taken before skill installation or
-        // a path-rebind commit. The already-desired state is also accepted so a
+        // a local path rebind. The already-desired state is also accepted so a
         // previously interrupted apply remains safely repeatable.
         if (repositoryExpectation is not null &&
             !MatchesOptionalBytes(runtime, repositoryExpectation.Runtime) &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(source)))
+            (runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource)))
         {
             throw new InvalidOperationException(
                 "Runtime target changed during AEC attachment; " +
@@ -244,7 +257,7 @@ internal static class ApplyCommand
             AtomicFile.ReplaceIfUnchanged(
                 runtimePath,
                 initialization?.Runtime ?? runtime,
-                source);
+                desiredRuntimeSource);
         }
 
         output.WriteLine("applied");
@@ -517,5 +530,6 @@ internal static class ApplyCommand
         CodexPersonality? RuntimePersonality,
         string Commit,
         byte[] Source,
-        byte[] Config);
+        byte[] Config,
+        byte[]? LocalRuntimeSource);
 }

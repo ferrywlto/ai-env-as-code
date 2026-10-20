@@ -498,7 +498,7 @@ Rerunning ordinary `init` at the recorded path uses the attachment flow: it inst
 the bundled skill and applies the committed managed environment without another
 backup or commit.
 
-### v0.10 pulled-repository initialization
+### Pulled-repository initialization
 
 The following flow lets `init` attach a pulled, already initialized AEC repository
 to another local machine without silently changing its recorded
@@ -530,30 +530,31 @@ flowchart TD
     Confirm -->|"No"| Unchanged["Leave repository and runtime unchanged"]
     Confirm -->|"Yes"| Rerun["Run aec init with<br/>--force-path-change"]
     Rerun --> RebindSkill["Install the bundled $aec skill"]
-    RebindSkill --> Rebind["Update the existing v3 through v6 block in place<br/>Never create a duplicate block"]
-    Rebind --> PathCommit["Commit the confirmed repository path change"]
-    PathCommit --> Apply
+    RebindSkill --> Rebind["Bind the local runtime AEC block to --repo<br/>Leave committed canonical bytes and HEAD unchanged"]
+    Rebind --> Ready
 
     State -->|"Other non-empty state"| Reject["Reject without mutation"]
 
     Apply --> Ready["Local AEC environment is ready"]
     Ready --> Routine["Later: run aec apply --repo PATH"]
-    Routine --> ApplyPath{"Recorded path equals --repo?"}
-    ApplyPath -->|"Yes"| Apply
+    Routine --> ApplyPath{"Runtime binding equals --repo?"}
+    ApplyPath -->|"Yes"| PortableApply["Apply committed portable target<br/>with this machine's local binding"]
+    PortableApply --> Ready
     ApplyPath -->|"No"| Redirect["Stop without changes<br/>Prompt the user to run aec init --repo PATH"]
     Redirect -->|"User invokes aec init"| Read
 ```
 
 Path mismatch detection is read-only. The command is deliberately non-interactive:
 it displays the recorded and selected paths and stops. The caller must obtain user
-confirmation before rerunning with `--force-path-change`. A confirmed rebind
-preserves every non-AEC byte and the existing provider-neutral or ChatGPT-aware
-block type, emits the current v5 or v6 form, and commits only the canonical source as
-`Rebind AEC repository path`, and does not push. A machine using the previous path
-may subsequently require its own confirmed rebind.
+confirmation before rerunning with `--force-path-change`. A confirmed Codex
+attachment preserves every non-AEC byte and the existing provider-neutral or
+ChatGPT-aware block type, then binds only this machine's runtime block to the
+selected path. It does not rewrite canonical bytes, create a path-only commit,
+or push. Another machine may use a different local path for its clone without
+changing the shared Git history.
 
-Before a routine `apply` writes runtime instructions, it must compare the repository
-path recorded in the AEC block with the selected `--repo`. A mismatch returns an
+Before a routine `apply` writes runtime instructions, it compares the repository
+path recorded in the local runtime AEC block with the selected `--repo`. A mismatch returns an
 error without changing Git, canonical instructions, installed skills, or runtime,
 and prompts the user to run `aec init --repo PATH`. The `--force-path-change` switch
 is valid only with ordinary `init`; fresh, partial-baseline, and provider modes

@@ -3,7 +3,6 @@ namespace Aec;
 internal static class InitCommand
 {
     private const string InitializationCommitMessage = "Initialize AEC instructions";
-    private const string RebindCommitMessage = "Rebind AEC repository path";
 
     public static int Run(
         string directoryPath,
@@ -250,30 +249,11 @@ internal static class InitCommand
             return 0;
         }
 
-        EnsureCommitIdentity(repository);
-        AecSkillInstaller.Install(codexHome);
-        GitProcess.RunRequired(
-            repository,
-            "Git could not configure exact instruction bytes",
-            "config",
-            "--local",
-            "core.autocrlf",
-            "false");
-
         var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
+        // The committed source belongs to the shared data history; only this
+        // machine's runtime control block should contain its checkout path.
         var rebound = AecInstructionBlock.RebindRepository(completed.Content, repository);
-        AtomicFile.ReplaceIfUnchanged(
-            sourcePath,
-            completed.Content,
-            rebound,
-            "Canonical source");
-
-        var commit = BackupCommand.CommitCanonicalSource(
-            repository,
-            RebindCommitMessage,
-            completed.Commit,
-            rebound,
-            allowEmpty: false);
+        AecSkillInstaller.Install(codexHome);
         ApplyCommand.RunForAttachment(
             repository,
             codexHome,
@@ -281,16 +261,18 @@ internal static class InitCommand
             warning,
             runtime,
             runtimePersonality,
-            commit,
-            rebound,
-            completed.Config);
+            completed.Commit,
+            completed.Content,
+            completed.Config,
+            rebound);
         VerifyInitializationResult(
             repository,
             sourcePath,
             runtimePath,
-            commit,
-            rebound,
-            completed.Config);
+            completed.Commit,
+            completed.Content,
+            completed.Config,
+            rebound);
 
         output.WriteLine("initialized");
         return 0;
@@ -709,7 +691,8 @@ internal static class InitCommand
         string runtimePath,
         string expectedCommit,
         byte[] expectedContent,
-        byte[] expectedConfig)
+        byte[] expectedConfig,
+        byte[]? expectedRuntimeContent = null)
     {
         var head = ResolveBaselineHead(repository, "Git could not verify initialized HEAD");
         if (!string.Equals(head, expectedCommit, StringComparison.Ordinal))
@@ -737,7 +720,7 @@ internal static class InitCommand
         }
 
         VerifyContent(sourcePath, expectedContent, "Canonical source");
-        VerifyContent(runtimePath, expectedContent, "Runtime target");
+        VerifyContent(runtimePath, expectedRuntimeContent ?? expectedContent, "Runtime target");
         var configSourcePath = Path.Combine(
             repository,
             AecApplication.ConfigSourceRelativePath);

@@ -334,10 +334,85 @@ public sealed class InitTests
         Assert.Empty(TestGit.Run(movedRepository, "status", "--porcelain").Output);
     }
 
+    [Fact]
+    public void PulledCodexRepositoryBindsRuntimeLocallyWithoutChangingSharedHistory()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var platform = RenderCommand.CurrentPlatform();
+        var shared = Path.Combine(layout.Target, "environment", "shared", "instructions.md");
+        var policy = Path.Combine(layout.Target, "environment", "platforms", platform,
+            "policy.md");
+        var overlay = Path.Combine(layout.Target, "environment", "providers", "codex",
+            "overlay.md");
+        foreach (var path in new[] { shared, policy, overlay })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        }
+
+        File.WriteAllText(shared, "Shared approval.\n");
+        File.WriteAllText(policy, "Local paths.\n");
+        File.WriteAllText(overlay, "Codex mechanics.\n");
+        Assert.Equal(0, TestGit.Run(layout.Target, "add", "--", "environment").ExitCode);
+        Assert.Equal(0, TestGit.Run(layout.Target, "commit", "--quiet", "--message",
+            "Author portable sources").ExitCode);
+        var enroll = TestApplication.Run("init", "--repo", layout.Target,
+            "--codex-home", layout.CodexHome, "--enroll-shared");
+        Assert.Equal(0, enroll.ExitCode);
+        Assert.Equal(0, TestGit.Run(layout.Target, "add", "--", "environment/targets").ExitCode);
+        Assert.Equal(0, TestGit.Run(layout.Target, "commit", "--quiet", "--message",
+            "Enroll Codex target").ExitCode);
+
+        // A second checkout models pulling the committed data on another
+        // machine without copying the first machine's runtime or skill files.
+        var pulled = Path.Combine(layout.Root, "pulled data repository");
+        var secondHome = Path.Combine(layout.Root, "second codex home");
+        var absentCopilotHome = Path.Combine(layout.Root, "absent copilot home");
+        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Target,
+            pulled).ExitCode);
+        Assert.Equal(0, TestGit.Run(pulled, "config", "--local", "user.name",
+            "AEC Test").ExitCode);
+        Assert.Equal(0, TestGit.Run(pulled, "config", "--local", "user.email",
+            "aec-test@example.invalid").ExitCode);
+        Assert.Equal(0, TestGit.Run(pulled, "config", "--local", "commit.gpgsign",
+            "false").ExitCode);
+        Directory.CreateDirectory(secondHome);
+        var oldHead = TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim();
+
+        var withoutConfirmation = Run(pulled, secondHome);
+
+        Assert.Equal(1, withoutConfirmation.ExitCode);
+        Assert.Contains("--force-path-change", withoutConfirmation.Error,
+            StringComparison.Ordinal);
+        Assert.Equal(oldHead, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+        Assert.False(File.Exists(Path.Combine(secondHome, "AGENTS.md")));
+        Assert.False(Directory.Exists(absentCopilotHome));
+
+        var confirmed = Run(pulled, secondHome, forcePathChange: true);
+        Assert.Equal(0, confirmed.ExitCode);
+        Assert.Equal(pulled, AecInstructionBlock.ReadRepositoryBinding(
+            File.ReadAllBytes(Path.Combine(secondHome, "AGENTS.md")))!.Repository);
+        Assert.Equal(oldHead, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(layout.Target, AecInstructionBlock.ReadRepositoryBinding(
+            File.ReadAllBytes(Path.Combine(pulled, AecApplication.SourceRelativePath)))!.Repository);
+        var apply = TestApplication.Run("apply", "--repo", pulled,
+            "--codex-home", secondHome);
+        Assert.Equal(0, apply.ExitCode);
+        var status = TestApplication.Run("status", "--repo", pulled,
+            "--codex-home", secondHome);
+        Assert.Equal(0, status.ExitCode);
+        Assert.Contains("codex/AGENTS.md   in_sync", status.Output,
+            StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(pulled, "environment", "targets",
+            platform, "copilot")));
+        Assert.False(Directory.Exists(absentCopilotHome));
+        Assert.Empty(TestGit.Run(pulled, "status", "--porcelain").Output);
+    }
+
     [Theory]
-    [InlineData(false, 5, 3)]
-    [InlineData(true, 6, 4)]
-    public void ConfirmedPathChangeRebindsCommitsAndAppliesIdempotently(
+    [InlineData(false, 5, 2)]
+    [InlineData(true, 6, 3)]
+    public void ConfirmedPathChangeBindsOnlyRuntimeAndAppliesIdempotently(
         bool includeChatGptProvider,
         int expectedBlockVersion,
         int expectedCommitCount)
@@ -359,8 +434,10 @@ public sealed class InitTests
         }
 
         var movedRepository = Path.Combine(layout.Root, "pulled data repository");
+        var originalRepository = layout.Target;
         Directory.Move(layout.Target, movedRepository);
         var movedSource = Path.Combine(movedRepository, AecApplication.SourceRelativePath);
+        var originalHead = TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim();
         File.Delete(layout.Runtime);
         File.WriteAllText(
             layout.RuntimeConfig,
@@ -376,31 +453,23 @@ public sealed class InitTests
         var binding = AecInstructionBlock.ReadRepositoryBinding(source);
         Assert.NotNull(binding);
         Assert.Equal(expectedBlockVersion, binding.Version);
-        Assert.Equal(movedRepository, binding.Repository);
+        Assert.Equal(originalRepository, binding.Repository);
         Assert.Contains("Existing instruction.", File.ReadAllText(movedSource), StringComparison.Ordinal);
         Assert.Equal(
             1,
             File.ReadAllText(movedSource)
                 .Split("<!-- AEC:BEGIN", StringSplitOptions.None).Length - 1);
-        Assert.Equal(source, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(movedRepository, AecInstructionBlock.ReadRepositoryBinding(
+            File.ReadAllBytes(layout.Runtime))!.Repository);
+        Assert.Equal(AecInstructionBlock.RebindRepository(source, movedRepository),
+            File.ReadAllBytes(layout.Runtime));
         Assert.Equal(
             "model = \"gpt-test\"\npersonality = \"none\"\n",
             File.ReadAllText(layout.RuntimeConfig));
-        Assert.Equal(
-            "Rebind AEC repository path",
-            TestGit.Run(movedRepository, "log", "-1", "--format=%s").Output.Trim());
+        Assert.Equal(originalHead, TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(
             expectedCommitCount.ToString(CultureInfo.InvariantCulture),
             TestGit.Run(movedRepository, "rev-list", "--count", "HEAD").Output.Trim());
-        Assert.Equal(
-            AecApplication.SourceRelativePath,
-            TestGit.Run(
-                movedRepository,
-                "diff-tree",
-                "--no-commit-id",
-                "--name-only",
-                "-r",
-                "HEAD").Output.Trim());
         Assert.Empty(TestGit.Run(movedRepository, "status", "--porcelain").Output);
 
         var head = TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim();
@@ -408,11 +477,12 @@ public sealed class InitTests
 
         Assert.Equal(0, repeated.ExitCode);
         Assert.Equal(head, TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim());
-        Assert.Equal(source, File.ReadAllBytes(layout.Runtime));
+        Assert.Equal(AecInstructionBlock.RebindRepository(source, movedRepository),
+            File.ReadAllBytes(layout.Runtime));
     }
 
     [Fact]
-    public void ConfirmedPathChangePreflightsConfigBeforeSkillOrRebindCommit()
+    public void ConfirmedPathChangePreflightsConfigBeforeSkillOrRuntimeRebind()
     {
         using var layout = new InitLayout();
         Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
@@ -1627,12 +1697,12 @@ public sealed class InitTests
             ["status", "--repo", layout.Target, "--codex-home", layout.CodexHome],
             statusOutput,
             statusError);
-        Assert.Equal(0, statusExitCode);
-        Assert.Equal(
-            $"codex/AGENTS.md   in_sync{Environment.NewLine}" +
-            $"codex/config.toml in_sync{Environment.NewLine}",
-            statusOutput.ToString());
-        Assert.Empty(statusError.ToString());
+        // Fresh initialization predates shared-target enrollment. Portable
+        // status must not silently fall back to the legacy canonical file.
+        Assert.Equal(1, statusExitCode);
+        Assert.Empty(statusOutput.ToString());
+        Assert.Contains("Authored shared instructions", statusError.ToString(),
+            StringComparison.Ordinal);
     }
 
     private sealed class InitLayout : IDisposable

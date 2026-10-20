@@ -17,6 +17,7 @@ flowchart LR
     subgraph Engine[AEC engine repository and installed binary]
         CLI --> Route[AecApplication]
         Route --> Compose[Enrollment and render]
+        Route --> Attach[Codex init attachment]
         Route --> Inspect[Status and previews]
         Route --> Writers[Backup and apply writers]
     end
@@ -34,12 +35,14 @@ flowchart LR
     Targets --> History
     Config --> History
     History --> Inspect
+    History -->|committed Codex source/config| Attach
+    Attach -->|machine-local path binding; no path-only commit| Runtime[Local Codex or Copilot runtime]
     Inspect --> Writers
     Writers -->|backup: changed source| Sources
     Writers -->|backup: affected targets| Targets
     Writers -->|backup: managed config| Config
     Writers -->|commit exact paths| History
-    Writers -->|apply: committed target/config| Runtime[Local Codex or Copilot runtime]
+    Writers -->|apply: committed target/config| Runtime
     Runtime --> Inspect
 ```
 
@@ -50,6 +53,8 @@ commits, and `apply` moves committed repository content into runtime. The CLI
 does not fetch or push; the installed skill coordinates remote checks and any
 approved Git operations. Codex also manages root `personality` in
 `config.toml`; Copilot currently manages only its instruction file.
+Confirmed Codex attachment of a clone at a new local path changes only its
+runtime binding; it does not commit a machine-specific path to shared history.
 
 ## Classes: source composition and runtime inspection
 
