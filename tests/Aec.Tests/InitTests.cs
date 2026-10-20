@@ -403,6 +403,21 @@ public sealed class InitTests
         Assert.Equal(0, status.ExitCode);
         Assert.Contains("codex/AGENTS.md   in_sync", status.Output,
             StringComparison.Ordinal);
+        var appliedRuntime = File.ReadAllBytes(Path.Combine(secondHome, "AGENTS.md"));
+        var appliedConfig = File.ReadAllBytes(Path.Combine(secondHome, "config.toml"));
+        var repeated = Run(pulled, secondHome);
+        Assert.Equal(0, repeated.ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", repeated.Output);
+        Assert.Equal(appliedRuntime,
+            File.ReadAllBytes(Path.Combine(secondHome, "AGENTS.md")));
+        Assert.Equal(appliedConfig,
+            File.ReadAllBytes(Path.Combine(secondHome, "config.toml")));
+        Assert.Equal(0, TestApplication.Run("status", "--repo", pulled,
+            "--codex-home", secondHome).ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}",
+            Run(pulled, secondHome, forcePathChange: true).Output);
+        Assert.Equal(appliedRuntime,
+            File.ReadAllBytes(Path.Combine(secondHome, "AGENTS.md")));
         Assert.False(Directory.Exists(Path.Combine(pulled, "environment", "targets",
             platform, "copilot")));
         Assert.False(Directory.Exists(absentCopilotHome));
@@ -410,7 +425,54 @@ public sealed class InitTests
     }
 
     [Fact]
-    public void ImplicitCodexHomeRejectsConflictingCopilotBindingEvenWhenForced()
+    public void CopilotFirstOnTheSelectedCheckoutStillRequiresCodexPathConfirmation()
+    {
+        using var layout = new InitLayout();
+        Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
+        var pulled = Path.Combine(layout.Root, "copilot-first checkout");
+        var secondCodexHome = Path.Combine(layout.Root, "second codex home");
+        var copilotHome = Path.Combine(layout.Root, "copilot home");
+        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Target,
+            pulled).ExitCode);
+        Directory.CreateDirectory(secondCodexHome);
+        Directory.CreateDirectory(copilotHome);
+        var copilotRuntimePath = Path.Combine(copilotHome, "copilot-instructions.md");
+        var copilotRuntime = CopilotInstructionBlock.Merge([], pulled);
+        File.WriteAllBytes(copilotRuntimePath, copilotRuntime);
+        var head = TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim();
+        var previousCodexHome = Environment.GetEnvironmentVariable("CODEX_HOME");
+        var previousCopilotHome = Environment.GetEnvironmentVariable("COPILOT_HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", secondCodexHome);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", copilotHome);
+            var unconfirmed = TestApplication.Run("init", "--repo", pulled);
+            Assert.Equal(1, unconfirmed.ExitCode);
+            Assert.Contains("--force-path-change", unconfirmed.Error,
+                StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(secondCodexHome, "AGENTS.md")));
+
+            var confirmed = TestApplication.Run("init", "--repo", pulled,
+                "--force-path-change");
+            Assert.Equal(0, confirmed.ExitCode);
+            Assert.Equal(pulled, AecInstructionBlock.ReadRepositoryBinding(
+                File.ReadAllBytes(Path.Combine(secondCodexHome, "AGENTS.md")))!.Repository);
+            Assert.Equal(copilotRuntime, File.ReadAllBytes(copilotRuntimePath));
+            Assert.Equal(head, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", previousCodexHome);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", previousCopilotHome);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ImplicitCodexHomeRejectsConflictingCopilotBindingWithOrWithoutForce(
+        bool forcePathChange)
     {
         using var layout = new InitLayout();
         Assert.Equal(0, Run(layout.Target, layout.CodexHome).ExitCode);
@@ -431,8 +493,13 @@ public sealed class InitTests
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", secondCodexHome);
             Environment.SetEnvironmentVariable("COPILOT_HOME", copilotHome);
-            var result = TestApplication.Run("init", "--repo", pulled,
-                "--force-path-change");
+            var arguments = new List<string> { "init", "--repo", pulled };
+            if (forcePathChange)
+            {
+                arguments.Add("--force-path-change");
+            }
+
+            var result = TestApplication.Run([.. arguments]);
 
             Assert.Equal(1, result.ExitCode);
             Assert.Contains(layout.Target, result.Error, StringComparison.Ordinal);
@@ -515,9 +582,10 @@ public sealed class InitTests
         Assert.Empty(TestGit.Run(movedRepository, "status", "--porcelain").Output);
 
         var head = TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim();
-        var repeated = Run(movedRepository, layout.CodexHome, forcePathChange: true);
+        var repeated = Run(movedRepository, layout.CodexHome);
 
         Assert.Equal(0, repeated.ExitCode);
+        Assert.Equal($"initialized{Environment.NewLine}", repeated.Output);
         Assert.Equal(head, TestGit.Run(movedRepository, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(AecInstructionBlock.RebindRepository(source, movedRepository),
             File.ReadAllBytes(layout.Runtime));

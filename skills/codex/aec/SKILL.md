@@ -145,8 +145,10 @@ aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] --force-path-change
 
 This installs the skill and binds only the local runtime AEC block to the
 selected repository path while applying the committed Codex instructions and
-personality. It leaves canonical bytes and Git `HEAD` unchanged. Never use
-this flag for a fresh/partial repository, provider init, or `apply`.
+personality. It leaves canonical bytes and Git `HEAD` unchanged. A later init
+on the already-bound checkout needs no flag and leaves runtime unchanged;
+use `aec status` and `aec apply` for drift. Never use the flag for a
+fresh/partial repository, ChatGPT provider init, or `apply`.
 For implicit homes, init stops if the other harness is bound to a different
 checkout; the flag cannot override that conflict. Explicit custom-home flags
 remain available but are outside this cross-harness check.

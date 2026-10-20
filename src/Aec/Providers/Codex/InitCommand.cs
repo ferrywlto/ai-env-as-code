@@ -196,7 +196,13 @@ internal static class InitCommand
         var pathMatches = AecInstructionBlock.RepositoryPathsEqual(
             completed.Binding.Repository,
             repository);
-        if (!pathMatches && !forcePathChange)
+        var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        var runtimeBinding = pathMatches || runtime is null
+            ? null
+            : AecInstructionBlock.ReadRepositoryBinding(runtime);
+        var alreadyBoundLocally = !pathMatches && runtimeBinding is not null &&
+            AecInstructionBlock.RepositoryPathsEqual(runtimeBinding.Repository, repository);
+        if (!pathMatches && !forcePathChange && !alreadyBoundLocally)
         {
             throw new InvalidOperationException(
                 "Initialized AEC instructions are bound to a different data repository. " +
@@ -206,8 +212,7 @@ internal static class InitCommand
         }
 
         // Preflight both managed runtime inputs before installing the skill or
-        // committing a rebind; Apply repeats the reads before changing either file.
-        var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        // applying a local rebind; Apply repeats the reads before changing either file.
         var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
         var runtimeConfig = AecApplication.ReadOptionalTextFile(
             runtimeConfigPath,
@@ -219,11 +224,27 @@ internal static class InitCommand
             completed.Config,
             Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
         // A deterministic planning failure must happen before skill installation
-        // and, for a moved repository, before the rebind commit.
+        // and, for a moved repository, before the runtime-only rebind.
         _ = CodexPersonalityConfig.PlanRuntimeUpdate(
             runtimeConfig,
             runtimeConfigPath,
             desiredPersonality);
+
+        if (alreadyBoundLocally)
+        {
+            // The path was already confirmed on this machine. Preserve its
+            // possibly newer portable runtime block; status/apply own drift.
+            AecSkillInstaller.Install(codexHome);
+            if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Repository HEAD changed during Codex attachment verification.");
+            }
+
+            output.WriteLine("initialized");
+            return 0;
+        }
 
         if (pathMatches)
         {

@@ -58,6 +58,8 @@ approved Git operations. Codex also manages root `personality` in
 Confirmed Codex or Copilot attachment of a clone at a new local path changes
 only its runtime binding; it does not commit a machine-specific path to shared
 history. Copilot requires a clean committed canonical source for this rebind.
+Once Codex runtime is bound to the selected checkout, repeating init without
+the flag does not rewrite its instructions or config; status/apply own drift.
 Ordinary init checks the other harness's implicit home before writes and stops
 on a different repository binding. Explicit custom homes are outside that
 cross-harness check in this 2.0 alpha slice.

@@ -378,9 +378,22 @@
   Exact help and ChatGPT force-mode dispatch tests passed 4/4 separately.
   Both bundled skill frontmatter blocks parsed and `git diff --check` passed.
   No personal runtime or data repository was touched. Ferry reviewed and
-  approved this slice.
+  approved this slice; committed as `d950231`.
 
-Immediate next work: review the Copilot attachment, then migrate legacy
+- [x] Review ticket #2 slice 16's Codex repeat-attachment behavior. A first
+  attachment to a pulled checkout still requires `--force-path-change` when
+  canonical records another machine's path. Once local runtime is bound to
+  `--repo`, repeating init leaves its instructions and config unchanged, even
+  after portable apply; status/apply own later drift. Both harnesses still
+  stop on an implicit-home conflict even with the flag. Keep canonical bytes
+  and Git `HEAD` unchanged. Disposable Copilot-first, moved-checkout, portable
+  repeat, both Codex conflict variants, and skill-upgrade tests passed 34/34;
+  both Copilot conflict variants passed 2/2 separately. Warning-as-error
+  Release build had zero warnings, skill frontmatter parsed, and whitespace
+  checks passed. No personal runtime or data repository was touched. Ferry
+  reviewed and approved this slice.
+
+Immediate next work: review Codex repeat attachment, then migrate legacy
 canonical blocks toward path-free repository data in a later reviewed slice.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.

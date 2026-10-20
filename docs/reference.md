@@ -532,7 +532,10 @@ flowchart TD
 
     Path -->|"Yes"| AttachSkill["Install the bundled $aec skill"]
     AttachSkill --> Apply
-    Path -->|"No"| Stop["Stop without changing repository or runtime<br/>Display recorded and selected paths"]
+    Path -->|"No"| Local{"Runtime already bound to --repo?"}
+    Local -->|"Yes"| Repeat["Leave runtime unchanged<br/>Use status/apply for drift"]
+    Repeat --> Ready
+    Local -->|"No"| Stop["Stop without changing repository or runtime<br/>Display recorded and selected paths"]
     Stop --> Confirm{"User confirms the path change?"}
 
     Confirm -->|"No"| Unchanged["Leave repository and runtime unchanged"]
@@ -560,6 +563,11 @@ ChatGPT-aware block type, then binds only this machine's runtime block to the
 selected path. It does not rewrite canonical bytes, create a path-only commit,
 or push. Another machine may use a different local path for its clone without
 changing the shared Git history.
+Once this machine's runtime block is already bound to the selected checkout,
+repeating Codex `init` needs no flag and leaves runtime instructions and config
+unchanged. This also preserves a newer portable block installed by `apply`;
+use `aec status` to inspect drift and `aec apply` for deployment. A different
+implicit Copilot-home binding still stops init, with or without the flag.
 
 Before a routine `apply` writes runtime instructions, it compares the repository
 path recorded in the local runtime AEC block with the selected `--repo`. A mismatch returns an
