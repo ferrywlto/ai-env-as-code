@@ -336,7 +336,7 @@
   runtime or data repository was touched. Ferry reviewed and approved this
   slice.
 
-- [ ] Review ticket #2 slice 13's Codex local-path attachment. A disposable
+- [x] Review ticket #2 slice 13's Codex local-path attachment. A disposable
   two-checkout test confirms a different-path clone still requires explicit
   `--force-path-change`, then binds only the local runtime block and verifies
   portable apply/status without a path-only commit or invented Copilot home.
@@ -350,7 +350,8 @@
   Release build had zero warnings. The
   wider init/apply test run was stopped after its stale fresh-init assertion
   was identified, not counted as a full pass. No personal runtime or data
-  repository was touched.
+  repository was touched. Ferry reviewed and approved this slice; committed as
+  `d28249f`.
 
 Immediate next work: enforce the approved one-checkout-per-machine rule so a
 confirmed path change cannot leave Codex and Copilot bound to different data
