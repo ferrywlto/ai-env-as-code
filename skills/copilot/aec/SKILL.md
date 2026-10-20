@@ -61,7 +61,7 @@ committed target; stop if enrollment is absent.
 Ordinary Copilot initialization:
 
 ```text
-aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
 ```
 
 Copilot home resolves from `--copilot-home`, absolute `COPILOT_HOME`, then
@@ -70,6 +70,10 @@ Copilot home resolves from `--copilot-home`, absolute `COPILOT_HOME`, then
 With an implicit home, init stops if implicit Codex is bound to another data
 checkout. An explicit custom-home flag is outside this cross-harness check;
 keep both harnesses on one checkout yourself.
+For a pulled checkout whose committed Copilot source records another machine's
+path, stop and ask before rerunning init with `--force-path-change`. This binds
+only the local runtime block, without a path-only repository commit. A
+conflicting implicit Codex checkout still stops.
 
 Read-only comparison with the committed current-platform target and local AEC
 block:

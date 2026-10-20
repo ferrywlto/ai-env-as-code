@@ -165,7 +165,7 @@ confirmed ordinary-init flow first.
 Local Copilot CLI initialization:
 
 ```text
-aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
 ```
 
 Copilot home resolves from `--copilot-home`, absolute `COPILOT_HOME`, then
@@ -174,6 +174,10 @@ Copilot home resolves from `--copilot-home`, absolute `COPILOT_HOME`, then
 `config.json`, stage, commit, push, or invoke Copilot. Copilot
 `status`/`backup`/`apply` also require `--provider=copilot`; Copilot uninstall
 and skill upgrade are unavailable. Do not substitute Codex flags.
+For a pulled checkout whose committed Copilot source records another machine's
+path, ask before using `--force-path-change`; confirmed init changes only the
+local runtime binding, not Git history. A conflicting implicit Codex checkout
+still stops.
 
 ## Back up runtime to Git
 

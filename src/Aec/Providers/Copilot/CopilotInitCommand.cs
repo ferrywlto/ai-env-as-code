@@ -2,7 +2,11 @@ namespace Aec;
 
 internal static class CopilotInitCommand
 {
-    public static int Run(string repository, string copilotHome, TextWriter output)
+    public static int Run(
+        string repository,
+        string copilotHome,
+        bool forcePathChange,
+        TextWriter output)
     {
         ChatGptInitCommand.ValidateRepository(repository);
         AecApplication.EnsureNoLinksInExistingPath(copilotHome, "Copilot home path");
@@ -25,8 +29,15 @@ internal static class CopilotInitCommand
             "Canonical Copilot instructions");
 
         byte[] desired;
+        string? expectedCommit = null;
         if (canonical is null)
         {
+            if (forcePathChange)
+            {
+                throw new InvalidOperationException(
+                    "--force-path-change requires existing canonical Copilot instructions.");
+            }
+
             // The first provider initialization captures the local file before
             // adding guidance, mirroring Codex's initial AEC block lifecycle.
             desired = CopilotInstructionBlock.Merge(runtime ?? [], repository);
@@ -38,13 +49,35 @@ internal static class CopilotInitCommand
                     "Canonical Copilot instructions do not contain a supported managed AEC block.");
             if (!AecInstructionBlock.RepositoryPathsEqual(binding, repository))
             {
-                throw new InvalidOperationException(
-                    "Canonical Copilot instructions are bound to a different data repository. " +
-                    $"Recorded repository: {binding}. " +
-                    $"Selected repository: {repository}.");
-            }
+                desired = CopilotInstructionBlock.RebindRepository(canonical, repository);
+                if (!forcePathChange &&
+                    (runtime is null || !runtime.AsSpan().SequenceEqual(desired)))
+                {
+                    throw new InvalidOperationException(
+                        "Canonical Copilot instructions are bound to a different data repository. " +
+                        $"Recorded repository: {binding}. " +
+                        $"Selected repository: {repository}. " +
+                        "Confirm the local path change, then rerun with --force-path-change.");
+                }
 
-            desired = canonical;
+                // A pulled checkout retains the original machine's canonical path.
+                // Bind this machine's runtime only; never commit a path-only change.
+                expectedCommit = ApplyCommand.ResolveHeadCommit(repository);
+                var committed = ApplyCommand.ReadCommittedFile(
+                    repository,
+                    expectedCommit,
+                    AecApplication.CopilotSourceRelativePath,
+                    "Canonical Copilot instructions");
+                if (!canonical.AsSpan().SequenceEqual(committed))
+                {
+                    throw new InvalidOperationException(
+                        "Canonical Copilot instructions changed before local path attachment.");
+                }
+            }
+            else
+            {
+                desired = canonical;
+            }
         }
 
         // Preflight every mutable target before the skill installation can make a
@@ -69,7 +102,13 @@ internal static class CopilotInitCommand
                 UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
 
-        VerifyResult(canonicalPath, runtimePath, desired);
+        VerifyResult(canonicalPath, runtimePath, canonical ?? desired, desired);
+        if (expectedCommit is not null &&
+            !string.Equals(expectedCommit, ApplyCommand.ResolveHeadCommit(repository),
+                StringComparison.Ordinal))
+        {
+            throw new IOException("Repository HEAD changed during Copilot attachment.");
+        }
         output.WriteLine(sourceChanged || runtimeChanged || skillChanged ? "initialized" : "unchanged");
         return 0;
     }
@@ -89,7 +128,11 @@ internal static class CopilotInitCommand
         }
     }
 
-    private static void VerifyResult(string canonicalPath, string runtimePath, byte[] expected)
+    private static void VerifyResult(
+        string canonicalPath,
+        string runtimePath,
+        byte[] expectedCanonical,
+        byte[] expectedRuntime)
     {
         var canonical = AecApplication.ReadRequiredTextFile(
             canonicalPath,
@@ -97,7 +140,8 @@ internal static class CopilotInitCommand
         var runtime = AecApplication.ReadRequiredTextFile(
             runtimePath,
             "Copilot runtime instructions");
-        if (!canonical.AsSpan().SequenceEqual(expected) || !runtime.AsSpan().SequenceEqual(expected))
+        if (!canonical.AsSpan().SequenceEqual(expectedCanonical) ||
+            !runtime.AsSpan().SequenceEqual(expectedRuntime))
         {
             throw new IOException("Copilot initialization verification failed.");
         }

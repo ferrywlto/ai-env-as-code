@@ -353,7 +353,7 @@
   repository was touched. Ferry reviewed and approved this slice; committed as
   `d28249f`.
 
-- [ ] Review ticket #2 slice 14's implicit-home conflict guard. Ordinary Codex
+- [x] Review ticket #2 slice 14's implicit-home conflict guard. Ordinary Codex
   and Copilot init now read the other harness's effective implicit home
   (`CODEX_HOME`/`COPILOT_HOME`, then the user-profile default) before mutation.
   A different AEC repository binding stops both providers, including confirmed
@@ -364,11 +364,23 @@
   both conflict directions plus same-path/no-other-harness behavior. Focused
   init and skill-upgrade tests passed 45/45; warning-as-error Release build
   had zero warnings; `git diff --check` passed. No personal runtime or data
-  repository was touched.
+  repository was touched. Ferry reviewed and approved this slice; committed as
+  `17eccfe`.
 
-Immediate next work: address Copilot's pulled-repository path attachment
-separately; its parser currently rejects `--force-path-change`. Neither
-provider may make a machine-specific path-only commit. Migrate legacy
+- [x] Review ticket #2 slice 15's Copilot pulled-repository attachment. A clean,
+  committed Copilot canonical source may retain another machine's path;
+  `--force-path-change` confirms a local runtime-only rebind. Without the flag,
+  init stops before writes; after a confirmed bind, rerunning init is stable.
+  The canonical file and Git `HEAD` must remain unchanged, and an implicit
+  Codex-home conflict still stops. Keep ChatGPT provider force mode invalid.
+  Disposable clone and dirty-source cases, block tests, and adjacent skill
+  upgrades passed 56/56; the warning-as-error Release build had zero warnings.
+  Exact help and ChatGPT force-mode dispatch tests passed 4/4 separately.
+  Both bundled skill frontmatter blocks parsed and `git diff --check` passed.
+  No personal runtime or data repository was touched. Ferry reviewed and
+  approved this slice.
+
+Immediate next work: review the Copilot attachment, then migrate legacy
 canonical blocks toward path-free repository data in a later reviewed slice.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.

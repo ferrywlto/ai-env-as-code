@@ -643,8 +643,8 @@ repair, or inspect the Codex skill.
 
 If an existing supported block records another repository path, provider mode stops
 before creating files or changing canonical instructions and directs the caller to
-the ordinary confirmed-init flow. `--force-path-change` is not valid in provider
-mode.
+the ordinary confirmed-init flow. `--force-path-change` is not valid with the
+ChatGPT provider.
 
 The first change writes `initialized`; an idempotent rerun writes `unchanged`.
 Both return exit code 0. `unchanged` describes only the initialized file state—it
@@ -654,7 +654,7 @@ staging, commit, push, or ChatGPT account operation.
 ### GitHub Copilot provider initialization (alpha)
 
 ```text
-aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
 ```
 
 This alpha path extends an existing AEC repository with the native Copilot
@@ -672,8 +672,12 @@ repository. AEC captures the existing runtime instruction file when the canonica
 file is first absent, prepends its Copilot-specific managed block while preserving
 all non-AEC bytes, and installs only the bundled `SKILL.md`. When a recognized
 canonical file already exists, a repeat `init` applies it back to the selected
-runtime path. A path mismatch or a customized `skills/aec/SKILL.md` stops before
-instruction files are changed.
+runtime path. A path mismatch stops and asks for explicit confirmation with
+`--force-path-change`. For a clean, committed canonical file in a pulled checkout,
+confirmed init changes only this machine's runtime AEC block; canonical bytes and
+Git `HEAD` remain unchanged. A subsequent rerun is idempotent without the flag.
+A customized `skills/aec/SKILL.md` stops before instruction files are changed.
+With an implicit home, a conflicting Codex checkout stops even with the flag.
 
 The command does not manage `config.json`, which is Copilot application state rather
 than the user-authored instruction contract. It does not stage, commit, push, or

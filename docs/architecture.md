@@ -18,7 +18,7 @@ flowchart LR
         CLI --> Route[AecApplication]
         Route --> Compose[Enrollment and render]
         Route --> Guard[Implicit-home binding check]
-        Guard --> Attach[Codex init attachment]
+        Guard --> Attach[Codex or Copilot init attachment]
         Route --> Inspect[Status and previews]
         Route --> Writers[Backup and apply writers]
     end
@@ -36,7 +36,7 @@ flowchart LR
     Targets --> History
     Config --> History
     History --> Inspect
-    History -->|committed Codex source/config| Attach
+    History -->|clean committed provider source| Attach
     Attach -->|machine-local path binding; no path-only commit| Runtime[Local Codex or Copilot runtime]
     Runtime -->|read other implicit harness binding| Guard
     Inspect --> Writers
@@ -55,8 +55,9 @@ commits, and `apply` moves committed repository content into runtime. The CLI
 does not fetch or push; the installed skill coordinates remote checks and any
 approved Git operations. Codex also manages root `personality` in
 `config.toml`; Copilot currently manages only its instruction file.
-Confirmed Codex attachment of a clone at a new local path changes only its
-runtime binding; it does not commit a machine-specific path to shared history.
+Confirmed Codex or Copilot attachment of a clone at a new local path changes
+only its runtime binding; it does not commit a machine-specific path to shared
+history. Copilot requires a clean committed canonical source for this rebind.
 Ordinary init checks the other harness's implicit home before writes and stops
 on a different repository binding. Explicit custom homes are outside that
 cross-harness check in this 2.0 alpha slice.

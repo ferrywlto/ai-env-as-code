@@ -117,8 +117,10 @@ public sealed class CopilotInitTests
         }
     }
 
-    [Fact]
-    public void ImplicitCopilotHomeRejectsConflictingCodexBinding()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ImplicitCopilotHomeRejectsConflictingCodexBinding(bool forcePathChange)
     {
         using var layout = new CopilotLayout();
         var pulled = Path.Combine(layout.Root, "second checkout");
@@ -133,8 +135,16 @@ public sealed class CopilotInitTests
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
             Environment.SetEnvironmentVariable("COPILOT_HOME", layout.CopilotHome);
-            var result = TestApplication.Run("init", "--repo", pulled,
-                "--provider=copilot");
+            var arguments = new List<string>
+            {
+                "init", "--repo", pulled, "--provider=copilot"
+            };
+            if (forcePathChange)
+            {
+                arguments.Add("--force-path-change");
+            }
+
+            var result = TestApplication.Run([.. arguments]);
 
             Assert.Equal(1, result.ExitCode);
             Assert.Contains(layout.Repository, result.Error, StringComparison.Ordinal);
@@ -247,6 +257,81 @@ public sealed class CopilotInitTests
     }
 
     [Fact]
+    public void ConfirmedCloneAttachmentChangesOnlyLocalRuntimeBinding()
+    {
+        using var layout = new CopilotLayout();
+        Assert.Equal(0, Run(layout.Repository, layout.CopilotHome).ExitCode);
+        Assert.Equal(0, TestGit.Run(layout.Repository, "add", "--",
+            AecApplication.CopilotSourceRelativePath).ExitCode);
+        Assert.Equal(0, TestGit.Run(layout.Repository, "commit", "--quiet", "--message",
+            "Enroll Copilot instructions").ExitCode);
+
+        var pulled = Path.Combine(layout.Root, "pulled-repository");
+        var secondHome = Path.Combine(layout.Root, "second-copilot-home");
+        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Repository,
+            pulled).ExitCode);
+        Directory.CreateDirectory(secondHome);
+        var canonicalPath = Path.Combine(pulled, AecApplication.CopilotSourceRelativePath);
+        var canonicalBefore = File.ReadAllBytes(canonicalPath);
+        var headBefore = TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim();
+
+        var withoutConfirmation = Run(pulled, secondHome);
+        Assert.Equal(1, withoutConfirmation.ExitCode);
+        Assert.Contains("--force-path-change", withoutConfirmation.Error,
+            StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(secondHome, "copilot-instructions.md")));
+        Assert.Equal(canonicalBefore, File.ReadAllBytes(canonicalPath));
+
+        var confirmed = Run(pulled, secondHome, forcePathChange: true);
+        Assert.Equal(0, confirmed.ExitCode);
+        var runtimePath = Path.Combine(secondHome, "copilot-instructions.md");
+        Assert.Equal(pulled, CopilotInstructionBlock.ReadRepositoryBinding(
+            File.ReadAllBytes(runtimePath)));
+        Assert.Equal(canonicalBefore, File.ReadAllBytes(canonicalPath));
+        Assert.Equal(headBefore, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+        Assert.Equal(string.Empty, TestGit.Run(pulled, "status", "--porcelain").Output);
+        Assert.Equal($"unchanged{Environment.NewLine}", Run(pulled, secondHome).Output);
+    }
+
+    [Fact]
+    public void ForcePathChangeRequiresExistingCopilotCanonicalFile()
+    {
+        using var layout = new CopilotLayout();
+
+        var result = Run(layout.Repository, layout.CopilotHome, forcePathChange: true);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("requires existing canonical Copilot instructions", result.Error,
+            StringComparison.Ordinal);
+        Assert.False(File.Exists(layout.CanonicalInstructions));
+    }
+
+    [Fact]
+    public void ConfirmedCloneAttachmentRejectsUncommittedCanonicalChanges()
+    {
+        using var layout = new CopilotLayout();
+        Assert.Equal(0, Run(layout.Repository, layout.CopilotHome).ExitCode);
+        Assert.Equal(0, TestGit.Run(layout.Repository, "add", "--",
+            AecApplication.CopilotSourceRelativePath).ExitCode);
+        Assert.Equal(0, TestGit.Run(layout.Repository, "commit", "--quiet", "--message",
+            "Enroll Copilot instructions").ExitCode);
+        var pulled = Path.Combine(layout.Root, "dirty-pulled-repository");
+        var secondHome = Path.Combine(layout.Root, "second-copilot-home");
+        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Repository,
+            pulled).ExitCode);
+        Directory.CreateDirectory(secondHome);
+        File.AppendAllText(Path.Combine(pulled, AecApplication.CopilotSourceRelativePath),
+            "Local uncommitted edit.\n");
+
+        var result = Run(pulled, secondHome, forcePathChange: true);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("unstaged changes", result.Error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(secondHome, "copilot-instructions.md")));
+        Assert.False(File.Exists(Path.Combine(secondHome, "skills", "aec", "SKILL.md")));
+    }
+
+    [Fact]
     public void RejectsCodexHomeAndCopilotHomeTogether()
     {
         using var layout = new CopilotLayout();
@@ -266,14 +351,22 @@ public sealed class CopilotInitTests
         Assert.False(File.Exists(layout.CanonicalInstructions));
     }
 
-    private static CommandResult Run(string repository, string copilotHome) =>
-        TestApplication.Run(
-            "init",
-            "--repo",
-            repository,
-            "--provider=copilot",
-            "--copilot-home",
-            copilotHome);
+    private static CommandResult Run(
+        string repository,
+        string copilotHome,
+        bool forcePathChange = false)
+    {
+        var arguments = new List<string>
+        {
+            "init", "--repo", repository, "--provider=copilot", "--copilot-home", copilotHome
+        };
+        if (forcePathChange)
+        {
+            arguments.Add("--force-path-change");
+        }
+
+        return TestApplication.Run([.. arguments]);
+    }
 
     private sealed class CopilotLayout : IDisposable
     {

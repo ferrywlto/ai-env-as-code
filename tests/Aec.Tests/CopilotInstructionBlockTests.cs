@@ -40,6 +40,22 @@ public sealed class CopilotInstructionBlockTests
     }
 
     [Fact]
+    public void RebindChangesOnlyTheManagedBlockAndPreservesAuthoredBytes()
+    {
+        var original = new byte[] { 0xEF, 0xBB, 0xBF }
+            .Concat("# Keep\r\nThis text.\r\n"u8.ToArray()).ToArray();
+        var managed = CopilotInstructionBlock.Merge(original, Repository);
+        var second = Path.Combine(Path.GetTempPath(), "aec-copilot-block-tests", "second");
+
+        var rebound = CopilotInstructionBlock.RebindRepository(managed, second);
+
+        Assert.Equal(second, CopilotInstructionBlock.ReadRepositoryBinding(rebound));
+        Assert.True(rebound.AsSpan().EndsWith(original.AsSpan(3)));
+        Assert.Equal(rebound, CopilotInstructionBlock.RebindRepository(rebound, second));
+        Assert.Equal(Repository, CopilotInstructionBlock.ReadRepositoryBinding(managed));
+    }
+
+    [Fact]
     public void PortableBlockPointsToTheSelectedTargetWithoutChangingTheLegacyGenerator()
     {
         var original = "Authored instructions.\n"u8.ToArray();

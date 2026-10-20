@@ -100,6 +100,27 @@ internal static class CopilotInstructionBlock
     public static string? ReadRepositoryBinding(byte[] content) =>
         ReadManagedBinding(content)?.Repository;
 
+    internal static byte[] RebindRepository(byte[] content, string repository)
+    {
+        ValidateText(content);
+        var block = ReadBlock(content)
+            ?? throw new InvalidDataException(
+                "Copilot instructions do not contain a supported managed AEC block.");
+        var replacement = RenderBlock(block.NewLine, NormalizeRepository(repository),
+            block.Version, block.Platform, block.TargetDigest);
+        var result = new byte[checked(content.Length - (block.End - block.Start) +
+            replacement.Length)];
+        content.AsSpan(0, block.Start).CopyTo(result);
+        replacement.CopyTo(result.AsSpan(block.Start));
+        content.AsSpan(block.End).CopyTo(result.AsSpan(block.Start + replacement.Length));
+        if (result.Length > AecApplication.MaximumTextBytes)
+        {
+            throw new InvalidDataException("Rebound Copilot instructions exceed 1 MiB.");
+        }
+
+        return result;
+    }
+
     internal static RepositoryBinding? ReadManagedBinding(byte[] content)
     {
         ValidateText(content);

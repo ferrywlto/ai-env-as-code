@@ -201,7 +201,8 @@ public static class AecApplication
                 EnsureOtherImplicitHarnessUsesRepository(repository, "codex");
             }
 
-            return CopilotInitCommand.Run(repository, copilotHome, output);
+            return CopilotInitCommand.Run(
+                repository, copilotHome, options.ForcePathChange, output);
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
@@ -555,10 +556,10 @@ public static class AecApplication
             throw new ArgumentException("--copilot-home requires --provider=copilot.");
         }
 
-        if (provider is not null && forcePathChange)
+        if (provider == "chatgpt" && forcePathChange)
         {
             throw new ArgumentException(
-                "--force-path-change is not valid with --provider initialization.");
+                "--force-path-change is not valid with --provider=chatgpt.");
         }
 
         if (enrollShared && forcePathChange)
@@ -849,7 +850,7 @@ public static class AecApplication
               aec uninstall [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
               aec init --repo ABSOLUTE_PATH --provider=chatgpt
-              aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
               aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
