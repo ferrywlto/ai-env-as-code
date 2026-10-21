@@ -69,13 +69,12 @@ internal static class SharedEnrollmentCommand
                 commit,
                 AecApplication.CopilotSourceRelativePath,
                 "Canonical Copilot instructions");
-            var binding = CopilotInstructionBlock.ReadRepositoryBinding(canonical)
-                ?? throw new InvalidDataException(
-                    "Canonical Copilot instructions do not contain a supported managed AEC block.");
-            if (!AecInstructionBlock.RepositoryPathsEqual(binding, repository))
+            // The selected runtime binding was checked above; this committed
+            // block may still contain the first machine's checkout path.
+            if (CopilotInstructionBlock.ReadRepositoryBinding(canonical) is null)
             {
-                throw new InvalidOperationException(
-                    "Canonical Copilot instructions are bound to a different data repository.");
+                throw new InvalidDataException(
+                    "Canonical Copilot instructions do not contain a supported managed AEC block.");
             }
         }
 

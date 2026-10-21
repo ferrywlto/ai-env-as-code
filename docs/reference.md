@@ -128,6 +128,10 @@ creates only the selected target under
 stages, commits, or pushes. A repeat with the same target reports `unchanged`;
 a different existing target is not overwritten. `--force-path-change` and
 `--provider=chatgpt` cannot be combined with `--enroll-shared`.
+For a pulled checkout at a different path, first confirm ordinary provider
+`init` so this machine's runtime binds to `--repo`. Enrollment can then proceed
+even if the clean committed legacy provider block still names the original
+machine's checkout; it never rewrites that canonical block.
 
 ## Shared-instruction rendering (2.0 development)
 

@@ -48,6 +48,100 @@ public sealed class SharedEnrollmentTests
             InstructionSections.Parse(File.ReadAllText(layout.TargetPath("copilot")), true, true).Provider);
     }
 
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void ConfirmedCloneCanEnrollWithoutRewritingCanonicalRepositoryPath(string provider)
+    {
+        using var layout = new EnrollmentLayout();
+        if (provider == "copilot")
+        {
+            layout.InitializeCopilot();
+        }
+
+        layout.CommitAuthoredSources(provider);
+        var pulled = Path.Combine(Path.GetDirectoryName(layout.Repository)!, "pulled-data");
+        var secondHome = Path.Combine(Path.GetDirectoryName(layout.Repository)!,
+            $"second-{provider}-home");
+        Assert.Equal(0, TestGit.Run(Path.GetDirectoryName(layout.Repository)!, "clone",
+            "--quiet", layout.Repository, pulled).ExitCode);
+        Directory.CreateDirectory(secondHome);
+        var canonicalRelativePath = provider == "codex"
+            ? AecApplication.SourceRelativePath
+            : AecApplication.CopilotSourceRelativePath;
+        var canonicalPath = Path.Combine(pulled, canonicalRelativePath);
+        var canonicalBefore = File.ReadAllBytes(canonicalPath);
+        var headBefore = TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim();
+        var attached = provider == "codex"
+            ? TestApplication.Run("init", "--repo", pulled, "--codex-home", secondHome,
+                "--force-path-change")
+            : TestApplication.Run("init", "--repo", pulled, "--provider=copilot",
+                "--copilot-home", secondHome, "--force-path-change");
+        Assert.Equal(0, attached.ExitCode);
+        var runtimePath = Path.Combine(secondHome, provider == "codex"
+            ? "AGENTS.md" : "copilot-instructions.md");
+        var runtimeBefore = File.ReadAllBytes(runtimePath);
+        CommandResult EnrollPulled() => provider == "codex"
+            ? TestApplication.Run("init", "--repo", pulled, "--codex-home", secondHome,
+                "--enroll-shared")
+            : TestApplication.Run("init", "--repo", pulled, "--provider=copilot",
+                "--copilot-home", secondHome, "--enroll-shared");
+
+        var enrollment = EnrollPulled();
+
+        Assert.Equal(0, enrollment.ExitCode);
+        Assert.Equal($"enrolled {layout.TargetRelativePath(provider)}{Environment.NewLine}",
+            enrollment.Output);
+        Assert.True(File.Exists(Path.Combine(pulled, layout.TargetRelativePath(provider))));
+        Assert.Equal(canonicalBefore, File.ReadAllBytes(canonicalPath));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(runtimePath));
+        Assert.Equal(headBefore, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+
+        var targetPath = Path.Combine(pulled, layout.TargetRelativePath(provider));
+        var targetBefore = File.ReadAllBytes(targetPath);
+        File.AppendAllText(canonicalPath, "Uncommitted canonical edit.\n");
+        var dirtyEnrollment = EnrollPulled();
+        Assert.Equal(1, dirtyEnrollment.ExitCode);
+        Assert.Contains("changes outside the selected enrollment target",
+            dirtyEnrollment.Error, StringComparison.Ordinal);
+        Assert.Equal(targetBefore, File.ReadAllBytes(targetPath));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(runtimePath));
+    }
+
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void CloneEnrollmentRejectsRuntimeStillBoundToOriginalCheckout(string provider)
+    {
+        using var layout = new EnrollmentLayout();
+        if (provider == "copilot")
+        {
+            layout.InitializeCopilot();
+        }
+
+        layout.CommitAuthoredSources(provider);
+        var pulled = Path.Combine(Path.GetDirectoryName(layout.Repository)!, "pulled-data");
+        var secondHome = Path.Combine(Path.GetDirectoryName(layout.Repository)!,
+            $"second-{provider}-home");
+        Assert.Equal(0, TestGit.Run(Path.GetDirectoryName(layout.Repository)!, "clone",
+            "--quiet", layout.Repository, pulled).ExitCode);
+        Directory.CreateDirectory(secondHome);
+        File.Copy(provider == "codex" ? layout.CodexRuntime : layout.CopilotRuntime,
+            Path.Combine(secondHome, provider == "codex" ? "AGENTS.md" :
+                "copilot-instructions.md"));
+
+        var enrollment = provider == "codex"
+            ? TestApplication.Run("init", "--repo", pulled, "--codex-home", secondHome,
+                "--enroll-shared")
+            : TestApplication.Run("init", "--repo", pulled, "--provider=copilot",
+                "--copilot-home", secondHome, "--enroll-shared");
+
+        Assert.Equal(1, enrollment.ExitCode);
+        Assert.Contains("not bound to the selected AEC repository", enrollment.Error,
+            StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(pulled, layout.TargetRelativePath(provider))));
+    }
+
     [Fact]
     public void MissingSourcesExplainTheSplitWithoutCreatingTargets()
     {

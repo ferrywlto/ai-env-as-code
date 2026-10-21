@@ -39,6 +39,7 @@ flowchart LR
     History -->|clean committed provider source| Attach
     Attach -->|machine-local path binding; no path-only commit| Runtime[Local Codex or Copilot runtime]
     Runtime -->|read other implicit harness binding| Guard
+    Runtime -->|validate selected local binding for enrollment| Compose
     Inspect --> Writers
     Writers -->|backup: changed source| Sources
     Writers -->|backup: affected targets| Targets
@@ -58,6 +59,9 @@ approved Git operations. Codex also manages root `personality` in
 Confirmed Codex or Copilot attachment of a clone at a new local path changes
 only its runtime binding; it does not commit a machine-specific path to shared
 history. Copilot requires a clean committed canonical source for this rebind.
+Enrollment then trusts that local binding, while still validating committed
+canonical content and history; the canonical block may name the original
+machine's checkout path.
 Once Codex runtime is bound to the selected checkout, repeating init without
 the flag does not rewrite its instructions or config; status/apply own drift.
 Ordinary init checks the other harness's implicit home before writes and stops

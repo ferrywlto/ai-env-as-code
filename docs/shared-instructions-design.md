@@ -89,7 +89,8 @@ flowchart TD
     Select --> Init{Explicit init --enroll-shared?}
     Init -->|Yes| Create[Create only the selected portable target]
     Init -->|No| None[Create no target]
-    Pulled[Provider source pulled from another machine] -.->|not local enrollment| Init
+    Pulled[Provider source pulled from another machine] --> Attach[Confirm local runtime binding through ordinary init]
+    Attach --> Select
     Create --> Keep[Preserve existing data and manual ChatGPT backups]
 ```
 
@@ -107,6 +108,9 @@ and match committed `HEAD`. It does not create or classify them. Existing Codex
 `AGENTS.md` remains in ordinary init's legacy lifecycle; managed
 `config.toml` remains the canonical personality source;
 initializing Copilot or another platform enrolls only the selected target.
+After confirmed local attachment, enrollment accepts a committed legacy
+provider block that still names the other machine's checkout; the selected
+runtime must already bind to this checkout.
 CI coverage does not enroll anything in the user's data repository.
 
 ## Alignment workflow

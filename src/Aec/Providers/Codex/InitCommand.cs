@@ -303,14 +303,9 @@ internal static class InitCommand
         string repository,
         string targetRelativePath)
     {
-        var completed = LoadCompletedRepository(repository, targetRelativePath);
-        if (!AecInstructionBlock.RepositoryPathsEqual(completed.Binding.Repository, repository))
-        {
-            throw new InvalidOperationException(
-                "Canonical Codex instructions are bound to a different data repository.");
-        }
-
-        return completed.Commit;
+        // Enrollment already checked this machine's runtime binding. The
+        // committed canonical block may retain another machine's checkout path.
+        return LoadCompletedRepository(repository, targetRelativePath).Commit;
     }
 
     private static CompletedSnapshot LoadCompletedRepository(

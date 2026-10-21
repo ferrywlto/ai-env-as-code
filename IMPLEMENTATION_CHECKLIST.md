@@ -391,10 +391,20 @@
   both Copilot conflict variants passed 2/2 separately. Warning-as-error
   Release build had zero warnings, skill frontmatter parsed, and whitespace
   checks passed. No personal runtime or data repository was touched. Ferry
-  reviewed and approved this slice.
+  reviewed and approved this slice; committed as `82c09e0`.
 
-Immediate next work: review Codex repeat attachment, then migrate legacy
-canonical blocks toward path-free repository data in a later reviewed slice.
+- [x] Review ticket #2 slice 17's pulled-checkout enrollment. After confirmed
+  Codex or Copilot init binds local runtime to `--repo`, shared enrollment
+  accepts clean committed legacy canonical instructions even if their AEC
+  block records another machine's path. It still rejects a runtime bound to
+  the wrong checkout, creates only the selected portable target, and leaves
+  canonical bytes, runtime bytes, and Git `HEAD` unchanged. Focused enrollment
+  tests passed 14/14; the warning-as-error Release build had zero warnings.
+  No personal runtime or data repository was touched. Ferry reviewed and
+  approved this slice.
+
+Immediate next work: migrate legacy canonical blocks toward path-free
+repository data in a later reviewed slice.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.
 
