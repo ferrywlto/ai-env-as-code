@@ -8,6 +8,21 @@ internal static class CommittedTargetValidator
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
+    internal static bool IsEnrolled(
+        string repository,
+        string commit,
+        string platform,
+        string provider)
+    {
+        var fileName = TargetFileName(provider);
+        var relativePath = $"environment/targets/{platform}/{provider}/{fileName}";
+        var entries = GitProcess.RunRequired(
+            repository,
+            "Git could not inspect the enrolled target",
+            "ls-tree", "-z", "--name-only", commit, "--", relativePath).Output;
+        return string.Equals(entries, relativePath + '\0', StringComparison.Ordinal);
+    }
+
     public static byte[] Read(
         string repository,
         string platform,
@@ -18,12 +33,7 @@ internal static class CommittedTargetValidator
             throw new ArgumentException($"Unsupported target platform: {platform}");
         }
 
-        var fileName = provider switch
-        {
-            "codex" => "AGENTS.md",
-            "copilot" => "copilot-instructions.md",
-            _ => throw new ArgumentException($"Unsupported target provider: {provider}")
-        };
+        var fileName = TargetFileName(provider);
 
         AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
         AecApplication.EnsureRealDirectory(repository, "Repository");
@@ -69,6 +79,13 @@ internal static class CommittedTargetValidator
     {
         return StrictUtf8.GetString(ReadCommitted(repository, commit, relativePath, label));
     }
+
+    private static string TargetFileName(string provider) => provider switch
+    {
+        "codex" => "AGENTS.md",
+        "copilot" => "copilot-instructions.md",
+        _ => throw new ArgumentException($"Unsupported target provider: {provider}")
+    };
 
     private static byte[] ReadCommitted(
         string repository,

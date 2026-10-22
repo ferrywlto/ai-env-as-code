@@ -689,6 +689,17 @@ staging, commit, push, or ChatGPT account operation.
 aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
 ```
 
+```mermaid
+flowchart LR
+    Init["Ordinary Copilot init"] --> Target{"Current-platform target committed?"}
+    Target -->|"No"| Legacy["Retain legacy canonical flow"]
+    Target -->|"Yes"| Validate["Validate target and historical canonical file"]
+    Validate --> Bind{"Local portable runtime already bound?"}
+    Bind -->|"Yes"| Keep["Leave runtime to status/apply"]
+    Bind -->|"No"| Confirm["Confirm different checkout path if required"]
+    Confirm --> Attach["Write target plus local AEC block only to runtime"]
+```
+
 This alpha path extends an existing AEC repository with the native Copilot
 instruction contract:
 
@@ -703,11 +714,19 @@ uses `~/.copilot`. The selected home must already exist and must be outside the 
 repository. AEC captures the existing runtime instruction file when the canonical
 file is first absent, prepends its Copilot-specific managed block while preserving
 all non-AEC bytes, and installs only the bundled `SKILL.md`. When a recognized
-canonical file already exists, a repeat `init` applies it back to the selected
-runtime path. A path mismatch stops and asks for explicit confirmation with
-`--force-path-change`. For a clean, committed canonical file in a pulled checkout,
+canonical file exists without an enrolled target, a repeat `init` applies it
+back to the selected runtime path. A path mismatch stops and asks for explicit
+confirmation with `--force-path-change`. For a clean, committed canonical file
+in a pulled checkout,
 confirmed init changes only this machine's runtime AEC block; canonical bytes and
 Git `HEAD` remain unchanged. A subsequent rerun is idempotent without the flag.
+Once the current-platform Copilot target is committed, ordinary `init` validates
+it against committed shared, platform, and Copilot-authored sources, then uses it
+instead of legacy canonical instruction bytes for runtime attachment. The local
+AEC block names this machine's checkout; the historical canonical file and Git
+`HEAD` remain unchanged. A locally bound portable runtime is left alone on
+repeat init, so use `aec status` and `aec apply` for later drift. Dirty or stale
+targets and wrong-platform runtime blocks stop before replacement.
 A customized `skills/aec/SKILL.md` stops before instruction files are changed.
 With an implicit home, a conflicting Codex checkout stops even with the flag.
 

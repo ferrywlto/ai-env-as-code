@@ -413,10 +413,22 @@
   enrollment and retained legacy cases passed 17/17; the final expanded clone
   case passed 1/1. The warning-as-error Release build had zero warnings and
   whitespace checks passed. No personal runtime or data repo mutation. Ferry
-  reviewed and approved this slice.
+  reviewed and approved this slice; committed as `6d15df8`.
 
-Immediate next work: address Copilot enrolled attachment in a separate approved
-slice.
+- [x] Review ticket #2 slice 19's enrolled Copilot attachment. Ordinary init
+  detects a committed current-platform Copilot target, validates its authored
+  sources and historical canonical block, and writes a local portable runtime
+  block only after the existing path-confirmation rule is satisfied. A locally
+  bound portable runtime stays unchanged on repeat init; the unenrolled path
+  remains intact. Dirty target/canonical inputs and a wrong runtime platform
+  stop before runtime writes. Copilot init and adjacent Codex clone tests passed
+  21/21; enrollment and target validation passed 22/22. The warning-as-error
+  Release build had zero warnings. Disposable tests verified unchanged
+  canonical bytes and Git HEAD; no personal runtime or data repo was touched.
+  Ferry reviewed and approved this slice.
+
+Immediate next work: decide the next smallest path-free canonical cleanup after
+both harnesses attach portably.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.
 

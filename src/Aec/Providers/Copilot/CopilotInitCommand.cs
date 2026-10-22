@@ -17,6 +17,25 @@ internal static class CopilotInitCommand
             "copilot-instructions.md",
             "Copilot runtime target");
 
+        var platform = RenderCommand.CurrentPlatform();
+        var head = GitProcess.Run(repository, "rev-parse", "--verify", "--quiet",
+            "HEAD^{commit}");
+        if (head.ExitCode is not (0 or 1))
+        {
+            throw new InvalidOperationException(
+                $"Git could not inspect committed HEAD (exit code {head.ExitCode}).");
+        }
+
+        if (head.ExitCode == 0)
+        {
+            var commit = head.Output.Trim();
+            if (CommittedTargetValidator.IsEnrolled(repository, commit, platform, "copilot"))
+            {
+                return AttachEnrolledRepository(
+                    repository, copilotHome, forcePathChange, commit, platform, output);
+            }
+        }
+
         var runtimePath = Path.Combine(copilotHome, "copilot-instructions.md");
         var canonicalPath = Path.Combine(repository, AecApplication.CopilotSourceRelativePath);
         var providerDirectory = Path.GetDirectoryName(canonicalPath)
@@ -111,6 +130,100 @@ internal static class CopilotInitCommand
         }
         output.WriteLine(sourceChanged || runtimeChanged || skillChanged ? "initialized" : "unchanged");
         return 0;
+    }
+
+    private static int AttachEnrolledRepository(
+        string repository,
+        string copilotHome,
+        bool forcePathChange,
+        string commit,
+        string platform,
+        TextWriter output)
+    {
+        var canonical = ApplyCommand.ReadCommittedFile(
+            repository, commit, AecApplication.CopilotSourceRelativePath,
+            "Canonical Copilot instructions");
+        var canonicalBinding = CopilotInstructionBlock.ReadManagedBinding(canonical)
+            ?? throw new InvalidDataException(
+                "Canonical Copilot instructions do not contain a supported managed AEC block.");
+        var target = CommittedTargetValidator.Read(repository, platform, "copilot");
+        var runtimePath = Path.Combine(copilotHome, "copilot-instructions.md");
+        var runtime = AecApplication.ReadOptionalTextFile(
+            runtimePath, "Copilot runtime instructions");
+        var runtimeBinding = runtime is null
+            ? null
+            : CopilotInstructionBlock.ReadManagedBinding(runtime);
+        var locallyBound = runtimeBinding is not null &&
+            AecInstructionBlock.RepositoryPathsEqual(runtimeBinding.Repository, repository);
+        if (locallyBound && runtimeBinding!.Platform is not null &&
+            !string.Equals(runtimeBinding.Platform, platform, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Copilot runtime instructions are bound to a different AEC platform.");
+        }
+
+        var canonicalPathMatches = AecInstructionBlock.RepositoryPathsEqual(
+            canonicalBinding.Repository, repository);
+        if (!forcePathChange &&
+            ((!canonicalPathMatches && !locallyBound) ||
+             (runtimeBinding is not null && !locallyBound)))
+        {
+            throw new InvalidOperationException(
+                "Copilot instructions record a different data repository. " +
+                "Confirm the local path change, then rerun `aec init` with --force-path-change.");
+        }
+
+        // An already-portable local runtime is owned by status/apply. Only a
+        // missing or legacy runtime needs an attachment write from this target.
+        if (locallyBound && runtimeBinding!.Platform is not null)
+        {
+            var installed = AecSkillInstaller.InstallCopilot(copilotHome);
+            VerifyEnrolledInputs(repository, commit, platform, canonical, target);
+            output.WriteLine(installed ? "initialized" : "unchanged");
+            return 0;
+        }
+
+        var desired = CopilotInstructionBlock.MergeForPortableTarget(
+            target, repository, platform);
+        var skillChanged = AecSkillInstaller.InstallCopilot(copilotHome);
+        VerifyEnrolledInputs(repository, commit, platform, canonical, target);
+        var runtimeChanged = runtime is null || !runtime.AsSpan().SequenceEqual(desired);
+        if (runtimeChanged)
+        {
+            AtomicFile.ReplaceIfUnchanged(
+                runtimePath, runtime, desired, "Copilot runtime instructions",
+                UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        VerifyEnrolledInputs(repository, commit, platform, canonical, target);
+        if (!AecApplication.ReadRequiredTextFile(runtimePath, "Copilot runtime instructions")
+                .AsSpan().SequenceEqual(desired))
+        {
+            throw new IOException("Copilot runtime verification failed after enrolled init.");
+        }
+
+        output.WriteLine(skillChanged || runtimeChanged ? "initialized" : "unchanged");
+        return 0;
+    }
+
+    private static void VerifyEnrolledInputs(
+        string repository,
+        string commit,
+        string platform,
+        byte[] canonical,
+        byte[] target)
+    {
+        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
+                StringComparison.Ordinal) ||
+            !ApplyCommand.ReadCommittedFile(
+                repository, commit, AecApplication.CopilotSourceRelativePath,
+                "Canonical Copilot instructions").AsSpan().SequenceEqual(canonical) ||
+            !CommittedTargetValidator.Read(repository, platform, "copilot")
+                .AsSpan().SequenceEqual(target))
+        {
+            throw new InvalidOperationException(
+                "Committed Copilot instructions changed during enrolled init.");
+        }
     }
 
     private static void PreflightProviderDirectory(string path)

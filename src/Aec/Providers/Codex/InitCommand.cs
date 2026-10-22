@@ -39,8 +39,8 @@ internal static class InitCommand
             }
 
             var platform = RenderCommand.CurrentPlatform();
-            var targetRelativePath = $"environment/targets/{platform}/codex/AGENTS.md";
-            if (HasCommittedTarget(directoryPath, completed.Commit, targetRelativePath))
+            if (CommittedTargetValidator.IsEnrolled(
+                    directoryPath, completed.Commit, platform, "codex"))
             {
                 return AttachEnrolledRepository(
                     directoryPath,
@@ -312,18 +312,6 @@ internal static class InitCommand
 
         output.WriteLine("initialized");
         return 0;
-    }
-
-    private static bool HasCommittedTarget(
-        string repository,
-        string commit,
-        string relativePath)
-    {
-        var entries = GitProcess.RunRequired(
-            repository,
-            "Git could not inspect the enrolled Codex target",
-            "ls-tree", "-z", "--name-only", commit, "--", relativePath).Output;
-        return string.Equals(entries, relativePath + '\0', StringComparison.Ordinal);
     }
 
     private static int AttachEnrolledRepository(
