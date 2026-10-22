@@ -362,6 +362,12 @@ public sealed class InitTests
         Assert.Equal(0, TestGit.Run(layout.Target, "add", "--", "environment/targets").ExitCode);
         Assert.Equal(0, TestGit.Run(layout.Target, "commit", "--quiet", "--message",
             "Enroll Codex target").ExitCode);
+        var originalAttachment = Run(layout.Target, layout.CodexHome);
+        Assert.Equal(0, originalAttachment.ExitCode);
+        Assert.Equal(0, TestApplication.Run("status", "--repo", layout.Target,
+            "--codex-home", layout.CodexHome).ExitCode);
+        Assert.Equal(platform, AecInstructionBlock.ReadRepositoryBinding(
+            File.ReadAllBytes(layout.Runtime))!.Platform);
 
         // A second checkout models pulling the committed data on another
         // machine without copying the first machine's runtime or skill files.
@@ -388,13 +394,28 @@ public sealed class InitTests
         Assert.False(File.Exists(Path.Combine(secondHome, "AGENTS.md")));
         Assert.False(Directory.Exists(absentCopilotHome));
 
+        File.Copy(layout.Runtime, Path.Combine(secondHome, "AGENTS.md"));
+        var wrongRuntimeBinding = Run(pulled, secondHome);
+        Assert.Equal(1, wrongRuntimeBinding.ExitCode);
+        Assert.Contains("--force-path-change", wrongRuntimeBinding.Error,
+            StringComparison.Ordinal);
+        File.Delete(Path.Combine(secondHome, "AGENTS.md"));
+
         var confirmed = Run(pulled, secondHome, forcePathChange: true);
         Assert.Equal(0, confirmed.ExitCode);
-        Assert.Equal(pulled, AecInstructionBlock.ReadRepositoryBinding(
-            File.ReadAllBytes(Path.Combine(secondHome, "AGENTS.md")))!.Repository);
+        Assert.Contains("committed value will be added", confirmed.Error,
+            StringComparison.Ordinal);
+        Assert.Equal("personality = \"none\"\n",
+            File.ReadAllText(Path.Combine(secondHome, "config.toml")));
+        var attachedBinding = AecInstructionBlock.ReadRepositoryBinding(
+            File.ReadAllBytes(Path.Combine(secondHome, "AGENTS.md")))!;
+        Assert.Equal(pulled, attachedBinding.Repository);
+        Assert.Equal(platform, attachedBinding.Platform);
         Assert.Equal(oldHead, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(layout.Target, AecInstructionBlock.ReadRepositoryBinding(
             File.ReadAllBytes(Path.Combine(pulled, AecApplication.SourceRelativePath)))!.Repository);
+        Assert.Equal(0, TestApplication.Run("status", "--repo", pulled,
+            "--codex-home", secondHome).ExitCode);
         var apply = TestApplication.Run("apply", "--repo", pulled,
             "--codex-home", secondHome);
         Assert.Equal(0, apply.ExitCode);
@@ -422,6 +443,30 @@ public sealed class InitTests
             platform, "copilot")));
         Assert.False(Directory.Exists(absentCopilotHome));
         Assert.Empty(TestGit.Run(pulled, "status", "--porcelain").Output);
+
+        var targetPath = Path.Combine(pulled, "environment", "targets", platform,
+            "codex", "AGENTS.md");
+        File.AppendAllText(targetPath, "Uncommitted target edit.\n");
+        var failedRepeat = Run(pulled, secondHome);
+        Assert.Equal(1, failedRepeat.ExitCode);
+        Assert.Contains("changes outside the managed Codex environment files",
+            failedRepeat.Error, StringComparison.Ordinal);
+        Assert.Equal(appliedRuntime,
+            File.ReadAllBytes(Path.Combine(secondHome, "AGENTS.md")));
+        Assert.Equal(oldHead, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+
+        File.WriteAllBytes(targetPath, File.ReadAllBytes(Path.Combine(
+            layout.Target, "environment", "targets", platform, "codex", "AGENTS.md")));
+        var otherPlatform = platform == "windows-x64" ? "linux-arm64" : "windows-x64";
+        var wrongPlatformRuntime = AecInstructionBlock.MergeForPortableTarget(
+            File.ReadAllBytes(targetPath), pulled, otherPlatform, false);
+        File.WriteAllBytes(Path.Combine(secondHome, "AGENTS.md"), wrongPlatformRuntime);
+        var wrongPlatformResult = Run(pulled, secondHome);
+        Assert.Equal(1, wrongPlatformResult.ExitCode);
+        Assert.Contains("different AEC platform", wrongPlatformResult.Error,
+            StringComparison.Ordinal);
+        Assert.Equal(wrongPlatformRuntime,
+            File.ReadAllBytes(Path.Combine(secondHome, "AGENTS.md")));
     }
 
     [Fact]

@@ -406,7 +406,7 @@ already exist. Fresh and baseline-only initialization require its regular
 If its root `personality` is absent, `init` warns that `none` will be enrolled and
 waits until both initialization commits succeed before adding it to runtime. A
 completed pulled repository may create either missing runtime file from committed
-canonical state.
+canonical state, or from its enrolled current-platform target when present.
 
 During ordinary Codex or Copilot init without an explicit home flag, AEC reads
 the other harness's implicit home (`CODEX_HOME`/`COPILOT_HOME`, then
@@ -506,15 +506,14 @@ invocation is needed.
 
 A failure before the second commit leaves the runtime untouched and a recognizable
 baseline may resume. A failure after the second commit leaves a complete repository.
-Rerunning ordinary `init` at the recorded path uses the attachment flow: it installs
-the bundled skill and applies the committed managed environment without another
-backup or commit.
+Rerunning ordinary `init` at the recorded path uses the attachment flow without
+another backup or commit. An unenrolled repository applies its legacy canonical
+environment; an enrolled Codex repository uses its committed portable target.
 
 ### Pulled-repository initialization
 
-The following flow lets `init` attach a pulled, already initialized AEC repository
-to another local machine without silently changing its recorded
-absolute path:
+The following flow covers fresh initialization and attachment before the Codex
+portable target is enrolled. It never silently changes the recorded path:
 
 ```mermaid
 flowchart TD
@@ -531,7 +530,7 @@ flowchart TD
     Insert --> InitCommit["Commit initialized instructions"]
     InitCommit --> Apply["Apply committed instructions and personality to runtime"]
 
-    State -->|"Pulled initialized repository"| Read["Validate both committed canonical files<br/>and read the existing AEC block"]
+    State -->|"Pulled initialized repository without enrolled target"| Read["Validate both committed canonical files<br/>and read the existing AEC block"]
     Read --> Path{"Recorded path equals --repo?"}
 
     Path -->|"Yes"| AttachSkill["Install the bundled $aec skill"]
@@ -558,6 +557,27 @@ flowchart TD
     ApplyPath -->|"No"| Redirect["Stop without changes<br/>Prompt the user to run aec init --repo PATH"]
     Redirect -->|"User invokes aec init"| Read
 ```
+
+When a current-platform Codex target is committed, attachment instead uses
+this path:
+
+```mermaid
+flowchart TD
+    Start["Completed repository with enrolled Codex target"] --> Validate["Validate initialization history,<br/>committed target, authored sources, and config"]
+    Validate --> Local{"Runtime already has this checkout's portable block?"}
+    Local -->|"Yes"| Keep["Leave runtime unchanged; status/apply own drift"]
+    Local -->|"No"| Conflict{"Recorded path differs without local binding,<br/>or runtime binds another checkout?"}
+    Conflict -->|"Yes"| Stop["Stop before writes; request path confirmation"]
+    Stop --> Confirm["After approval, rerun with --force-path-change"]
+    Conflict -->|"No"| Attach
+    Confirm --> Attach["Compose target plus machine-local AEC block;<br/>update managed personality if needed"]
+    Attach --> Verify["Verify runtime bytes and unchanged Git HEAD"]
+```
+
+The enrolled path keeps historical canonical bytes and Git history unchanged.
+It upgrades a locally bound legacy block once, but preserves an already-portable
+runtime on repeat init. A dirty or stale target, wrong runtime platform, or
+conflicting other implicit harness stops before runtime changes.
 
 Path mismatch detection is read-only. The command is deliberately non-interactive:
 it displays the recorded and selected paths and stops. The caller must obtain user

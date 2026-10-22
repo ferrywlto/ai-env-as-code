@@ -111,6 +111,9 @@ initializing Copilot or another platform enrolls only the selected target.
 After confirmed local attachment, enrollment accepts a committed legacy
 provider block that still names the other machine's checkout; the selected
 runtime must already bind to this checkout.
+Once its target is committed, ordinary Codex init validates that target and
+attaches a local portable block from it; it leaves the historical canonical
+file and Git HEAD unchanged. Copilot init still uses its legacy provider flow.
 CI coverage does not enroll anything in the user's data repository.
 
 ## Alignment workflow

@@ -401,10 +401,22 @@
   canonical bytes, runtime bytes, and Git `HEAD` unchanged. Focused enrollment
   tests passed 14/14; the warning-as-error Release build had zero warnings.
   No personal runtime or data repository was touched. Ferry reviewed and
-  approved this slice.
+  approved this slice; committed as `9cbd013`.
 
-Immediate next work: migrate legacy canonical blocks toward path-free
-repository data in a later reviewed slice.
+- [x] Review ticket #2 slice 18's enrolled Codex attachment. Ordinary init
+  validates the committed current-platform target and composes a local portable
+  block when the runtime is missing or still legacy. It retains the historical
+  canonical file and Git HEAD, preserves a locally bound portable runtime on
+  repeat init, and keeps unenrolled attachment unchanged. A different checkout
+  still needs confirmation; a dirty target or implicit cross-harness conflict
+  stops. Enrolled clone and adjacent attachment/conflict cases passed 5/5;
+  enrollment and retained legacy cases passed 17/17; the final expanded clone
+  case passed 1/1. The warning-as-error Release build had zero warnings and
+  whitespace checks passed. No personal runtime or data repo mutation. Ferry
+  reviewed and approved this slice.
+
+Immediate next work: address Copilot enrolled attachment in a separate approved
+slice.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.
 

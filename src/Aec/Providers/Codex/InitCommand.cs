@@ -38,6 +38,21 @@ internal static class InitCommand
                 throw NotAttachable(directoryPath, exception);
             }
 
+            var platform = RenderCommand.CurrentPlatform();
+            var targetRelativePath = $"environment/targets/{platform}/codex/AGENTS.md";
+            if (HasCommittedTarget(directoryPath, completed.Commit, targetRelativePath))
+            {
+                return AttachEnrolledRepository(
+                    directoryPath,
+                    codexHome,
+                    runtimePath,
+                    forcePathChange,
+                    completed,
+                    platform,
+                    output,
+                    warning);
+            }
+
             return AttachCompletedRepository(
                 directoryPath,
                 codexHome,
@@ -297,6 +312,143 @@ internal static class InitCommand
 
         output.WriteLine("initialized");
         return 0;
+    }
+
+    private static bool HasCommittedTarget(
+        string repository,
+        string commit,
+        string relativePath)
+    {
+        var entries = GitProcess.RunRequired(
+            repository,
+            "Git could not inspect the enrolled Codex target",
+            "ls-tree", "-z", "--name-only", commit, "--", relativePath).Output;
+        return string.Equals(entries, relativePath + '\0', StringComparison.Ordinal);
+    }
+
+    private static int AttachEnrolledRepository(
+        string repository,
+        string codexHome,
+        string runtimePath,
+        bool forcePathChange,
+        CompletedSnapshot completed,
+        string platform,
+        TextWriter output,
+        TextWriter warning)
+    {
+        var target = CommittedTargetValidator.Read(repository, platform, "codex");
+        var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        var runtimeBinding = runtime is null
+            ? null
+            : AecInstructionBlock.ReadRepositoryBinding(runtime);
+        var locallyBound = runtimeBinding is not null &&
+            AecInstructionBlock.RepositoryPathsEqual(runtimeBinding.Repository, repository);
+        if (locallyBound && runtimeBinding!.Platform is not null &&
+            !string.Equals(runtimeBinding.Platform, platform, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Codex runtime instructions are bound to a different AEC platform.");
+        }
+        var canonicalPathMatches = AecInstructionBlock.RepositoryPathsEqual(
+            completed.Binding.Repository, repository);
+        if (!forcePathChange &&
+            ((!canonicalPathMatches && !locallyBound) ||
+             (runtimeBinding is not null && !locallyBound)))
+        {
+            throw new InvalidOperationException(
+                "Codex instructions record a different data repository. " +
+                "Confirm the local path change, then rerun `aec init` with --force-path-change.");
+        }
+
+        var configPath = Path.Combine(codexHome, "config.toml");
+        var runtimeConfig = AecApplication.ReadOptionalTextFile(configPath, "Runtime config");
+        var personality = CodexPersonalityConfig.ReadCanonical(
+            completed.Config,
+            Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
+        var configUpdate = CodexPersonalityConfig.PlanRuntimeUpdate(
+            runtimeConfig, configPath, personality);
+
+        // A locally bound portable runtime belongs to status/apply, not init.
+        // A legacy block is upgraded once so this enrollment uses its target.
+        if (locallyBound && runtimeBinding!.Platform is not null)
+        {
+            AecSkillInstaller.Install(codexHome);
+            VerifyEnrolledInputs(repository, completed, platform, target);
+            output.WriteLine("initialized");
+            return 0;
+        }
+
+        var includeChatGptGuidance = AecInstructionBlock.IncludesChatGptGuidance(
+            runtimeBinding?.Version) ||
+            AecInstructionBlock.IncludesChatGptGuidance(completed.Binding.Version);
+        var desired = AecInstructionBlock.MergeForPortableTarget(
+            target, repository, platform, includeChatGptGuidance);
+        AecSkillInstaller.Install(codexHome);
+        VerifyEnrolledInputs(repository, completed, platform, target);
+
+        if (configUpdate.Changed)
+        {
+            if (configUpdate.Inserted)
+            {
+                warning.WriteLine(
+                    "warning: runtime config does not declare root `personality`; " +
+                    "the committed value will be added.");
+            }
+
+            AtomicFile.ReplaceIfUnchanged(
+                configPath, runtimeConfig, configUpdate.Content, "Runtime config",
+                UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        try
+        {
+            // The repository is shared, but only this machine's runtime gets its
+            // checkout path. Recheck after the config step before replacing instructions.
+            VerifyEnrolledInputs(repository, completed, platform, target);
+            if (runtime is null || !runtime.AsSpan().SequenceEqual(desired))
+            {
+                AtomicFile.ReplaceIfUnchanged(runtimePath, runtime, desired, "Runtime target");
+            }
+
+            VerifyEnrolledInputs(repository, completed, platform, target);
+            if (!AecApplication.ReadRequiredTextFile(runtimePath, "Runtime target")
+                    .AsSpan().SequenceEqual(desired) ||
+                !AecApplication.ReadRequiredTextFile(configPath, "Runtime config")
+                    .AsSpan().SequenceEqual(configUpdate.Content))
+            {
+                throw new IOException("Codex runtime verification failed after enrolled init.");
+            }
+        }
+        catch (Exception exception) when (configUpdate.Changed &&
+            exception is IOException or InvalidOperationException or InvalidDataException)
+        {
+            throw new InvalidOperationException(
+                $"Enrolled Codex init stopped after the config step. Config at {configPath} " +
+                $"may be updated; instructions at {runtimePath} may not be. " +
+                "Inspect both runtime files before retrying; no automatic rollback was attempted.",
+                exception);
+        }
+
+        output.WriteLine("initialized");
+        return 0;
+    }
+
+    private static void VerifyEnrolledInputs(
+        string repository,
+        CompletedSnapshot completed,
+        string platform,
+        byte[] expectedTarget)
+    {
+        if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
+                StringComparison.Ordinal) ||
+            !CommittedTargetValidator.Read(repository, platform, "codex")
+                .AsSpan().SequenceEqual(expectedTarget) ||
+            !ApplyCommand.ReadCommittedConfig(repository, completed.Commit)
+                .AsSpan().SequenceEqual(completed.Config))
+        {
+            throw new InvalidOperationException(
+                "Committed Codex environment changed during enrolled init.");
+        }
     }
 
     internal static string ValidateCompletedRepositoryForEnrollment(

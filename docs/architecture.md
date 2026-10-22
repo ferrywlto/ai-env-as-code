@@ -36,7 +36,8 @@ flowchart LR
     Targets --> History
     Config --> History
     History --> Inspect
-    History -->|clean committed provider source| Attach
+    History -->|validate legacy initialization history| Attach
+    Targets -->|enrolled Codex attachment| Attach
     Attach -->|machine-local path binding; no path-only commit| Runtime[Local Codex or Copilot runtime]
     Runtime -->|read other implicit harness binding| Guard
     Runtime -->|validate selected local binding for enrollment| Compose
@@ -61,9 +62,11 @@ only its runtime binding; it does not commit a machine-specific path to shared
 history. Copilot requires a clean committed canonical source for this rebind.
 Enrollment then trusts that local binding, while still validating committed
 canonical content and history; the canonical block may name the original
-machine's checkout path.
-Once Codex runtime is bound to the selected checkout, repeating init without
-the flag does not rewrite its instructions or config; status/apply own drift.
+machine's checkout path. Ordinary Codex init now validates a committed,
+current-platform target when enrolled and composes a local portable control
+block from it. The historical canonical source stays unchanged. Once Codex
+runtime has a portable block bound to this checkout, repeating init without
+the flag does not rewrite instructions or config; status/apply own drift.
 Ordinary init checks the other harness's implicit home before writes and stops
 on a different repository binding. Explicit custom homes are outside that
 cross-harness check in this 2.0 alpha slice.
@@ -95,6 +98,9 @@ classDiagram
     class CommittedTargetValidator {
         +Read(repository, platform, provider)
     }
+    class InitCommand {
+        +Run(repository, codexHome, forcePathChange)
+    }
     class PortableEnvironmentStatus {
         +Inspect(repository, provider, providerHome)
     }
@@ -107,12 +113,14 @@ classDiagram
     }
 
     AecApplication --> SharedEnrollmentCommand : init --enroll-shared
+    AecApplication --> InitCommand : ordinary Codex init
     AecApplication --> RenderCommand : render
     AecApplication --> PortableEnvironmentStatus : status
     AecApplication --> PortableApplyPreview : apply preflight
     SharedEnrollmentCommand --> InstructionSections : compose
     RenderCommand --> InstructionSections : compose
     PortableRuntimeSnapshot --> CommittedTargetValidator : read committed target
+    InitCommand --> CommittedTargetValidator : enrolled attachment
     PortableEnvironmentStatus --> PortableRuntimeSnapshot : inspect
     PortableEnvironmentStatus --> PortableCodexConfigPreview : Codex only
     PortableApplyPreview --> PortableRuntimeSnapshot : inspect
