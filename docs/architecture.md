@@ -81,6 +81,23 @@ uses a reviewed split followed by per-provider enrollment, target commits, and
 approved apply. Classification is a user/skill review step; the engine does not
 guess it or delete the historical provider files and manual backups.
 
+## Cross-machine boundary
+
+```mermaid
+flowchart LR
+    A[(A: committed portable target)] -->|approved Git push| Remote[(Git remote)]
+    Remote -->|explicit clone or fetch + fast-forward| B[(B: same committed target)]
+    A -->|apply with A binding| RuntimeA[A runtime: A checkout path]
+    B -->|confirmed init; apply with B binding| RuntimeB[B runtime: B checkout path]
+```
+
+Git transfers portable source and target history. Init/apply generate each
+runtime's local repository binding; they do not rewrite a shared path in Git.
+Status compares runtime with the local commit, so remote freshness requires the
+separate tip check and approved Git transport. The Codex round-trip test uses a
+local bare remote and two checkouts on one platform; Copilot and cross-platform
+Native AOT round-trip evidence remain separate release work.
+
 ## Classes: source composition and runtime inspection
 
 ```mermaid

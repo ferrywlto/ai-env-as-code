@@ -228,6 +228,48 @@ bytes. It checks preservation, per-provider commit boundaries, usable 2.0
 status/apply/backup, and safe reruns. This is local managed-code evidence, not
 execution of a historical binary, Native AOT smoke, or real-harness verification.
 
+## Sharing migrated Codex instructions between machines
+
+```mermaid
+flowchart LR
+    A["A: review source edit<br/>render and commit"] -->|"approved Git push"| Remote[(Git remote)]
+    Remote -->|"B: explicit clone or fetch + fast-forward"| B["B: local committed target"]
+    B --> Confirm["First attachment: confirm local checkout path"]
+    Confirm --> Apply["aec apply, then status"]
+    Apply --> Runtime["B runtime: shared target<br/>plus B's local AEC block"]
+```
+
+Use the migration sequence above to publish a committed enrolled target from A.
+Git may use any host; AEC does not perform the transport. On another machine:
+
+1. Clone the selected data repository to its chosen absolute path. Install/select
+   the local Codex home separately; a pulled target does not create or activate it.
+2. Run `aec init --repo ABSOLUTE_PATH`. If the recorded checkout path differs,
+   obtain confirmation and rerun with `--force-path-change`. This changes local
+   runtime instructions/config as needed, while committed canonical files and
+   Git HEAD stay unchanged. A conflicting other implicit harness still stops.
+3. Run `aec apply --repo ABSOLUTE_PATH` and `aec status --repo ABSOLUTE_PATH`.
+   Both machines share committed authored text; each runtime block names its own
+   checkout. The initial apply may report `unchanged` because init already used
+   the committed portable target.
+4. For later updates, A reviews the source/target change, commits, and obtains
+   push approval. B checks its tracked remote's advertised default-branch tip;
+   after approval, explicitly fetches and fast-forwards only a clean, strictly
+   behind checkout. Then B separately applies and verifies status. See the remote
+   preflight above for ahead, divergent, dirty, or unreachable states.
+
+Before fetching, B's status can still report `in_sync` against its **old local
+commit**. It does not prove remote freshness. After fast-forwarding to a changed
+target, status reports drift until apply. Neither status nor apply silently
+fetches, pushes, merges, or changes the checkout's Git HEAD.
+
+`CodexGitRoundTripTests` verifies this with two different paths and a local bare
+remote named `shared`: real push/clone, a later push, read-only tip inspection,
+explicit fetch/fast-forward, and apply/status. It checks equal portable targets,
+distinct runtime bindings, retained history/config, and no unused Copilot target.
+This is managed-code Git integration on one host/platform; it is not two real
+machines, a network service, Native AOT, Copilot, or real-harness verification.
+
 ## Shared-instruction rendering (2.0 development)
 
 ```text
@@ -1037,9 +1079,9 @@ dotnet test tests/Aec.Tests/Aec.Tests.csproj \
 dotnet test tests/Aec.Tests/Aec.Tests.csproj \
   --filter "FullyQualifiedName~BackupTests"
 
-# Existing-user migration rehearsal; process-backed Git integration, not a unit test
+# Migration and two-checkout rehearsals; process-backed Git integration
 dotnet test tests/Aec.Tests/Aec.Tests.csproj -c Release \
-  --filter "FullyQualifiedName~LegacyMigrationTests"
+  --filter "FullyQualifiedName~LegacyMigrationTests|FullyQualifiedName~CodexGitRoundTripTests"
 ```
 
 Run the complete regression suite before pushing and again in Release configuration

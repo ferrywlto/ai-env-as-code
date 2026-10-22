@@ -440,11 +440,27 @@
   warning-as-error product/test build had zero warnings, whitespace checks
   passed, and an independent read-only review found no actionable issue.
   Historical-binary, Native AOT, real-harness, and full regression runs were not
-  part of this slice. Ferry reviewed and approved the rehearsal and runbook.
+  part of this slice. Ferry reviewed and approved the rehearsal and runbook;
+  committed as `1e967e6`.
 
-Immediate next work: review the next boundary after the verified migration
-rehearsal, with the provider-first CLI proposal still deferred. Keep local and ticket
-progress synchronized at each reviewed boundary; CLI work is not started.
+- [x] Review ticket #2 milestone 16's first, Codex-only Git round-trip checkpoint.
+  Two disposable data checkouts at different paths publish/retrieve through a
+  local bare remote. B requires explicit path confirmation and its own existing
+  home, then uses its local runtime binding. A reviewed shared-source revision
+  is rendered, committed, and explicitly pushed; B remains locally in sync until
+  explicit fetch/fast-forward, then reports drift until apply. Final target bytes
+  and commit IDs agree while each runtime keeps its own checkout path; legacy
+  canonical bytes, history, and unrelated config survive. No Copilot target is
+  created. The focused Release rehearsal passed 1/1 (20 seconds), the product/test
+  warning-as-error build had zero warnings, whitespace checks passed, and an
+  independent read-only review confirmed the acceptance coverage. Ferry reviewed
+  and approved this checkpoint. This is managed-code, same-host
+  Git evidence, not real machines, a hosted service, or Native AOT verification.
+
+Immediate next work: cover the Copilot round trip in a separate approved slice
+before considering milestone 16
+complete. Keep local and ticket progress synchronized at each reviewed boundary;
+the provider-first CLI proposal remains deferred.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.
 
