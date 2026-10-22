@@ -133,6 +133,101 @@ For a pulled checkout at a different path, first confirm ordinary provider
 even if the clean committed legacy provider block still names the original
 machine's checkout; it never rewrites that canonical block.
 
+## Migrating an existing 1.x repository to 2.0
+
+```mermaid
+flowchart TD
+    Baseline["Clean, committed 1.x repository<br/>and matching local runtime"] --> Split["Review every instruction's destination:<br/>shared, current platform, or provider"]
+    Split --> Sources["Create and separately commit authored sources"]
+    Sources --> Enroll["Enroll one installed provider"]
+    Enroll --> Target["Review and separately commit its target"]
+    Target --> More{"Another installed provider?"}
+    More -->|"Yes"| Enroll
+    More -->|"No"| Apply["Approved apply for each provider"]
+    Apply --> Status["Status: in_sync<br/>Review unchanged legacy files and backups"]
+```
+
+This is the supported **2.0 development-branch data migration** using the current
+command syntax. Installing the executable or upgrading a skill does not migrate
+the data. There is no automatic instruction classification or migration command.
+The example below covers Codex and Copilot used on the same machine; omit the
+Copilot source, enrollment, and deployment when that harness is not used.
+
+1. Before replacing the 1.x executable, use its `status` to inspect runtime drift.
+   Resolve any drift with a separately approved 1.x capture or deployment. Start
+   from a clean, committed data repository; retain its commit ID and the old
+   executable. Pending manual ChatGPT backups require their own review and commit.
+   The 2.0 `status`, `backup`, and `apply` require committed targets, so they cannot
+   reconcile a legacy-only repository before enrollment. If already upgraded,
+   pause for that baseline review rather than trying 2.0 backup as a bootstrap.
+2. Install the 2.0 development executable and upgrade the Codex skill separately
+   with `aec skill upgrade`. Confirm each selected local home belongs to this
+   checkout. If attaching a different checkout path, use ordinary provider `init`
+   and obtain approval before `--force-path-change`, as described below. Keep
+   both local harnesses on the same checkout.
+3. Review a complete split of the **existing committed** instruction bodies,
+   excluding only AEC-generated control blocks. Account for every paragraph,
+   code example, and unclassified instruction before applying. Put common rules
+   in shared once, OS/path rules in the current platform, and harness mechanics
+   in its overlay. Resolve conflicting rules explicitly; AEC cannot prove the
+   semantic completeness of an arbitrary split. Create only the sources in use:
+
+   | Authored source | Review scope |
+   |---|---|
+   | `environment/shared/instructions.md` | Rules for all enrolled harnesses |
+   | `environment/platforms/<platform>/policy.md` | This platform's approved rules |
+   | `environment/providers/codex/overlay.md` | Codex mechanics |
+   | `environment/providers/copilot/overlay.md` | Copilot mechanics, if used |
+
+   Preserve the existing provider instruction files, canonical Codex `config.toml`,
+   and `environment/providers/chatgpt/`. Review the new files, stage their exact
+   paths, inspect the staged diff, and separately approve their source commit.
+4. Enroll **one provider at a time**, then review and separately commit its exact
+   target before enrolling another. Enrollment writes no runtime or Git commit:
+
+   ```text
+   aec init --repo ABSOLUTE_PATH --enroll-shared
+   # Review and commit environment/targets/<platform>/codex/AGENTS.md
+
+   aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared
+   # Review and commit environment/targets/<platform>/copilot/copilot-instructions.md
+   ```
+
+   `<platform>` is `macos-arm64`, `windows-x64`, or `linux-arm64` for the current
+   machine. Use the selected `--codex-home`/`--copilot-home` consistently if custom
+   homes are required. Attempting the second enrollment while the first target
+   is uncommitted stops with `changes outside the selected enrollment target`.
+5. After reviewing and committing the targets, separately approve deployment:
+
+   ```text
+   aec apply --repo ABSOLUTE_PATH
+   aec status --repo ABSOLUTE_PATH
+   aec apply --repo ABSOLUTE_PATH --provider=copilot
+   aec status --repo ABSOLUTE_PATH --provider=copilot
+   ```
+
+   Require `in_sync` for instructions and Codex config. Before the first apply,
+   legacy control blocks may report instruction drift; that is expected. Verify
+   the managed personality and unrelated runtime settings are retained. Legacy
+   provider files, manual backups, and Git history stay available for review.
+   Partial apply failures require inspection of both Codex runtime files before
+   retrying; no automatic rollback is performed.
+
+With no further edits, repeating enrollment, render, and apply reports
+`unchanged`; `status` remains `in_sync`. Repeating ordinary init preserves an
+already-bound portable runtime. An explicitly authorized backup of that unchanged
+runtime reports `unchanged` without a commit. These reruns do not authorize a
+new instruction split, overwrite a dirty target, or replace manual ChatGPT data.
+The CLI performs no remote operations; use the separately approved Git workflow
+for publication and retrieval.
+
+`LegacyMigrationTests` rehearses this sequence through public commands with a
+disposable 1.x-format repository, both local homes, a supplied lossless split,
+non-default personality, unrelated runtime settings, and manual ChatGPT backup
+bytes. It checks preservation, per-provider commit boundaries, usable 2.0
+status/apply/backup, and safe reruns. This is local managed-code evidence, not
+execution of a historical binary, Native AOT smoke, or real-harness verification.
+
 ## Shared-instruction rendering (2.0 development)
 
 ```text
@@ -155,8 +250,9 @@ It writes only changed canonical target files under
 directory nor changes a runtime, stages, commits, or pushes. Each output contains
 AEC-owned markers around the three authored sections. A target already edited
 outside this render flow is preserved and reported as an error. Review and commit
-the source and target changes together. The current `apply` and `backup` commands
-do not yet consume these targets.
+the source and target changes together. Public `status`, `apply`, and `backup`
+consume committed enrolled targets; backup attributes supported runtime edits
+to the authored sources before rendering affected targets.
 
 ## Approved development decisions
 
@@ -940,6 +1036,10 @@ dotnet test tests/Aec.Tests/Aec.Tests.csproj \
 # One affected command suite; replace BackupTests as needed
 dotnet test tests/Aec.Tests/Aec.Tests.csproj \
   --filter "FullyQualifiedName~BackupTests"
+
+# Existing-user migration rehearsal; process-backed Git integration, not a unit test
+dotnet test tests/Aec.Tests/Aec.Tests.csproj -c Release \
+  --filter "FullyQualifiedName~LegacyMigrationTests"
 ```
 
 Run the complete regression suite before pushing and again in Release configuration

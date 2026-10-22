@@ -11,6 +11,7 @@ class diagrams show the main relationships, not every implementation helper.
 flowchart LR
     User[User] --> Skill[Installed AEC skill]
     User --> CLI[AEC CLI]
+    User --> Split[Review existing 1.x instruction split]
     Skill --> CLI
     Skill -.->|remote preflight and approved push| Remote[(Git remote)]
 
@@ -27,10 +28,14 @@ flowchart LR
         Sources[Shared + platform + provider authored sources]
         Targets[Enrolled platform/provider targets]
         Config[Codex canonical config.toml]
+        Legacy[Legacy provider files and manual ChatGPT backups]
         History[(Git commits)]
     end
 
     Compose -->|render; no commit| Targets
+    Legacy -->|read existing instructions| Split
+    Split -->|reviewed source commit| Sources
+    Legacy --> History
     Sources --> Compose
     Sources --> History
     Targets --> History
@@ -71,6 +76,10 @@ later drift.
 Ordinary init checks the other harness's implicit home before writes and stops
 on a different repository binding. Explicit custom homes are outside that
 cross-harness check in this 2.0 alpha slice.
+The [existing-user migration](reference.md#migrating-an-existing-1x-repository-to-20)
+uses a reviewed split followed by per-provider enrollment, target commits, and
+approved apply. Classification is a user/skill review step; the engine does not
+guess it or delete the historical provider files and manual backups.
 
 ## Classes: source composition and runtime inspection
 

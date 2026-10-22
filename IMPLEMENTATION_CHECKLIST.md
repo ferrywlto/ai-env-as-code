@@ -30,8 +30,8 @@
   (zero warnings/errors), whitespace checks, and both skill YAML frontmatter
   blocks. The skill-creator validator could not run because PyYAML is absent
   from the installed Python runtimes.
-- [ ] Complete committed-target backup migration for Copilot. Both providers'
-  public `status` and `apply`, and Codex public `backup`, now use committed targets.
+- [x] Complete committed-target backup migration for Copilot. Both providers'
+  public `status`, `apply`, and `backup` now use committed targets.
 - [x] Enroll only the explicitly used platform and harness; preserve existing
   enrolled data and manual ChatGPT files.
 - [x] Add focused composition, section, and `render` xUnit tests to each
@@ -425,10 +425,26 @@
   21/21; enrollment and target validation passed 22/22. The warning-as-error
   Release build had zero warnings. Disposable tests verified unchanged
   canonical bytes and Git HEAD; no personal runtime or data repo was touched.
-  Ferry reviewed and approved this slice.
+  Ferry reviewed and approved this slice; committed as `3e11ed1`.
 
-Immediate next work: decide the next smallest path-free canonical cleanup after
-both harnesses attach portably.
+- [x] Review ticket #2 milestone 13a's existing-user migration rehearsal before
+  CLI syntax work. A disposable committed 1.x-format repository contains Codex,
+  Copilot, a non-default personality, unrelated runtime settings, and manual
+  ChatGPT backup bytes. An explicit reviewed split accounts for every authored
+  instruction, enrolls and commits one target at a time, applies both providers,
+  verifies in-sync status, and safely repeats enrollment/init/render/apply/backup.
+  Original provider/config/backup bytes and Git ancestry are preserved. The
+  reference now documents the sequence and fixes stale target-consumption and
+  fresh-init guidance; no new production command is required. The focused
+  Release rehearsal passed 1/1 (26 seconds of Git/filesystem integration); the
+  warning-as-error product/test build had zero warnings, whitespace checks
+  passed, and an independent read-only review found no actionable issue.
+  Historical-binary, Native AOT, real-harness, and full regression runs were not
+  part of this slice. Ferry reviewed and approved the rehearsal and runbook.
+
+Immediate next work: review the next boundary after the verified migration
+rehearsal, with the provider-first CLI proposal still deferred. Keep local and ticket
+progress synchronized at each reviewed boundary; CLI work is not started.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.
 

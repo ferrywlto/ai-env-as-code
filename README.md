@@ -70,6 +70,10 @@ environment/providers/<selected-provider>/overlay.md
 Then run `aec init --repo ABSOLUTE_PATH --enroll-shared` for Codex, or add
 `--provider=copilot` for Copilot. Review and separately commit the new target.
 This opt-in follows ordinary initialization; it does not deploy the target.
+For an existing 1.x data repository, follow the
+[reviewed migration sequence](docs/reference.md#migrating-an-existing-1x-repository-to-20)
+through enrollment, per-provider target commits, apply, and status before using
+the 2.0 directional commands.
 
 ## Start on Apple-silicon macOS
 
@@ -89,9 +93,10 @@ repository and initialize Codex:
 
 ```sh
 aec init --repo /absolute/path/to/aec-data
-aec status --repo /absolute/path/to/aec-data
 ```
 
+On this 2.0 development branch, complete the authored-source and target enrollment
+steps above before running `status`, `backup`, or `apply`.
 Review the changes and history before pushing your data repository to a remote.
 If it has no remote, AEC remains local-only; the skill warns rather than guessing
 where to publish it. For a cloned repository, the skill checks its tracked remote
