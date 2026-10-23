@@ -1,16 +1,18 @@
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
-public sealed class CodexGitRoundTripTests
+public sealed class GitRoundTripTests
 {
-    [Fact]
-    public void ExplicitGitTransportUpdatesAnotherCheckoutWithoutSharingRuntimePaths()
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void ExplicitGitTransportUpdatesAnotherCheckoutWithoutSharingRuntimePaths(string provider)
     {
-        using var layout = new RoundTripLayout();
+        using var layout = new RoundTripLayout(provider);
         var firstCommit = Head(layout.CheckoutA);
-        var canonical = File.ReadAllBytes(Path.Combine(layout.CheckoutA,
-            AecApplication.SourceRelativePath));
-        var configA = File.ReadAllBytes(Path.Combine(layout.HomeA, "config.toml"));
+        var canonical = layout.CanonicalPaths.ToDictionary(path => path,
+            path => File.ReadAllBytes(Path.Combine(layout.CheckoutA, path)));
+        var configA = File.ReadAllBytes(Path.Combine(layout.HomeA, layout.ConfigFileName));
 
         // Git transport is an explicit caller action. A local bare repository
         // exercises real push/clone/fetch without any hosted service or network.
@@ -22,33 +24,30 @@ public sealed class CodexGitRoundTripTests
             "--config", "core.autocrlf=false", layout.Remote, layout.CheckoutB);
         Assert.Equal(firstCommit, Head(layout.CheckoutB));
         Assert.False(Directory.Exists(layout.HomeB));
-        Assert.Equal(1, Run(layout.CheckoutB, layout.HomeB, "status").ExitCode);
+        Assert.Equal(1, layout.Run(layout.CheckoutB, layout.HomeB, "status").ExitCode);
         Assert.False(Directory.Exists(layout.HomeB));
 
         // The harness home is a separate local prerequisite, not something
         // cloning a portable target is allowed to invent.
         Directory.CreateDirectory(layout.HomeB);
-        var configPathB = Path.Combine(layout.HomeB, "config.toml");
-        const string configBefore = "model = \"machine-b\"\npersonality = 'none'\n" +
-            "[local]\nkeep_setting = true\n";
+        var configPathB = Path.Combine(layout.HomeB, layout.ConfigFileName);
+        var configBefore = layout.InitialConfigB;
         File.WriteAllText(configPathB, configBefore);
-        var unconfirmed = Run(layout.CheckoutB, layout.HomeB, "init");
+        var unconfirmed = layout.Run(layout.CheckoutB, layout.HomeB, "init");
         Assert.Equal(1, unconfirmed.ExitCode);
         Assert.Contains("--force-path-change", unconfirmed.Error, StringComparison.Ordinal);
         Assert.Equal(configBefore, File.ReadAllText(configPathB));
-        Assert.False(File.Exists(Path.Combine(layout.HomeB, "AGENTS.md")));
+        Assert.False(File.Exists(Path.Combine(layout.HomeB, layout.RuntimeFileName)));
         Assert.False(Directory.Exists(Path.Combine(layout.HomeB, "skills")));
         Assert.Equal(firstCommit, Head(layout.CheckoutB));
 
-        Success(Run(layout.CheckoutB, layout.HomeB, "init", "--force-path-change"));
-        Assert.Equal("unchanged", Success(Run(layout.CheckoutB, layout.HomeB, "apply"))
+        Success(layout.Run(layout.CheckoutB, layout.HomeB, "init", "--force-path-change"));
+        Assert.Equal("unchanged", Success(layout.Run(layout.CheckoutB, layout.HomeB, "apply"))
             .Output.Trim());
         var configB = File.ReadAllBytes(configPathB);
-        Assert.Equal(configBefore.Replace("'none'", "\"friendly\"", StringComparison.Ordinal),
-            File.ReadAllText(configPathB));
+        Assert.Equal(layout.ExpectedConfigB, File.ReadAllText(configPathB));
         Assert.Equal(firstCommit, Head(layout.CheckoutB));
-        Assert.Equal(canonical, File.ReadAllBytes(Path.Combine(layout.CheckoutB,
-            AecApplication.SourceRelativePath)));
+        AssertCanonicalBytes(layout.CheckoutB, canonical);
         layout.AssertLocalRuntime(layout.CheckoutB, layout.HomeB);
 
         File.WriteAllText(layout.SharedSource, "Shared revision from machine A.\n");
@@ -60,12 +59,12 @@ public sealed class CodexGitRoundTripTests
         Git(layout.CheckoutA, "push", "--quiet", "shared", "main");
         Assert.Equal(publishedCommit,
             Git(layout.Remote, "rev-parse", "refs/heads/main").Trim());
-        Success(Run(layout.CheckoutA, layout.HomeA, "apply"));
+        Success(layout.Run(layout.CheckoutA, layout.HomeA, "apply"));
 
         // Status/apply deliberately see only B's old committed target. Even
         // with a newer remote tip, they must not silently fetch or advance HEAD.
         layout.AssertLocalRuntime(layout.CheckoutB, layout.HomeB);
-        Assert.Equal("unchanged", Success(Run(layout.CheckoutB, layout.HomeB, "apply"))
+        Assert.Equal("unchanged", Success(layout.Run(layout.CheckoutB, layout.HomeB, "apply"))
             .Output.Trim());
         Assert.Equal(firstCommit, Head(layout.CheckoutB));
         Assert.Equal(firstCommit,
@@ -77,8 +76,8 @@ public sealed class CodexGitRoundTripTests
         Assert.Equal(firstCommit, Head(layout.CheckoutB));
         Git(layout.CheckoutB, "merge", "--ff-only", "--no-edit", "shared/main");
         Assert.Equal(publishedCommit, Head(layout.CheckoutB));
-        Assert.Equal(2, Run(layout.CheckoutB, layout.HomeB, "status").ExitCode);
-        Success(Run(layout.CheckoutB, layout.HomeB, "apply"));
+        Assert.Equal(2, layout.Run(layout.CheckoutB, layout.HomeB, "status").ExitCode);
+        Success(layout.Run(layout.CheckoutB, layout.HomeB, "apply"));
 
         foreach (var (checkout, home) in new[]
         {
@@ -87,11 +86,10 @@ public sealed class CodexGitRoundTripTests
         {
             layout.AssertLocalRuntime(checkout, home);
             Assert.Equal(publishedCommit, Head(checkout));
-            Assert.Equal(canonical, File.ReadAllBytes(Path.Combine(checkout,
-                AecApplication.SourceRelativePath)));
+            AssertCanonicalBytes(checkout, canonical);
             Assert.Empty(Git(checkout, "status", "--porcelain"));
             Assert.False(Directory.Exists(Path.Combine(checkout, "environment", "targets",
-                layout.Platform, "copilot")));
+                layout.Platform, layout.OtherProvider)));
             Assert.Equal(0, TestGit.Run(checkout, "merge-base", "--is-ancestor", firstCommit,
                 publishedCommit).ExitCode);
         }
@@ -100,9 +98,10 @@ public sealed class CodexGitRoundTripTests
         var sections = InstructionSections.Parse(File.ReadAllText(layout.TargetPath(layout.CheckoutB)),
             true, true);
         Assert.Equal("Shared revision from machine A.\n", sections.Shared);
-        Assert.Equal("Codex mechanics remain.\n", sections.Provider);
-        Assert.Equal(configA, File.ReadAllBytes(Path.Combine(layout.HomeA, "config.toml")));
+        Assert.Equal(layout.ProviderInstructions, sections.Provider);
+        Assert.Equal(configA, File.ReadAllBytes(Path.Combine(layout.HomeA, layout.ConfigFileName)));
         Assert.Equal(configB, File.ReadAllBytes(configPathB));
+        Assert.False(Directory.Exists(layout.OtherHomeB));
     }
 
     private static CommandResult Success(CommandResult result)
@@ -111,9 +110,13 @@ public sealed class CodexGitRoundTripTests
         return result;
     }
 
-    private static CommandResult Run(string checkout, string home, string command,
-        params string[] options) => TestApplication.Run([command, "--repo", checkout,
-            "--codex-home", home, .. options]);
+    private static void AssertCanonicalBytes(string checkout, Dictionary<string, byte[]> canonical)
+    {
+        foreach (var (path, content) in canonical)
+        {
+            Assert.Equal(content, File.ReadAllBytes(Path.Combine(checkout, path)));
+        }
+    }
 
     private static void Commit(string checkout, string message, params string[] paths)
     {
@@ -126,25 +129,40 @@ public sealed class CodexGitRoundTripTests
 
     private sealed class RoundTripLayout : IDisposable
     {
-        public RoundTripLayout()
+        public RoundTripLayout(string provider)
         {
+            Provider = provider;
             Root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
-                "aec-codex-roundtrip-tests", Guid.NewGuid().ToString("N"));
+                "aec-roundtrip-tests", Guid.NewGuid().ToString("N"));
             CheckoutA = Path.Combine(Root, "machine-a", "data");
             CheckoutB = Path.Combine(Root, "machine-b", "different data path");
-            HomeA = Path.Combine(Root, "machine-a", "codex-home");
-            HomeB = Path.Combine(Root, "machine-b", "codex-home");
+            HomeA = Path.Combine(Root, "machine-a", provider + "-home");
+            HomeB = Path.Combine(Root, "machine-b", provider + "-home");
             Remote = Path.Combine(Root, "shared-data.git");
             Directory.CreateDirectory(HomeA);
             Directory.CreateDirectory(Path.GetDirectoryName(CheckoutB)!);
-            File.WriteAllText(Path.Combine(HomeA, "AGENTS.md"),
+            // The current data layout starts with a Codex baseline. Copilot's
+            // case retains that history without enrolling a Codex target.
+            var codexHome = Path.Combine(Root, "machine-a", "codex-home");
+            Directory.CreateDirectory(codexHome);
+            File.WriteAllText(Path.Combine(codexHome, "AGENTS.md"),
                 "Shared approval.\nLocal paths.\nCodex mechanics remain.\n");
-            File.WriteAllText(Path.Combine(HomeA, "config.toml"),
+            File.WriteAllText(Path.Combine(codexHome, "config.toml"),
                 "model = \"machine-a\"\npersonality = \"friendly\"\n");
-            Success(Run(CheckoutA, HomeA, "init"));
+            Success(TestApplication.Run("init", "--repo", CheckoutA, "--codex-home", codexHome));
+            if (Provider == "copilot")
+            {
+                File.WriteAllText(Path.Combine(HomeA, RuntimeFileName),
+                    "Shared approval.\nLocal paths.\n" + ProviderInstructions);
+                File.WriteAllText(Path.Combine(HomeA, ConfigFileName),
+                    "{\"machine\":\"a\",\"localSetting\":true}\n");
+                Success(Run(CheckoutA, HomeA, "init"));
+                Commit(CheckoutA, "Record legacy Copilot baseline",
+                    AecApplication.CopilotSourceRelativePath);
+            }
             var sourcePaths = new[] { "environment/shared/instructions.md",
-                $"environment/platforms/{Platform}/policy.md", "environment/providers/codex/overlay.md" };
-            var content = new[] { "Shared approval.\n", "Local paths.\n", "Codex mechanics remain.\n" };
+                $"environment/platforms/{Platform}/policy.md", $"environment/providers/{provider}/overlay.md" };
+            var content = new[] { "Shared approval.\n", "Local paths.\n", ProviderInstructions };
             for (var index = 0; index < sourcePaths.Length; index++)
             {
                 var path = Path.Combine(CheckoutA, sourcePaths[index]);
@@ -153,7 +171,7 @@ public sealed class CodexGitRoundTripTests
             }
             Commit(CheckoutA, "Review portable sources", sourcePaths);
             Success(Run(CheckoutA, HomeA, "init", "--enroll-shared"));
-            Commit(CheckoutA, "Enroll reviewed Codex target", TargetRelativePath);
+            Commit(CheckoutA, "Enroll reviewed provider target", TargetRelativePath);
             Success(Run(CheckoutA, HomeA, "apply"));
             AssertLocalRuntime(CheckoutA, HomeA);
         }
@@ -164,18 +182,52 @@ public sealed class CodexGitRoundTripTests
         public string HomeA { get; }
         public string HomeB { get; }
         public string Remote { get; }
+        public string Provider { get; }
+        public string OtherProvider => Provider == "codex" ? "copilot" : "codex";
+        public string OtherHomeB => Path.Combine(Root, "machine-b", OtherProvider + "-home");
+        public string RuntimeFileName => Provider == "codex" ? "AGENTS.md" : "copilot-instructions.md";
+        public string ConfigFileName => Provider == "codex" ? "config.toml" : "config.json";
+        public string InitialConfigB => Provider == "codex"
+            ? "model = \"machine-b\"\npersonality = 'none'\n[local]\nkeep_setting = true\n"
+            : "{\"machine\":\"b\",\"localSetting\":true}\n";
+        public string ExpectedConfigB => Provider == "codex"
+            ? InitialConfigB.Replace("'none'", "\"friendly\"", StringComparison.Ordinal)
+            : InitialConfigB;
+        public string ProviderInstructions => Provider == "codex"
+            ? "Codex mechanics remain.\n" : "Copilot mechanics remain.\n";
+        public string[] CanonicalPaths => Provider == "codex"
+            ? [AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath]
+            : [AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath,
+                AecApplication.CopilotSourceRelativePath];
         public string Platform { get; } = RenderCommand.CurrentPlatform();
         public string SharedSource => Path.Combine(CheckoutA, "environment", "shared", "instructions.md");
-        public string TargetRelativePath => $"environment/targets/{Platform}/codex/AGENTS.md";
+        public string TargetRelativePath => $"environment/targets/{Platform}/{Provider}/{RuntimeFileName}";
         public string TargetPath(string checkout) => Path.Combine(checkout, TargetRelativePath);
+
+        public CommandResult Run(string checkout, string home, string command,
+            params string[] options) => Provider == "codex"
+            ? TestApplication.Run([command, "--repo", checkout, "--codex-home", home, .. options])
+            : TestApplication.Run([command, "--repo", checkout, "--provider=copilot",
+                "--copilot-home", home, .. options]);
 
         public void AssertLocalRuntime(string checkout, string home)
         {
             Success(Run(checkout, home, "status"));
-            var runtime = File.ReadAllBytes(Path.Combine(home, "AGENTS.md"));
-            Assert.Equal(checkout, AecInstructionBlock.ReadRepositoryBinding(runtime)!.Repository);
-            Assert.Equal(File.ReadAllBytes(TargetPath(checkout)),
-                AecInstructionBlock.Remove(runtime).Content);
+            var runtime = File.ReadAllBytes(Path.Combine(home, RuntimeFileName));
+            if (Provider == "codex")
+            {
+                Assert.Equal(checkout, AecInstructionBlock.ReadRepositoryBinding(runtime)!.Repository);
+                Assert.Equal(File.ReadAllBytes(TargetPath(checkout)),
+                    AecInstructionBlock.Remove(runtime).Content);
+            }
+            else
+            {
+                var binding = CopilotInstructionBlock.ReadManagedBinding(runtime)!;
+                Assert.Equal(checkout, binding.Repository);
+                Assert.Equal(Platform, binding.Platform);
+                Assert.EndsWith(File.ReadAllText(TargetPath(checkout)),
+                    File.ReadAllText(Path.Combine(home, RuntimeFileName)), StringComparison.Ordinal);
+            }
         }
 
         public void Dispose() => TestDirectoryCleanup.Delete(Root);

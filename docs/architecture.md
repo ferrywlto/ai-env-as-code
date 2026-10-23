@@ -94,9 +94,10 @@ flowchart LR
 Git transfers portable source and target history. Init/apply generate each
 runtime's local repository binding; they do not rewrite a shared path in Git.
 Status compares runtime with the local commit, so remote freshness requires the
-separate tip check and approved Git transport. The Codex round-trip test uses a
-local bare remote and two checkouts on one platform; Copilot and cross-platform
-Native AOT round-trip evidence remain separate release work.
+separate tip check and approved Git transport. The shared round-trip test runs
+Codex and Copilot cases against a local bare remote and two checkouts on one
+platform. Cross-platform Native AOT and real-harness evidence remain separate
+release work.
 
 ## Classes: source composition and runtime inspection
 

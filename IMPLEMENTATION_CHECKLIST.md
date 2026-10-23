@@ -454,13 +454,23 @@
   created. The focused Release rehearsal passed 1/1 (20 seconds), the product/test
   warning-as-error build had zero warnings, whitespace checks passed, and an
   independent read-only review confirmed the acceptance coverage. Ferry reviewed
-  and approved this checkpoint. This is managed-code, same-host
+  and approved this checkpoint; committed as `3d4f8e0`. This is managed-code, same-host
   Git evidence, not real machines, a hosted service, or Native AOT verification.
 
-Immediate next work: cover the Copilot round trip in a separate approved slice
-before considering milestone 16
-complete. Keep local and ticket progress synchronized at each reviewed boundary;
-the provider-first CLI proposal remains deferred.
+- [x] Review ticket #2 milestone 16's matching Copilot checkpoint. The existing
+  transport rehearsal is now one `GitRoundTripTests` theory for Codex/Copilot,
+  retaining provider-specific binding/config assertions. Copilot confirms B's
+  new path before attachment, transfers a reviewed source update through
+  explicit push/fetch/fast-forward, and verifies status/apply while keeping
+  `config.json` byte-identical in both homes. No unused Codex target or B runtime
+  is created. The focused Release theory passed 2/2 (Codex and Copilot, 45 seconds
+  total); the product/test warning-as-error build had zero warnings, whitespace
+  checks passed, and independent read-only review found no actionable issue.
+  Ferry reviewed and approved the checkpoint; milestone 16 is complete.
+
+Immediate next work: propose the next release-verification slice after the
+completed both-provider round trip. Keep local and ticket progress synchronized
+at each reviewed boundary; the provider-first CLI proposal remains deferred.
 Keep `docs/architecture.md` aligned, and run the complete suite before push
 or release.
 
@@ -729,7 +739,8 @@ available. The isolated installer lifecycle has passed on a Windows runner.
 - [x] Preserve non-AEC bytes and existing provider-specific guidance.
 - [x] Update README, bundled skill guidance, version metadata, and skill-upgrade predecessor support.
 - [x] Pass focused managed-block and initialization validation.
-- [ ] Run the deferred two-machine Git round-trip rehearsal.
+- [x] Run the deferred two-checkout Git round-trip rehearsal through ticket #2
+  milestone 16; managed Codex/Copilot cases pass on one host/platform.
 
 Immediate next work: rehearse push/pull through a disposable local bare Git remote,
 then document the cross-machine workflow before adding remote convenience commands.

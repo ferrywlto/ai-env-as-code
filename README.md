@@ -101,7 +101,7 @@ Review the changes and history before pushing your data repository to a remote.
 If it has no remote, AEC remains local-only; the skill warns rather than guessing
 where to publish it. For a cloned repository, the skill checks its tracked remote
 and default branch before a canonical change or runtime apply.
-See the [two-checkout Codex workflow](docs/reference.md#sharing-migrated-codex-instructions-between-machines)
+See the [two-checkout workflow](docs/reference.md#sharing-migrated-instructions-between-machines)
 for explicit Git transport and machine-local runtime bindings.
 For pulled repositories, path changes, other providers, custom install paths,
 and uninstallation, use the [detailed reference](docs/reference.md).
