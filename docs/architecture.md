@@ -99,7 +99,7 @@ Codex and Copilot cases against a local bare remote and two checkouts on one
 platform. Cross-platform Native AOT and real-harness evidence remain separate
 release work.
 
-## macOS lifecycle verification boundary
+## Platform lifecycle verification boundary
 
 ```mermaid
 flowchart LR
@@ -113,12 +113,15 @@ flowchart LR
     Refresh --> Render[Shared edit; render both targets only]
 ```
 
-The macOS smoke keeps installer/uninstaller checks in the same disposable
-lifecycle. It preserves legacy files and unrelated runtime config, checks exact
-backup commit paths, and verifies render changes neither runtime nor Git history.
-The manual workflow builds Native AOT before running it. A managed-DLL fallback
-checks shell sequencing only; neither that nor OS-runner smoke proves a real
-harness integration.
+The macOS and Windows smoke scripts keep installer/uninstaller checks in the same
+disposable lifecycle. They preserve legacy files and unrelated runtime config,
+check exact backup commit paths, and verify render changes neither runtime nor
+Git history. Windows also checks that uninstall preserves the previously applied
+authored sections, all data files, and the other provider's runtime/skill.
+Each manual workflow builds Native AOT before running its script. The macOS
+managed-DLL fallback checks shell sequencing only; neither that nor OS-runner
+smoke proves a real harness integration. The Windows 2.0 update awaits a new
+runner pass; source review is not execution evidence.
 
 ## Classes: source composition and runtime inspection
 

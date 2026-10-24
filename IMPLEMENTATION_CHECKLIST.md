@@ -513,10 +513,65 @@
   ticket #2 milestone 17 is complete. Native smoke and both focused managed
   scopes passed locally; no GitHub runner or real-harness pass is claimed.
 
-Immediate next work: propose the matching Windows x64 update as a separate
-slice and wait for approval before implementation. No push or workflow dispatch
-is authorized. Keep local and ticket progress synchronized; provider-first CLI
-work remains deferred. Run the complete suite before push or release.
+- [x] Implement the approved Windows x64 portable smoke update for ticket #2
+  milestone 18. Both providers now follow reviewed sources, separate enrollment/
+  target commits, apply/status, exact-path single-section backup, digest drift/
+  refresh, idempotence, and shared render. Native exit codes and exact ordered
+  output are checked inside helpers; fixtures use UTF-8/no-BOM/LF and isolated
+  Git signing/newline settings restored in `finally`. Existing installer safety
+  checks remain, including apostrophe/custom paths and refused cleanup.
+  Uninstall preserves applied authored sections, the data file tree, and the
+  other provider's runtime/config/skill. The manual Windows workflow matches
+  macOS's focused scopes and separate bounded migration rehearsal.
+- [ ] Validate the updated Windows sequence on its Windows x64 runner before
+  marking milestone 18 complete. PowerShell is not installed on the local macOS
+  host; no parser, Windows test, or native execution pass is claimed. Workflow
+  YAML/manual-trigger/permissions/runner checks, all 11 referenced test-class
+  checks, whitespace checks, and independent read-only review passed locally. At
+  that initial source-only checkpoint no dependency installation, personal
+  environment change, commit, push, or workflow dispatch was performed.
+  Historical runner passes cover the old
+  sequence only; the reference and architecture diagram distinguish this.
+
+- [x] Pass the approved pre-push full Debug regression gate after the repair.
+  The rebuilt focused scope passed 8/8; the full Debug retry passed 639/639 in
+  16m19s, with zero failures, skips, timeouts, or aborts. The completed TRX report
+  is under `artifacts/regression-repair-20261024/debug/`. The conditional
+  commit/push/manual Windows workflow gate may now resume. Historical first
+  attempt and diagnosis follow for traceability: the completed
+  2026-10-24 run executed 639 tests in 17m12s: 636 passed, 3 failed, none skipped
+  or aborted, with a bounded 2-minute hang guard. The TRX report is under
+  `artifacts/windows-gate-20261024/debug/`. Restore and compilation succeeded.
+  Commit/push/Windows workflow dispatch were conditional on a pass and did not
+  run. The three failures are identified; no automatic retry or fix was made:
+  - `FifoProbeTests.ZeroLengthFifoDoesNotBlockStatus`: the legacy fixture has no
+    Git initialization/commit or portable target. Current status rejects it at
+    committed-HEAD preflight, before it reaches the FIFO. Its expected drift
+    output no longer described the current public status contract. The original
+    timeout-recovery writer could also block; the repair below removes it.
+  - `PortableCodexBackupPreviewTests.MissingRuntimePersonalityStopsWithoutWriting`
+    and `MissingRuntimeConfigStopsWithTheSameClearError`: both tests expected exactly
+    `InvalidOperationException`, but the deliberate missing-personality warning
+    path now throws its specific `MissingRuntimePersonalityException` subclass.
+- [x] Implement Ferry's approved narrow test-only repair. The FIFO test keeps
+  its runtime AGENTS.md path, starts from a valid committed portable layout,
+  verifies a healthy baseline, and asserts the exact post-read binding error
+  for the empty FIFO. A child CLI with concurrent output draining, a 10-second
+  wait and bounded 5-second kill/reap replaces the unbounded writer recovery.
+  The process-state collection serializes inherited environment state. Both
+  backup-preview tests now assert the exact missing-personality exception,
+  retaining all diagnostic and no-write checks. No production file or test
+  removal was needed. Independent review found no blocking issue; the rebuilt
+  focused Debug scope passed 8/8 in 8s. The full Debug gate from that same build
+  passed 639/639 as recorded above. The repair was committed as `d55ba51`, separate
+  from the Windows smoke update.
+
+Immediate next work: complete the approved Windows smoke commit, push the
+verified branch, and explicitly dispatch its manual Windows workflow. Milestone
+18 stays open until current runner evidence and Ferry review pass. The test-only
+repair and Windows smoke changes remain separate semantic commits.
+Provider-first CLI work remains deferred; full Release regression remains a
+release gate rather than part of this pre-push Debug verification.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

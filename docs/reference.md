@@ -1063,10 +1063,11 @@ flowchart LR
 ```
 
 The complete suite currently contains unit, Git integration, and filesystem-safety
-tests in one xUnit project. A full Debug run of 315 tests takes about five minutes on
-an ARM64 Mac even when the project is already built. VSTest may print nothing during
-most of that time; wait for its final summary rather than treating a quiet console
-as a hang.
+tests in one xUnit project. The latest full Debug run executed 639 tests in about
+16 minutes on an ARM64 Mac; pass/fail details are in `IMPLEMENTATION_CHECKLIST.md`.
+This is an observed duration, not a performance guarantee. VSTest may print
+nothing during most of that time; wait for its final summary rather than treating
+a quiet console as a hang.
 
 | Cost | What happens |
 |---|---|
@@ -1091,21 +1092,23 @@ dotnet test tests/Aec.Tests/Aec.Tests.csproj -c Release \
 ```
 
 Run the complete regression suite before pushing and again in Release configuration
-before publishing a release. The hang guard terminates and identifies an individual
-test that stops making progress for 30 seconds:
+before publishing a release. Use a bounded two-minute hang guard for the full
+suite because Git-heavy rehearsals have exceeded 30 seconds. Smaller focused
+workflow scopes retain their 30-second guard. The guard identifies and terminates
+an individual test that exceeds the selected bound:
 
 ```bash
 # Before push
 dotnet test tests/Aec.Tests/Aec.Tests.csproj \
   --blame-hang \
-  --blame-hang-timeout 30s \
+  --blame-hang-timeout 2m \
   --blame-hang-dump-type none
 
 # Before release
 dotnet test tests/Aec.Tests/Aec.Tests.csproj \
   --configuration Release \
   --blame-hang \
-  --blame-hang-timeout 30s \
+  --blame-hang-timeout 2m \
   --blame-hang-dump-type none
 ```
 
@@ -1161,7 +1164,15 @@ The script works from any caller directory and writes the ignored
 `artifacts/aec-win-x64/aec.exe`. The manual-only
 `.github/workflows/windows-smoke.yml` workflow builds it on a Windows x64
 runner, checks `aec.exe version` and `aec.exe help`, and tests the isolated
-installer lifecycle.
+installer/uninstaller plus both providers' portable lifecycle. The 2.0 script
+uses reviewed sources, separate provider enrollment/target commits, directional
+backup/apply/status checks, and shared rendering of both enrolled targets.
+Uninstall preserves the applied authored sections, data files, and Copilot's
+runtime/config/skill. See [the lifecycle diagram](architecture.md#platform-lifecycle-verification-boundary).
+
+The updated Windows 2.0 sequence awaits a new runner pass; the historical runs
+linked here do not validate it. The workflow keeps the Git-heavy migration
+rehearsal separate with a two-minute hang guard; smaller tests retain 30 seconds.
 
 The installer consumes that artifact and installs per-user by default at
 `$env:LOCALAPPDATA\Programs\AEC\aec.exe`:
@@ -1193,7 +1204,7 @@ Run the generated helper by its explicit path:
 It uses the exact installed binary to run `aec uninstall` before removing the
 binary and helper script. The runtime cleanup preserves the AEC data repository
 and `config.toml`. The isolated Windows install/reinstall/managed-init/uninstall
-test [passed on a Windows runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35282576084);
+test [passed on a Windows runner before this 2.0 update](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35282576084);
 real Windows Codex harness validation remains unverified.
 
 ### Experimental Native AOT build on Ubuntu Linux ARM64
@@ -1264,7 +1275,7 @@ The updated sequence passed locally through the freshly built Native AOT artifac
 on 2026-10-24. After an approved retry with local socket permission, the separated
 managed scopes also passed: 110 focused lifecycle tests and one legacy migration
 rehearsal. Current verification details are in `IMPLEMENTATION_CHECKLIST.md`.
-See [the verification boundary](architecture.md#macos-lifecycle-verification-boundary).
+See [the verification boundary](architecture.md#platform-lifecycle-verification-boundary).
 The Git-heavy migration rehearsal runs separately with a two-minute hang guard;
 smaller focused tests retain 30 seconds. A watchdog abort is not a passing run
 or proof of a product deadlock.

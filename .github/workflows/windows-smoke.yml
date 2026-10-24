@@ -22,14 +22,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git fetch failed.' }
           git checkout --detach FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { throw 'git checkout failed.' }
-      - name: Test shared-instruction rendering on Windows x64
+      - name: Test portable instruction lifecycle on Windows x64
         shell: pwsh
         run: |
           dotnet test tests/Aec.Tests/Aec.Tests.csproj `
             --configuration Release `
-            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests' `
+            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests|FullyQualifiedName~PortableCodexStatusCommandTests|FullyQualifiedName~PortableCopilotStatusCommandTests|FullyQualifiedName~PortableCodexApplyCommandTests|FullyQualifiedName~PortableCopilotApplyCommandTests|FullyQualifiedName~PortableCodexBackupCommandTests|FullyQualifiedName~PortableCopilotBackupCommandTests' `
             --blame-hang --blame-hang-timeout 30s --blame-hang-dump-type none
-          if ($LASTEXITCODE -ne 0) { throw 'Shared-instruction tests failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'Portable lifecycle tests failed.' }
+      # Separate the Git-heavy rehearsal from smaller tests; local macOS runs
+      # took 26-42 seconds, so the 30-second guard is insufficient for this scope.
+      - name: Rehearse reviewed legacy migration
+        shell: pwsh
+        run: |
+          dotnet test tests/Aec.Tests/Aec.Tests.csproj `
+            --configuration Release --no-build --no-restore `
+            --filter 'FullyQualifiedName~LegacyMigrationTests' `
+            --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
+          if ($LASTEXITCODE -ne 0) { throw 'Legacy migration rehearsal failed.' }
       - name: Build Native AOT executable
         shell: pwsh
         run: ./scripts/build-win-x64.ps1
@@ -46,6 +56,6 @@ jobs:
             throw 'aec help failed or omitted command usage.'
           }
           Write-Output $help
-      - name: Test isolated install and uninstall
+      - name: Test isolated install, both portable providers, render, and uninstall
         shell: pwsh
         run: ./tests/install-win-x64.ps1
