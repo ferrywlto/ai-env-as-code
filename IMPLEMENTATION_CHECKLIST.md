@@ -468,11 +468,55 @@
   checks passed, and independent read-only review found no actionable issue.
   Ferry reviewed and approved the checkpoint; milestone 16 is complete.
 
-Immediate next work: propose the next release-verification slice after the
-completed both-provider round trip. Keep local and ticket progress synchronized
-at each reviewed boundary; the provider-first CLI proposal remains deferred.
-Keep `docs/architecture.md` aligned, and run the complete suite before push
-or release.
+- [x] Implement ticket #2 milestone 17's macOS portable lifecycle smoke update.
+  The isolated script commits the reviewed split, enrolls/commits each provider
+  separately, and exercises apply/status, provider-only backup with exact commit
+  paths, post-backup digest drift/refresh, and idempotence. Shared render updates
+  both enrolled targets without runtime/index/history writes. Legacy canonical
+  files, unrelated Codex config, and Copilot config.json remain byte-identical;
+  existing installer/uninstaller safety checks are retained. The manual macOS
+  workflow includes the matching focused lifecycle tests. Architecture/reference
+  explain the sequence and distinguish prior runner evidence from this update.
+  Shell syntax, YAML parsing, whitespace checks, independent read-only review,
+  and the complete isolated script using the existing Release managed DLL passed.
+  This fallback is not Native AOT or real-harness verification.
+- [x] Finish focused macOS managed verification. The existing Release assembly
+  run (`--no-build --no-restore`) passed 110 tests in 2m50s before the 30-second
+  watchdog aborted `LegacyMigrationTests.ReviewedLegacySplitEnrollsBothProvidersAndRerunsWithoutDataLoss`.
+  Its sequence attachment names that fixture as unfinished; no assertion failed,
+  but the run was aborted and is not an overall pass. The workflow now isolates
+  this Git-heavy rehearsal under a bounded 2-minute watchdog, keeping 30 seconds
+  for smaller tests. This gives headroom above its prior 26-second pass; it does
+  not establish why that run exceeded 30 seconds. Ferry approved the retry on
+  2026-10-24: both separated scopes were attempted once using the existing
+  Release assembly, with distinct result directories and no build/restore.
+  Both aborted before executing tests because VSTest's local communication
+  socket bind was denied by the sandbox (`SocketException (13)`). No counts or
+  sequence attachments were produced; this is not a test pass or assertion
+  failure. Ferry approved a further retry with local socket permission:
+  the separate scopes passed on 2026-10-24 using the same Release binaries,
+  without build/restore. Focused lifecycle: 110/110 passed in 2m16s; legacy
+  migration: 1/1 passed in 42s, within its 2-minute guard. Both TRX reports under
+  `artifacts/macos-socket-retry-20261024/` record completed runs with zero failed,
+  aborted, or skipped tests. This verifies the selected scopes, not full regression.
+- [x] Complete local macOS Native AOT build and isolated lifecycle verification.
+  The first build attempt stopped during restore with NU1900: NuGet and the
+  configured GitHub Packages vulnerability feeds were unreachable. Compilation
+  did not start. Ferry approved the networked retry on 2026-10-24: restore and
+  native compilation succeeded without an audit bypass; the built artifact's
+  `version` (`2.0.0-alpha.4`) and `help` commands passed. The complete isolated
+  native installer/uninstaller, both-provider portable lifecycle, and render
+  smoke passed. This is current local Native AOT evidence, not a GitHub runner,
+  full regression, or real-harness pass. No installed personal binary, skill,
+  runtime, or data repository was changed.
+- [x] Ferry reviewed and approved the verified macOS checkpoint for commit;
+  ticket #2 milestone 17 is complete. Native smoke and both focused managed
+  scopes passed locally; no GitHub runner or real-harness pass is claimed.
+
+Immediate next work: propose the matching Windows x64 update as a separate
+slice and wait for approval before implementation. No push or workflow dispatch
+is authorized. Keep local and ticket progress synchronized; provider-first CLI
+work remains deferred. Run the complete suite before push or release.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

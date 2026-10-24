@@ -1252,9 +1252,22 @@ source of truth. Building requires the .NET 10 SDK and Xcode Command Line Tools:
 
 The manual-only `.github/workflows/macos-arm64-smoke.yml` workflow uses a
 macOS 15 ARM64 runner to build the Native AOT executable, check `aec version`
-and `aec help`, and exercise the isolated installer plus complete Copilot AEC
-lifecycle. All checks
-[passed on the macOS runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284718).
+and `aec help`, and exercise the isolated installer/uninstaller plus both
+providers' portable lifecycle. The script commits the reviewed sources, enrolls
+and commits one target at a time, then checks apply/status, single-section
+backup, digest refresh, idempotence, and repository-only rendering. Legacy
+canonical files and unrelated Codex/Copilot configuration remain intact.
+
+The [earlier macOS run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284718)
+passed the previous lifecycle; it is not verification of this updated 2.0 sequence.
+The updated sequence passed locally through the freshly built Native AOT artifact
+on 2026-10-24. After an approved retry with local socket permission, the separated
+managed scopes also passed: 110 focused lifecycle tests and one legacy migration
+rehearsal. Current verification details are in `IMPLEMENTATION_CHECKLIST.md`.
+See [the verification boundary](architecture.md#macos-lifecycle-verification-boundary).
+The Git-heavy migration rehearsal runs separately with a two-minute hang guard;
+smaller focused tests retain 30 seconds. A watchdog abort is not a passing run
+or proof of a product deadlock.
 The workflow never reads the personal AEC data repository. Codex on macOS is
 marked ✓ because it has also been exercised with the real local harness, not
 merely because CI exists.

@@ -99,6 +99,27 @@ Codex and Copilot cases against a local bare remote and two checkouts on one
 platform. Cross-platform Native AOT and real-harness evidence remain separate
 release work.
 
+## macOS lifecycle verification boundary
+
+```mermaid
+flowchart LR
+    Legacy[Disposable legacy init: both providers] --> Sources[Commit reviewed sources]
+    Sources --> Codex[Enroll and commit Codex target]
+    Codex --> Copilot[Enroll and commit Copilot target]
+    Copilot --> Apply[Apply and check status per provider]
+    Apply --> Backup[Edit one provider section; backup commits]
+    Backup --> Drift[Runtime digest unchanged; status reports drift]
+    Drift --> Refresh[Apply refreshes digest; status in sync]
+    Refresh --> Render[Shared edit; render both targets only]
+```
+
+The macOS smoke keeps installer/uninstaller checks in the same disposable
+lifecycle. It preserves legacy files and unrelated runtime config, checks exact
+backup commit paths, and verifies render changes neither runtime nor Git history.
+The manual workflow builds Native AOT before running it. A managed-DLL fallback
+checks shell sequencing only; neither that nor OS-runner smoke proves a real
+harness integration.
+
 ## Classes: source composition and runtime inspection
 
 ```mermaid

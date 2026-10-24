@@ -19,14 +19,24 @@ jobs:
           git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
           git fetch --depth 1 origin "$GITHUB_SHA"
           git checkout --detach FETCH_HEAD
-      - name: Test shared-instruction rendering on macOS ARM64
+      - name: Test portable instruction lifecycle on macOS ARM64
         shell: bash
         run: |
           set -eu
           dotnet test tests/Aec.Tests/Aec.Tests.csproj \
             --configuration Release \
-            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests' \
+            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests|FullyQualifiedName~PortableCodexStatusCommandTests|FullyQualifiedName~PortableCopilotStatusCommandTests|FullyQualifiedName~PortableCodexApplyCommandTests|FullyQualifiedName~PortableCopilotApplyCommandTests|FullyQualifiedName~PortableCodexBackupCommandTests|FullyQualifiedName~PortableCopilotBackupCommandTests' \
             --blame-hang --blame-hang-timeout 30s --blame-hang-dump-type none
+      # This rehearsal includes many Git processes and previously took 26s.
+      # Isolate it from the smaller tests with more headroom, not an unbounded wait.
+      - name: Rehearse reviewed legacy migration
+        shell: bash
+        run: |
+          set -eu
+          dotnet test tests/Aec.Tests/Aec.Tests.csproj \
+            --configuration Release --no-build --no-restore \
+            --filter 'FullyQualifiedName~LegacyMigrationTests' \
+            --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
       - name: Build Native AOT executable
         shell: bash
         run: sh ./scripts/build-osx-arm64.sh
@@ -41,6 +51,6 @@ jobs:
           help=$("$artifact" help)
           printf '%s\n' "$help" | grep -Fq 'aec init'
           printf '%s\n' "$help"
-      - name: Test isolated install, Copilot lifecycle, and uninstall
+      - name: Test isolated install, both portable providers, render, and uninstall
         shell: bash
         run: sh ./tests/install-osx-arm64.sh

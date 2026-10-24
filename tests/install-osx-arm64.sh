@@ -120,8 +120,10 @@ export GIT_CONFIG_NOSYSTEM=1
 codex_home="$test_root/codex-home"
 data_repo="$test_root/aec-data"
 mkdir -p "$codex_home"
-printf '%s\n' 'Personal Codex instructions' >"$codex_home/AGENTS.md"
-printf '%s\n' 'personality = "none"' >"$codex_home/config.toml"
+printf '%s\n' 'Shared approval.' 'Local paths.' 'Codex models.' >"$codex_home/AGENTS.md"
+printf '%s\n' 'model = "keep-local-model"' 'personality = "friendly"' \
+    '[features]' 'local_setting = true' >"$codex_home/config.toml"
+cp "$codex_home/config.toml" "$test_root/codex-config-original"
 "$custom_target" init --repo "$data_repo" --codex-home "$codex_home" >/dev/null
 
 copilot_home="$test_root/copilot-home"
@@ -129,7 +131,9 @@ runtime_copilot="$copilot_home/copilot-instructions.md"
 canonical_copilot="$data_repo/environment/providers/copilot/copilot-instructions.md"
 copilot_skill="$copilot_home/skills/aec/SKILL.md"
 mkdir -p "$copilot_home"
-printf '%s\n' 'Personal Copilot instructions' >"$runtime_copilot"
+printf '%s\n' 'Shared approval.' 'Local paths.' 'Copilot tools.' >"$runtime_copilot"
+printf '%s\n' '{"localSetting":true}' >"$copilot_home/config.json"
+cp "$copilot_home/config.json" "$test_root/copilot-config-original"
 "$custom_target" init --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" >/dev/null
 
 [ -f "$canonical_copilot" ] || fail "canonical Copilot instructions were not created"
@@ -137,60 +141,152 @@ printf '%s\n' 'Personal Copilot instructions' >"$runtime_copilot"
 assert_file_equals "$canonical_copilot" "$runtime_copilot"
 grep -F '<!-- AEC:COPILOT:BEGIN' "$runtime_copilot" >/dev/null || \
     fail "Copilot managed block was not installed"
-assert_empty "$copilot_home/config.json"
-
-"$custom_target" status --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
-    >"$test_root/copilot-status"
-printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/copilot-status-expected"
-assert_output "$test_root/copilot-status-expected" "$test_root/copilot-status"
-
-# Backup must copy runtime drift into the canonical file and create exactly one
-# source-of-truth commit with the documented subject.
-printf '\n%s\n' 'macOS backup drift' >>"$runtime_copilot"
-"$custom_target" backup --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
-    >"$test_root/copilot-backup"
-grep -E '^committed [0-9a-f]+$' "$test_root/copilot-backup" >/dev/null || \
-    fail "Copilot backup did not report its commit"
-assert_file_equals "$canonical_copilot" "$runtime_copilot"
-[ "$(git -C "$data_repo" log -1 --format=%s)" = 'Backup Copilot instructions' ] || \
-    fail "Copilot backup used an unexpected commit subject"
-
-# Apply must restore the committed canonical bytes without changing Git HEAD.
-head_before_apply=$(git -C "$data_repo" rev-parse HEAD)
-printf '%s\n' 'macOS apply drift' >>"$runtime_copilot"
-"$custom_target" apply --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
-    >"$test_root/copilot-apply"
-printf '%s\n' 'applied' >"$test_root/copilot-apply-expected"
-assert_output "$test_root/copilot-apply-expected" "$test_root/copilot-apply"
-assert_file_equals "$canonical_copilot" "$runtime_copilot"
-[ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || \
-    fail "Copilot apply changed repository HEAD"
-
-"$custom_target" status --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
-    >"$test_root/copilot-final-status"
-assert_output "$test_root/copilot-status-expected" "$test_root/copilot-final-status"
-
-# Exercise repository-only rendering through the Native AOT executable. The
-# sources and enrolled target are committed first; changing the shared source
-# must update only the target, never runtime files or Git history.
+# Ordinary init retains the historical canonical files. Commit Copilot's
+# baseline before authoring the reviewed split; public 2.0 commands require
+# committed portable targets rather than silently using these legacy files.
+git -C "$data_repo" add -- environment/providers/copilot/copilot-instructions.md
+git -C "$data_repo" commit -m 'Record smoke Copilot baseline' >/dev/null
+cp "$codex_home/AGENTS.md" "$test_root/codex-legacy-original"
+cp "$runtime_copilot" "$test_root/copilot-legacy-original"
 platform=macos-arm64
 shared_source="$data_repo/environment/shared/instructions.md"
 platform_source="$data_repo/environment/platforms/$platform/policy.md"
-provider_source="$data_repo/environment/providers/codex/overlay.md"
-rendered_target="$data_repo/environment/targets/$platform/codex/AGENTS.md"
 mkdir -p "$(dirname "$shared_source")" "$(dirname "$platform_source")"
 printf '%s\n' 'Shared approval.' >"$shared_source"
 printf '%s\n' 'Local paths.' >"$platform_source"
-printf '%s\n' 'Codex models.' >"$provider_source"
+printf '%s\n' 'Codex models.' >"$data_repo/environment/providers/codex/overlay.md"
+printf '%s\n' 'Copilot tools.' >"$data_repo/environment/providers/copilot/overlay.md"
 git -C "$data_repo" add -- environment/shared/instructions.md \
-    "environment/platforms/$platform/policy.md" environment/providers/codex/overlay.md
+    "environment/platforms/$platform/policy.md" environment/providers/codex/overlay.md \
+    environment/providers/copilot/overlay.md
 git -C "$data_repo" commit -m 'Author smoke instruction sources' >/dev/null
-"$custom_target" init --repo "$data_repo" --codex-home "$codex_home" --enroll-shared \
-    >"$test_root/enroll-output"
-printf 'enrolled environment/targets/%s/codex/AGENTS.md\n' "$platform" >"$test_root/enroll-expected"
-assert_output "$test_root/enroll-expected" "$test_root/enroll-output"
-git -C "$data_repo" add -- "environment/targets/$platform/codex/AGENTS.md"
-git -C "$data_repo" commit -m 'Enroll smoke Codex target' >/dev/null
+
+# Keep provider selection in one place so both Native AOT lifecycle cases
+# execute the same commands, always with explicit disposable repo/home paths.
+run_provider() {
+    case "$1" in
+        codex) shift; "$custom_target" "$@" --repo "$data_repo" --codex-home "$codex_home" ;;
+        copilot) shift; "$custom_target" "$@" --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" ;;
+    esac
+}
+
+# Enrollment writes only one target and never deploys or commits it. Review
+# and commit that target before enrolling the next provider.
+for provider in codex copilot; do
+    case "$provider" in
+        codex) instruction_file=AGENTS.md ;;
+        copilot) instruction_file=copilot-instructions.md ;;
+    esac
+    target_relative="environment/targets/$platform/$provider/$instruction_file"
+    head_before_enroll=$(git -C "$data_repo" rev-parse HEAD)
+    run_provider "$provider" init --enroll-shared >"$test_root/enroll-output"
+    printf 'enrolled %s\n' "$target_relative" >"$test_root/enroll-expected"
+    assert_output "$test_root/enroll-expected" "$test_root/enroll-output"
+    [ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_enroll" ] || fail "enrollment committed"
+    git -C "$data_repo" diff --cached --quiet || fail "enrollment staged changes"
+    assert_file_equals "$test_root/codex-legacy-original" "$codex_home/AGENTS.md"
+    assert_file_equals "$test_root/copilot-legacy-original" "$runtime_copilot"
+    if [ "$provider" = codex ]; then
+        assert_empty "$data_repo/environment/targets/$platform/copilot"
+    fi
+    git -C "$data_repo" add -- "$target_relative"
+    git -C "$data_repo" commit -m "Enroll smoke $provider target" >/dev/null
+done
+
+for provider in codex copilot; do
+    case "$provider" in
+        codex)
+            runtime="$codex_home/AGENTS.md"
+            instruction_file=AGENTS.md
+            original_line='Codex models.'
+            updated_line='Codex models updated.'
+            commit_subject='Backup portable Codex environment'
+            ;;
+        copilot)
+            runtime="$runtime_copilot"
+            instruction_file=copilot-instructions.md
+            original_line='Copilot tools.'
+            updated_line='Copilot tools updated.'
+            commit_subject='Backup portable instructions'
+            ;;
+    esac
+    target_relative="environment/targets/$platform/$provider/$instruction_file"
+    overlay_relative="environment/providers/$provider/overlay.md"
+    head_before_apply=$(git -C "$data_repo" rev-parse HEAD)
+    run_provider "$provider" apply >"$test_root/apply-output"
+    printf '%s\n' applied >"$test_root/apply-expected"
+    assert_output "$test_root/apply-expected" "$test_root/apply-output"
+    [ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || fail "initial apply changed HEAD"
+    run_provider "$provider" status >"$test_root/status-output"
+    if [ "$provider" = codex ]; then
+        printf '%s\n' 'codex/AGENTS.md   in_sync' >"$test_root/status-expected"
+        printf '%s\n' 'codex/config.toml in_sync' >>"$test_root/status-expected"
+    else
+        printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/status-expected"
+    fi
+    assert_output "$test_root/status-expected" "$test_root/status-output"
+
+    # Change exactly one authored provider section, leaving all markers intact.
+    # Command substitution removes awk's final newline: rendered targets end
+    # at their last marker, and extra outside-section bytes are not attributable.
+    changed_runtime=$(awk -v before="$original_line" -v after="$updated_line" \
+        '$0 == before { $0 = after } { print }' "$runtime")
+    printf '%s' "$changed_runtime" >"$runtime"
+    cp "$runtime" "$test_root/$provider-runtime-before-backup"
+    head_before_backup=$(git -C "$data_repo" rev-parse HEAD)
+    run_provider "$provider" backup >"$test_root/backup-output"
+    printf 'committed %s\n' "$(git -C "$data_repo" rev-parse HEAD)" >"$test_root/backup-expected"
+    assert_output "$test_root/backup-expected" "$test_root/backup-output"
+    [ "$(git -C "$data_repo" log -1 --format=%s)" = "$commit_subject" ] || fail "unexpected backup subject"
+    [ "$(git -C "$data_repo" rev-parse HEAD^)" = "$head_before_backup" ] || fail "backup did not create one commit"
+    printf '%s\n' "$updated_line" >"$test_root/overlay-expected"
+    assert_file_equals "$test_root/overlay-expected" "$data_repo/$overlay_relative"
+    printf '%s\n' "$overlay_relative" "$target_relative" >"$test_root/backup-paths-expected"
+    git -C "$data_repo" diff-tree --no-commit-id --name-only -r HEAD >"$test_root/backup-paths"
+    assert_output "$test_root/backup-paths-expected" "$test_root/backup-paths"
+    assert_file_equals "$test_root/$provider-runtime-before-backup" "$runtime"
+
+    # Backup does not rewrite the runtime's last-applied digest. Status must
+    # report drift until apply refreshes that block from the new committed target.
+    status_exit=0
+    run_provider "$provider" status >"$test_root/status-output" || status_exit=$?
+    [ "$status_exit" = 2 ] || fail "backup did not leave expected digest drift"
+    sed 's/ in_sync$/ different/' "$test_root/status-expected" >"$test_root/status-drift-expected"
+    if [ "$provider" = codex ]; then
+        printf '%s\n' 'codex/AGENTS.md   different' 'codex/config.toml in_sync' >"$test_root/status-drift-expected"
+    fi
+    assert_output "$test_root/status-drift-expected" "$test_root/status-output"
+    run_provider "$provider" apply >"$test_root/apply-output"
+    assert_output "$test_root/apply-expected" "$test_root/apply-output"
+    run_provider "$provider" status >"$test_root/status-output"
+    assert_output "$test_root/status-expected" "$test_root/status-output"
+    cp "$runtime" "$test_root/$provider-runtime-after-backup"
+
+    # Explicit apply replaces drift from committed portable data, not from
+    # the preserved historical provider file. It never commits runtime writes.
+    printf '\n%s\n' 'macOS apply drift' >>"$runtime"
+    head_before_apply=$(git -C "$data_repo" rev-parse HEAD)
+    run_provider "$provider" apply >"$test_root/apply-output"
+    assert_output "$test_root/apply-expected" "$test_root/apply-output"
+    assert_file_equals "$test_root/$provider-runtime-after-backup" "$runtime"
+    [ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || fail "apply changed HEAD"
+    run_provider "$provider" status >"$test_root/status-output"
+    assert_output "$test_root/status-expected" "$test_root/status-output"
+    run_provider "$provider" backup >"$test_root/backup-again-output"
+    printf '%s\n' unchanged >"$test_root/unchanged-expected"
+    assert_output "$test_root/unchanged-expected" "$test_root/backup-again-output"
+    run_provider "$provider" apply >"$test_root/apply-again-output"
+    assert_output "$test_root/unchanged-expected" "$test_root/apply-again-output"
+    [ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || fail "idempotent commands changed HEAD"
+done
+assert_file_equals "$test_root/codex-legacy-original" "$data_repo/environment/providers/codex/AGENTS.md"
+assert_file_equals "$test_root/copilot-legacy-original" "$canonical_copilot"
+assert_file_equals "$test_root/codex-config-original" "$codex_home/config.toml"
+assert_file_equals "$test_root/copilot-config-original" "$copilot_home/config.json"
+[ -z "$(git -C "$data_repo" status --porcelain)" ] || fail "lifecycle left repository changes"
+
+# Repository-only render updates both enrolled targets after a shared edit,
+# never runtime files, the Git index, or history. No other platform is invented.
 
 cp "$codex_home/AGENTS.md" "$test_root/codex-runtime-before-render"
 cp "$codex_home/config.toml" "$test_root/config-before-render"
@@ -198,17 +294,24 @@ cp "$runtime_copilot" "$test_root/copilot-runtime-before-render"
 head_before_render=$(git -C "$data_repo" rev-parse HEAD)
 printf '%s\n' 'Shared approval updated.' >"$shared_source"
 "$custom_target" render --repo "$data_repo" >"$test_root/render-output"
-printf 'rendered environment/targets/%s/codex/AGENTS.md\n' "$platform" >"$test_root/render-expected-output"
+printf 'rendered environment/targets/%s/codex/AGENTS.md\nrendered environment/targets/%s/copilot/copilot-instructions.md\n' \
+    "$platform" "$platform" >"$test_root/render-expected-output"
 assert_output "$test_root/render-expected-output" "$test_root/render-output"
-printf '%s\n' \
-    '<!-- AEC:SOURCE:SHARED:BEGIN -->' 'Shared approval updated.' '' \
-    '<!-- AEC:SOURCE:SHARED:END -->' '' \
-    '<!-- AEC:SOURCE:PLATFORM:BEGIN -->' 'Local paths.' '' \
-    '<!-- AEC:SOURCE:PLATFORM:END -->' '' \
-    '<!-- AEC:SOURCE:PROVIDER:BEGIN -->' 'Codex models.' '' \
-    >"$test_root/render-expected-content"
-printf '%s' '<!-- AEC:SOURCE:PROVIDER:END -->' >>"$test_root/render-expected-content"
-assert_file_equals "$test_root/render-expected-content" "$rendered_target"
+for provider in codex copilot; do
+    case "$provider" in
+        codex) instruction_file=AGENTS.md; overlay='Codex models updated.' ;;
+        copilot) instruction_file=copilot-instructions.md; overlay='Copilot tools updated.' ;;
+    esac
+    printf '%s\n' \
+        '<!-- AEC:SOURCE:SHARED:BEGIN -->' 'Shared approval updated.' '' \
+        '<!-- AEC:SOURCE:SHARED:END -->' '' \
+        '<!-- AEC:SOURCE:PLATFORM:BEGIN -->' 'Local paths.' '' \
+        '<!-- AEC:SOURCE:PLATFORM:END -->' '' \
+        '<!-- AEC:SOURCE:PROVIDER:BEGIN -->' "$overlay" '' \
+        >"$test_root/render-expected-content"
+    printf '%s' '<!-- AEC:SOURCE:PROVIDER:END -->' >>"$test_root/render-expected-content"
+    assert_file_equals "$test_root/render-expected-content" "$data_repo/environment/targets/$platform/$provider/$instruction_file"
+done
 "$custom_target" render --repo "$data_repo" >"$test_root/render-again-output"
 printf '%s\n' unchanged >"$test_root/render-again-expected"
 assert_output "$test_root/render-again-expected" "$test_root/render-again-output"
@@ -218,7 +321,14 @@ git -C "$data_repo" diff --cached --quiet || fail "render staged repository chan
 assert_file_equals "$test_root/codex-runtime-before-render" "$codex_home/AGENTS.md"
 assert_file_equals "$test_root/config-before-render" "$codex_home/config.toml"
 assert_file_equals "$test_root/copilot-runtime-before-render" "$runtime_copilot"
-assert_empty "$data_repo/environment/targets/$platform/copilot"
+assert_file_equals "$test_root/copilot-config-original" "$copilot_home/config.json"
+printf '%s\n' environment/shared/instructions.md \
+    "environment/targets/$platform/codex/AGENTS.md" \
+    "environment/targets/$platform/copilot/copilot-instructions.md" >"$test_root/render-paths-expected"
+git -C "$data_repo" diff --name-only >"$test_root/render-paths"
+assert_output "$test_root/render-paths-expected" "$test_root/render-paths"
+[ "$(find "$data_repo/environment/targets" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = 1 ] || \
+    fail "render created an unused platform"
 
 # A small fake binary makes the generated script's all-or-nothing cleanup testable
 # without changing the actual personal Codex environment.
