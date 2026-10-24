@@ -81,7 +81,7 @@ public sealed class PortableCodexBackupPreviewTests
         var instructions = File.ReadAllBytes(layout.RuntimePath);
         var config = File.ReadAllBytes(runtimeConfig);
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<MissingRuntimePersonalityException>(() =>
             PortableCodexBackupPreview.Create(layout.Repository, layout.ProviderHome));
 
         Assert.Contains("does not declare root `personality`", error.Message,
@@ -98,7 +98,7 @@ public sealed class PortableCodexBackupPreviewTests
         var head = layout.Head();
         var instructions = File.ReadAllBytes(layout.RuntimePath);
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<MissingRuntimePersonalityException>(() =>
             PortableCodexBackupPreview.Create(layout.Repository, layout.ProviderHome));
 
         Assert.Contains("does not declare root `personality`", error.Message,
