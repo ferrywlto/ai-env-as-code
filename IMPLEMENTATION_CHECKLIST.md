@@ -613,10 +613,41 @@
   binary/skill remain untouched. Ferry reviewed and approved the checkpoint and
   verification notes; ticket #2 milestone 18 is complete.
 
-Immediate next work: propose the separately approved Linux ARM64 lifecycle slice
-(milestone 19). The passing Windows checkpoint and its verification notes are
-reviewed and approved for publication. No new workflow retry or Linux
-implementation is authorized yet.
+- [x] Implement the approved Linux ARM64 portable lifecycle update for ticket #2
+  milestone 19. The existing isolated shell script now mirrors the verified
+  two-provider flow: committed authored split, separate enrollment/target commits,
+  apply/status, exact-path one-section backup, digest drift/refresh, idempotence,
+  and both-target repository-only render. Uninstall preserves the last-applied
+  authored target, the entire data-file tree (including dirty rendered targets),
+  Git HEAD/index/diff, and the other provider's runtime/config/skill. Existing
+  installer refusal checks and the no-config.json-on-init assertion remain.
+  The manual Linux workflow now includes matching portable focused tests and a
+  separate two-minute-bounded migration rehearsal. No production source changed.
+- [x] Complete local Linux-slice checks. Shell syntax, workflow YAML/manual
+  trigger/empty permissions/ARM64 runner checks, all 11 referenced test classes,
+  bounded migration/native step ordering, whitespace, and independent read-only
+  review passed. Rebuilt local Release focused lifecycle tests passed 110/110
+  in 2m23s; separate legacy migration passed 1/1 in 26s, with the 30-second and
+  two-minute guards respectively. Completed TRX reports under
+  `artifacts/linux-lifecycle-20261025/` show zero failures, skips, timeouts, or
+  aborts. Compilation succeeded without warnings. These are macOS managed-code
+  results, not Linux Native AOT or actual harness execution; the Linux shell
+  script itself was syntax-checked, not executed on macOS.
+- [x] Obtain review/approval before commit, push, and Linux ARM64 dispatch. The
+  current 2.0 native lifecycle remains unverified on Linux; historical passes
+  cover the old sequence only. Keep milestone 19 open until runner proof/review.
+
+- [x] Pass the approved full pre-push Debug regression: 639/639 in 17m02s,
+  with zero failures, skips, timeouts, or aborts. The completed TRX report is
+  under `artifacts/linux-prepush-20261025/debug/`. Product/test compilation
+  succeeded without warnings; whitespace and independent pre-push review passed.
+
+Ferry reviewed the Linux update and approved this full Debug gate, followed by
+semantic commit, push, and explicit Linux ARM64 workflow dispatch on a pass.
+Immediate next work: publish the reviewed checkpoint, verify the remote SHA,
+and inspect that manual runner result. Personal runtime/data, installed binary,
+and installed skills remain untouched. No automatic retry or unrelated
+implementation is authorized.
 Provider-first CLI work remains deferred; full Release regression remains a
 release gate rather than part of this pre-push Debug verification.
 

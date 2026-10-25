@@ -19,14 +19,23 @@ jobs:
           git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
           git fetch --depth 1 origin "$GITHUB_SHA"
           git checkout --detach FETCH_HEAD
-      - name: Test shared-instruction rendering on Linux ARM64
+      - name: Test portable instruction lifecycle on Linux ARM64
         shell: bash
         run: |
           set -eu
           dotnet test tests/Aec.Tests/Aec.Tests.csproj \
             --configuration Release \
-            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests' \
+            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests|FullyQualifiedName~PortableCodexStatusCommandTests|FullyQualifiedName~PortableCopilotStatusCommandTests|FullyQualifiedName~PortableCodexApplyCommandTests|FullyQualifiedName~PortableCopilotApplyCommandTests|FullyQualifiedName~PortableCodexBackupCommandTests|FullyQualifiedName~PortableCopilotBackupCommandTests' \
             --blame-hang --blame-hang-timeout 30s --blame-hang-dump-type none
+      # Git-heavy migration needs more headroom than the smaller focused tests.
+      - name: Rehearse reviewed legacy migration
+        shell: bash
+        run: |
+          set -eu
+          dotnet test tests/Aec.Tests/Aec.Tests.csproj \
+            --configuration Release --no-build --no-restore \
+            --filter 'FullyQualifiedName~LegacyMigrationTests' \
+            --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
       - name: Install Native AOT build prerequisites
         shell: bash
         run: |
@@ -47,6 +56,6 @@ jobs:
           help=$("$artifact" help)
           printf '%s\n' "$help" | grep -Fq 'aec init'
           printf '%s\n' "$help"
-      - name: Test isolated install, Copilot lifecycle, and uninstall
+      - name: Test isolated install, both portable providers, render, and uninstall
         shell: bash
         run: sh ./tests/install-linux-arm64.sh

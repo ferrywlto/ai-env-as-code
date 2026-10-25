@@ -1235,8 +1235,19 @@ On an ARM64 Ubuntu 24.04 machine, install Git, the .NET 10 SDK, `clang`, and
 The script publishes the ignored `artifacts/aec-linux-arm64/aec` executable.
 The manual-only `.github/workflows/linux-arm64-smoke.yml` workflow builds on an
 Ubuntu 24.04 ARM64 runner, checks `aec version` and `aec help`, and exercises the
-isolated installer plus complete Copilot AEC lifecycle. All of those checks
-[passed on that runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284376).
+isolated installer plus both providers' portable 2.0 lifecycle. The sequence is
+shown in the [lifecycle diagram](architecture.md#platform-lifecycle-verification-boundary):
+reviewed sources, separate enrollment/target commits, apply/status, exact-path
+single-section backup, digest refresh, and both-target repository-only render.
+Uninstall preserves the last-applied authored sections, all data files (including
+unapplied render changes), and the other provider's runtime/config/skill.
+
+The workflow runs focused lifecycle tests and a separate, two-minute-bounded
+legacy migration rehearsal before the native build. The updated 2.0 sequence
+awaits its Linux runner pass; local macOS checks are not Linux-native proof.
+The [historical runner pass](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284376)
+covers the older single-file Copilot flow, not this update. Neither is proof of
+actual Codex/Copilot harness integration.
 
 After building, install the executable for the current user:
 

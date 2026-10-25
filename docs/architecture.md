@@ -116,10 +116,10 @@ flowchart LR
     Refresh --> Render[Shared edit; render both targets only]
 ```
 
-The macOS and Windows smoke scripts keep installer/uninstaller checks in the same
+The macOS, Windows, and Linux smoke scripts keep installer/uninstaller checks in the same
 disposable lifecycle. They preserve legacy files and unrelated runtime config,
 check exact backup commit paths, and verify render changes neither runtime nor
-Git history. Windows also checks that uninstall preserves the previously applied
+Git history. Windows and Linux also check that uninstall preserves the previously applied
 authored sections, all data files, and the other provider's runtime/skill.
 Each manual workflow builds Native AOT before running its script. The macOS
 managed-DLL fallback checks shell sequencing only; neither that nor OS-runner
@@ -128,6 +128,9 @@ lifecycle/migration tests, Native AOT build, and isolated installer lifecycle in
 [run 40201089188](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40201089188)
 at `8878d04`. The prior clone-attachment failure was resolved by preserving
 checkout bytes in the test fixtures, not by relaxing production provenance checks.
+The Linux 2.0 script/workflow now follows the same two-provider lifecycle; its
+updated ARM64 runner/native execution is pending. Local macOS managed tests and
+shell/YAML checks do not establish Linux-native or real-harness behavior.
 
 ## Classes: source composition and runtime inspection
 
