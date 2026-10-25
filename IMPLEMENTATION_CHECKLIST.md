@@ -523,7 +523,7 @@
   Uninstall preserves applied authored sections, the data file tree, and the
   other provider's runtime/config/skill. The manual Windows workflow matches
   macOS's focused scopes and separate bounded migration rehearsal.
-- [ ] Validate the updated Windows sequence on its Windows x64 runner before
+- [x] Validate the updated Windows sequence on its Windows x64 runner before
   marking milestone 18 complete. PowerShell is not installed on the local macOS
   host; local PowerShell parsing and native execution remain unavailable. Workflow
   YAML/manual-trigger/permissions/runner checks, all 11 referenced test-class
@@ -570,7 +570,7 @@
   commits are published. Explicitly dispatch and verify Windows run
   [40141526871](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40141526871)
   at `91ce9845e92e7258c2c8c74c6e5723e72a39f0c1` on `development/2.0`.
-- [ ] Resolve the current Windows managed verification failure before proceeding.
+- [x] Resolve the Windows managed verification failure before proceeding.
   The run completed 110 focused tests: 108 passed, 2 failed, none skipped or
   aborted (4m20s test duration). Both failures are
   `SharedEnrollmentTests.ConfirmedCloneCanEnrollWithoutRewritingCanonicalRepositoryPath`
@@ -599,12 +599,24 @@
   `artifacts/clone-byte-repair-20261025/debug/`; disposable reproduction evidence
   is in `artifacts/clone-byte-repair-20261025/reproduction.md`. Compilation and
   whitespace checks passed without warnings/errors.
+- [x] Publish the reviewed clone repair as semantic commit `8878d04` and verify
+  local/remote SHA `8878d04232ab51755979ff49b23babc55d21da65`. Independent
+  read-only readiness review found no blocker. Explicit Windows
+  [run 40201089188](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40201089188)
+  at that commit completed successfully in 8m1s on 2026-10-25: focused lifecycle
+  110/110 (4m31s), legacy migration 1/1 (58s), Native AOT build, version/help,
+  and isolated installer/both-provider/render/uninstaller lifecycle all passed.
+  Neither test scope skipped tests; no failure, abort, or timeout was reported.
+  The previously failing attachment cases now pass without weakening production
+  provenance checks. This proves current Windows runner/native behavior, not
+  installed Codex/Copilot harness integration. Personal runtime/data and installed
+  binary/skill remain untouched. Ferry reviewed and approved the checkpoint and
+  verification notes; ticket #2 milestone 18 is complete.
 
-Ferry reviewed and approved this repair plus its semantic commit, push, and new
-manual Windows workflow run. Immediate next work: publish the reviewed checkpoint,
-verify the remote commit, and inspect the explicitly dispatched Windows result.
-Both local verification gates have passed, but milestone 18 stays open until
-Windows execution and review pass. No unrelated implementation is authorized.
+Immediate next work: propose the separately approved Linux ARM64 lifecycle slice
+(milestone 19). The passing Windows checkpoint and its verification notes are
+reviewed and approved for publication. No new workflow retry or Linux
+implementation is authorized yet.
 Provider-first CLI work remains deferred; full Release regression remains a
 release gate rather than part of this pre-push Debug verification.
 

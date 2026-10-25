@@ -1177,16 +1177,15 @@ backup/apply/status checks, and shared rendering of both enrolled targets.
 Uninstall preserves the applied authored sections, data files, and Copilot's
 runtime/config/skill. See [the lifecycle diagram](architecture.md#platform-lifecycle-verification-boundary).
 
-The updated Windows 2.0 sequence awaits a new runner pass; the historical runs
-linked here do not validate it. Its [first current run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40141526871)
-at `91ce984` passed 108/110 managed tests and failed both provider cases of the
-clone-attachment enrollment test. Native build, dispatch smoke, and installer
-lifecycle steps were not reached. A disposable local reproduction of Git newline
-conversion reached the same attachment rejection path for both providers despite
-a clean Git diff.
-The clone fixtures now disable conversion before checkout and report application
-errors on failure; a new Windows run is still required to confirm the runner fix.
-Current verification details are in `IMPLEMENTATION_CHECKLIST.md`.
+The updated Windows 2.0 sequence passed in
+[run 40201089188](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40201089188)
+at `8878d04`: lifecycle tests 110/110, migration rehearsal 1/1, Native AOT build,
+version/help, and the complete isolated installer lifecycle. Neither test scope
+skipped tests. This is Windows runner/native proof, not real-harness verification.
+The [earlier run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40141526871)
+failed two clone-attachment tests; preserving committed bytes before clone checkout
+resolved them without weakening production checks. Detailed evidence is indexed
+in `IMPLEMENTATION_CHECKLIST.md`.
 The workflow keeps the Git-heavy migration
 rehearsal separate with a two-minute hang guard; smaller tests retain 30 seconds.
 

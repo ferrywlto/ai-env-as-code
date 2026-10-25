@@ -123,9 +123,11 @@ Git history. Windows also checks that uninstall preserves the previously applied
 authored sections, all data files, and the other provider's runtime/skill.
 Each manual workflow builds Native AOT before running its script. The macOS
 managed-DLL fallback checks shell sequencing only; neither that nor OS-runner
-smoke proves a real harness integration. The Windows 2.0 update awaits a new
-runner pass: its first run failed two clone-attachment managed cases before the
-Native AOT build or installer script ran. Source review is not execution evidence.
+smoke proves a real harness integration. The Windows 2.0 sequence passed managed
+lifecycle/migration tests, Native AOT build, and isolated installer lifecycle in
+[run 40201089188](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40201089188)
+at `8878d04`. The prior clone-attachment failure was resolved by preserving
+checkout bytes in the test fixtures, not by relaxing production provenance checks.
 
 ## Classes: source composition and runtime inspection
 
