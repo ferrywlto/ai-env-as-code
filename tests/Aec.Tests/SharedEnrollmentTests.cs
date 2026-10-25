@@ -63,8 +63,7 @@ public sealed class SharedEnrollmentTests
         var pulled = Path.Combine(Path.GetDirectoryName(layout.Repository)!, "pulled-data");
         var secondHome = Path.Combine(Path.GetDirectoryName(layout.Repository)!,
             $"second-{provider}-home");
-        Assert.Equal(0, TestGit.Run(Path.GetDirectoryName(layout.Repository)!, "clone",
-            "--quiet", layout.Repository, pulled).ExitCode);
+        CloneWithoutConversion(layout.Repository, pulled);
         Directory.CreateDirectory(secondHome);
         var canonicalRelativePath = provider == "codex"
             ? AecApplication.SourceRelativePath
@@ -77,7 +76,7 @@ public sealed class SharedEnrollmentTests
                 "--force-path-change")
             : TestApplication.Run("init", "--repo", pulled, "--provider=copilot",
                 "--copilot-home", secondHome, "--force-path-change");
-        Assert.Equal(0, attached.ExitCode);
+        Assert.True(attached.ExitCode == 0, attached.Error);
         var runtimePath = Path.Combine(secondHome, provider == "codex"
             ? "AGENTS.md" : "copilot-instructions.md");
         var runtimeBefore = File.ReadAllBytes(runtimePath);
@@ -89,7 +88,7 @@ public sealed class SharedEnrollmentTests
 
         var enrollment = EnrollPulled();
 
-        Assert.Equal(0, enrollment.ExitCode);
+        Assert.True(enrollment.ExitCode == 0, enrollment.Error);
         Assert.Equal($"enrolled {layout.TargetRelativePath(provider)}{Environment.NewLine}",
             enrollment.Output);
         Assert.True(File.Exists(Path.Combine(pulled, layout.TargetRelativePath(provider))));
@@ -123,8 +122,7 @@ public sealed class SharedEnrollmentTests
         var pulled = Path.Combine(Path.GetDirectoryName(layout.Repository)!, "pulled-data");
         var secondHome = Path.Combine(Path.GetDirectoryName(layout.Repository)!,
             $"second-{provider}-home");
-        Assert.Equal(0, TestGit.Run(Path.GetDirectoryName(layout.Repository)!, "clone",
-            "--quiet", layout.Repository, pulled).ExitCode);
+        CloneWithoutConversion(layout.Repository, pulled);
         Directory.CreateDirectory(secondHome);
         File.Copy(provider == "codex" ? layout.CodexRuntime : layout.CopilotRuntime,
             Path.Combine(secondHome, provider == "codex" ? "AGENTS.md" :
@@ -227,6 +225,15 @@ public sealed class SharedEnrollmentTests
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains(message, result.Error, StringComparison.Ordinal);
+    }
+
+    private static void CloneWithoutConversion(string source, string destination)
+    {
+        // Clone does not inherit source-local config. Disable conversion before
+        // checkout so a clean Windows clone also matches committed bytes exactly.
+        var clone = TestGit.Run(Path.GetDirectoryName(source)!, "clone", "--quiet",
+            "--config", "core.autocrlf=false", source, destination);
+        Assert.True(clone.ExitCode == 0, clone.Error);
     }
 
     private sealed class EnrollmentLayout : IDisposable

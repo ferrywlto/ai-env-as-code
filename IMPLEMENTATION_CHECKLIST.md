@@ -525,7 +525,7 @@
   macOS's focused scopes and separate bounded migration rehearsal.
 - [ ] Validate the updated Windows sequence on its Windows x64 runner before
   marking milestone 18 complete. PowerShell is not installed on the local macOS
-  host; no parser, Windows test, or native execution pass is claimed. Workflow
+  host; local PowerShell parsing and native execution remain unavailable. Workflow
   YAML/manual-trigger/permissions/runner checks, all 11 referenced test-class
   checks, whitespace checks, and independent read-only review passed locally. At
   that initial source-only checkpoint no dependency installation, personal
@@ -565,11 +565,46 @@
   focused Debug scope passed 8/8 in 8s. The full Debug gate from that same build
   passed 639/639 as recorded above. The repair was committed as `d55ba51`, separate
   from the Windows smoke update.
+- [x] Commit/push the approved Windows smoke update as `91ce984`, after the full
+  Debug gate passed. The branch is synchronized with origin; both semantic
+  commits are published. Explicitly dispatch and verify Windows run
+  [40141526871](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40141526871)
+  at `91ce9845e92e7258c2c8c74c6e5723e72a39f0c1` on `development/2.0`.
+- [ ] Resolve the current Windows managed verification failure before proceeding.
+  The run completed 110 focused tests: 108 passed, 2 failed, none skipped or
+  aborted (4m20s test duration). Both failures are
+  `SharedEnrollmentTests.ConfirmedCloneCanEnrollWithoutRewritingCanonicalRepositoryPath`
+  (Codex/Copilot), at the attachment exit-code assertion on line 80, before
+  enrollment. Legacy migration, Native AOT build, version/help, and the PowerShell
+  installer lifecycle were skipped; none is verified by this run. No automatic
+  rerun or source fix was made.
+  The runner's effective config and `attached.Error` were not logged, so its
+  exact cause still needs a new runner result; the reproduced mechanism follows.
+- [x] Reproduce clone newline conversion under the approved diagnostic slice.
+  Disposable local Git config with `core.autocrlf=true` produced clean Git status
+  but different committed/raw file hashes. Both public provider attachment
+  commands exited 1 with `bytes do not exactly match the committed Git blob`.
+  New clones with `--config core.autocrlf=false` attached successfully for both
+  providers under the same parent config, retaining clean repository status.
+  No personal installation, runtime, or data repository was touched.
+- [x] Repair both enrollment clone fixtures with conversion disabled before
+  checkout, and include Git/application errors in success assertions. Document
+  exact-byte cloning and safe fresh-clone guidance. Production provenance guards
+  remain unchanged; no tests were removed. The rebuilt focused Debug scope passed
+  16/16 (enrollment and both-provider Git round trips) in 1m22s, with no failures
+  or skips. Its completed TRX is under
+  `artifacts/clone-byte-repair-20261025/focused/`. The same rebuilt binaries passed
+  full Debug verification 639/639 in 14m49s, with zero failures, skips, timeouts,
+  or aborts. The completed report is under
+  `artifacts/clone-byte-repair-20261025/debug/`; disposable reproduction evidence
+  is in `artifacts/clone-byte-repair-20261025/reproduction.md`. Compilation and
+  whitespace checks passed without warnings/errors.
 
-Immediate next work: complete the approved Windows smoke commit, push the
-verified branch, and explicitly dispatch its manual Windows workflow. Milestone
-18 stays open until current runner evidence and Ferry review pass. The test-only
-repair and Windows smoke changes remain separate semantic commits.
+Ferry reviewed and approved this repair plus its semantic commit, push, and new
+manual Windows workflow run. Immediate next work: publish the reviewed checkpoint,
+verify the remote commit, and inspect the explicitly dispatched Windows result.
+Both local verification gates have passed, but milestone 18 stays open until
+Windows execution and review pass. No unrelated implementation is authorized.
 Provider-first CLI work remains deferred; full Release regression remains a
 release gate rather than part of this pre-push Debug verification.
 

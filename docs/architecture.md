@@ -86,13 +86,16 @@ guess it or delete the historical provider files and manual backups.
 ```mermaid
 flowchart LR
     A[(A: committed portable target)] -->|approved Git push| Remote[(Git remote)]
-    Remote -->|explicit clone or fetch + fast-forward| B[(B: same committed target)]
+    Remote -->|explicit exact-byte clone or fetch + fast-forward| B[(B: same committed target)]
     A -->|apply with A binding| RuntimeA[A runtime: A checkout path]
     B -->|confirmed init; apply with B binding| RuntimeB[B runtime: B checkout path]
 ```
 
 Git transfers portable source and target history. Init/apply generate each
 runtime's local repository binding; they do not rewrite a shared path in Git.
+Checkout must preserve committed bytes: clone with `--config core.autocrlf=false`
+before checkout, without content-changing filters. Clean Git diff alone is not
+byte-provenance proof; see the [clone instructions](reference.md#sharing-migrated-instructions-between-machines).
 Status compares runtime with the local commit, so remote freshness requires the
 separate tip check and approved Git transport. The shared round-trip test runs
 Codex and Copilot cases against a local bare remote and two checkouts on one
@@ -121,7 +124,8 @@ authored sections, all data files, and the other provider's runtime/skill.
 Each manual workflow builds Native AOT before running its script. The macOS
 managed-DLL fallback checks shell sequencing only; neither that nor OS-runner
 smoke proves a real harness integration. The Windows 2.0 update awaits a new
-runner pass; source review is not execution evidence.
+runner pass: its first run failed two clone-attachment managed cases before the
+Native AOT build or installer script ran. Source review is not execution evidence.
 
 ## Classes: source composition and runtime inspection
 

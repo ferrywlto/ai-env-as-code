@@ -233,7 +233,7 @@ execution of a historical binary, Native AOT smoke, or real-harness verification
 ```mermaid
 flowchart LR
     A["A: review source edit<br/>render and commit"] -->|"approved Git push"| Remote[(Git remote)]
-    Remote -->|"B: explicit clone or fetch + fast-forward"| B["B: local committed target"]
+    Remote -->|"B: exact-byte clone<br/>or fetch + fast-forward"| B["B: local committed target"]
     B --> Confirm["First attachment: confirm local checkout path"]
     Confirm --> Apply["aec apply, then status"]
     Apply --> Runtime["B runtime: shared target<br/>plus B's local AEC block"]
@@ -242,7 +242,14 @@ flowchart LR
 Use the migration sequence above to publish a committed enrolled target from A.
 Git may use any host; AEC does not perform the transport. On another machine:
 
-1. Clone the selected data repository to its chosen absolute path. Install/select
+1. Clone the selected data repository to its chosen absolute path, preserving
+   committed bytes: `git clone --config core.autocrlf=false REMOTE ABSOLUTE_PATH`.
+   This sets local configuration **before checkout**; a source repository's local
+   config does not travel with a clone. AEC rejects newline/filter transformations
+   even when `git status` reports clean. Do not enable content-changing checkout
+   filters for managed files. For an existing converted checkout, preserve any
+   local work and use a fresh clone; changing the setting alone does not restore
+   already-converted bytes. Install/select
    the selected local harness home separately; a pulled target does not create
    or activate it.
 2. Run `aec init --repo ABSOLUTE_PATH` for Codex, or add `--provider=copilot` for
@@ -1171,7 +1178,16 @@ Uninstall preserves the applied authored sections, data files, and Copilot's
 runtime/config/skill. See [the lifecycle diagram](architecture.md#platform-lifecycle-verification-boundary).
 
 The updated Windows 2.0 sequence awaits a new runner pass; the historical runs
-linked here do not validate it. The workflow keeps the Git-heavy migration
+linked here do not validate it. Its [first current run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40141526871)
+at `91ce984` passed 108/110 managed tests and failed both provider cases of the
+clone-attachment enrollment test. Native build, dispatch smoke, and installer
+lifecycle steps were not reached. A disposable local reproduction of Git newline
+conversion reached the same attachment rejection path for both providers despite
+a clean Git diff.
+The clone fixtures now disable conversion before checkout and report application
+errors on failure; a new Windows run is still required to confirm the runner fix.
+Current verification details are in `IMPLEMENTATION_CHECKLIST.md`.
+The workflow keeps the Git-heavy migration
 rehearsal separate with a two-minute hang guard; smaller tests retain 30 seconds.
 
 The installer consumes that artifact and installs per-user by default at
