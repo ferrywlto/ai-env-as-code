@@ -4,6 +4,8 @@ This is the **current implementation**, not a target-state design. The engine,
 the selected `--repo` data repository, and each local harness runtime are
 separate. Git commits in the data repository are the source of truth. The
 class diagrams show the main relationships, not every implementation helper.
+See the [glossary](reference.md#glossary) for capture, preflight, target, preview
+and fixture, including the distinction between rendered targets and target versions.
 
 ## Components
 
@@ -76,10 +78,360 @@ later drift.
 Ordinary init checks the other harness's implicit home before writes and stops
 on a different repository binding. Explicit custom homes are outside that
 cross-harness check in this 2.0 alpha slice.
-The [existing-user migration](reference.md#migrating-an-existing-1x-repository-to-20)
+The [existing-user migration](reference.md#existing-manual-migration--implemented-and-rehearsed)
 uses a reviewed split followed by per-provider enrollment, target commits, and
 approved apply. Classification is a user/skill review step; the engine does not
 guess it or delete the historical provider files and manual backups.
+The [planned interactive migration](reference.md#planned-interactive-command--not-implemented)
+adds an explicitly scoped fast-forward pull and legacy-compatible capture before
+scaffolding, then waits for `DONE` before source commits and enrollment/render/apply.
+It is not implemented or represented as a current component above; ordinary CLI
+commands retain their no-network boundaries. An incomplete invocation restarts
+from preflight, with an explicit Preserve/Overwrite choice for dirty section files.
+
+## Internal migration preflight — no CLI dispatch yet
+
+```mermaid
+flowchart LR
+    Input["Repository + target format"] --> Preflight[MigrationPreflight.Read]
+    Preflight --> History["InitCommand: contained Git metadata<br/>and original initialization history"]
+    Preflight --> Marker["ApplyCommand: committed .aec-version<br/>with exact working/index provenance"]
+    History --> Legacy["No marker: validate current legacy files<br/>then recognize format 1.0"]
+    Marker --> Versions["Validate forward known path<br/>and binary major/minor capability"]
+    Legacy --> Versions
+    Versions --> Snapshot["Return pinned commit + formats<br/>No writes or network"]
+    Snapshot --> Selection[MigrationHarnessSelection.Read]
+    Selection --> Homes["AecApplication implicit home resolvers<br/>CODEX_HOME / COPILOT_HOME or profile defaults"]
+    Homes --> Runtime{"Local instruction file exists?"}
+    Runtime -->|No| Skip["Skip provider; no repository-folder inference"]
+    Runtime -->|Yes| Bindings["Codex/Copilot full-block parsers<br/>Require selected checkout and current platform"]
+    Bindings --> Selected["MigrationHarness: provider, home, runtime path<br/>Recheck pinned HEAD; no writes"]
+```
+
+This helper reuses the original initialization proof without init's clean-tree
+or `main` requirement. Draft sections do not imply completion. Dirty-section and
+remote preflights below are separate internal stages, not a public orchestrator.
+The selector validates local runtime enrollment, not harness installation:
+an existing unbound/malformed file or conflicting checkout/platform stops selection.
+Recognized portable blocks remain selected for incomplete-migration retries; they
+do not prove repository completion or legacy-capture readiness. All-absent homes/files
+return an empty selection, never implicit enrollment from repository data.
+The Git-tracked format marker denotes completed data migration, not the CLI or
+managed-block version. There is no marker writer or public `migrate` route yet.
+
+### Internal dirty-section decision
+
+```mermaid
+flowchart LR
+    Selected["Pinned preflight + selected harnesses"] --> Check[MigrationDirtySections.Read]
+    Check -->|"Unrelated or unsafe changes"| Stop[Stop]
+    Check -->|"Clean"| Unchanged[Unchanged; no prompt]
+    Check -->|"Only eligible section files"| Prompt["Prompt: TextReader / TextWriter"]
+    Prompt -->|"Exactly Preserve or Overwrite"| Choice[Return decision only]
+    Prompt -->|"EOF or cancellation"| Cancel[Cancelled]
+    Prompt -->|"Other input"| Prompt
+```
+
+Eligible paths are the shared instructions, current-platform policy, and selected
+provider overlays—not whole directories. Git status uses NUL records and disables
+optional index writes; committed/indexed kinds, links and ignored sections are
+checked separately. Renames, copies, conflicts, type changes, and other dirty paths
+stop before the prompt. No choice writes or discards content. Later preparation
+must revalidate HEAD and paths before acting; this is not a saved authorization.
+
+### Internal remote preflight
+
+```mermaid
+flowchart LR
+    Pinned["Pinned local commit"] --> Local["MigrationRemotePreflight.Read<br/>Single configured upstream + remote URL"]
+    Local --> Query["GitProcess.ReadRemoteHead<br/>Bounded ls-remote --symref"]
+    Query --> Match{"Checkout = upstream<br/>= advertised default branch?"}
+    Match -->|No| Stop[Stop; never switch branches]
+    Match -->|Yes| Plan["Recheck local HEAD/branch<br/>Return remote + URL + branch ref + advertised tip"]
+```
+
+Missing/ambiguous tracking, local-only remotes, unresolved remote HEAD, detached or
+non-default checkouts, transport failures and timeouts stop. The query disables Git
+terminal prompting and closes child stdin; its 30-second budget includes startup,
+with up to one second to confirm Git exit after timeout termination. Transport
+stderr is not echoed because it may contain credentials. No fetch, pull, checkout
+or ref update occurs. An advertised tip alone proves no ancestry; future pull work
+must revalidate before acting. Tests use local bare remotes, not hosted SSH/HTTPS
+or real-harness integration.
+
+### Internal fetch preparation
+
+```mermaid
+flowchart LR
+    Approved[Approved remote snapshot] --> Before[Revalidate snapshot]
+    Before --> Fetch["Bounded pinned-tip fetch<br/>Objects only; no destination ref"]
+    Fetch --> After[Revalidate snapshot]
+    After --> Compare[Compare actual commit ancestry]
+    Compare --> Result["Equal / Behind / Ahead<br/>Recheck local HEAD and branch"]
+    Compare -->|Diverged| Stop[Stop; never merge]
+```
+
+`MigrationFetchPreparation` compares remote name, configured URL, default branch
+and advertised tip before and after fetching. The URL stays in memory and is not
+echoed in errors. Fetch has a two-minute budget plus up to one second for timeout
+cleanup. An empty refmap and explicit no-tags/no-submodules/no-FETCH_HEAD options
+prevent configured fetch mappings from changing refs or tracking metadata.
+Ancestry checks ignore replacement refs and use the fetched commit, not stale
+tracking refs. Received objects may remain after a later stop; HEAD, refs, index,
+authored files and runtime must remain unchanged. The result is advisory: future
+fast-forward execution must revalidate again. No public migration route, pull,
+merge, push or worktree advancement is added. Disposable local-remotes tests do
+not prove SSH/HTTPS or real-harness integration.
+
+### Internal clean-checkout advancement
+
+```mermaid
+flowchart TD
+    Snapshot["Approved preflight + fetched tip + local enrollment"] --> Fresh[Revalidate configuration, format, enrollment, remote and ancestry]
+    Fresh --> Position{Actual ancestry}
+    Position -->|Equal or ahead| Keep[Keep local HEAD and drafts]
+    Position -->|Behind| Clean{Clean checkout?}
+    Clean -->|No| Stop[Stop; no stash or discard]
+    Clean -->|Yes| Advance["Recheck remote; fast-forward only<br/>to the pinned commit"]
+    Advance --> Validate[Verify exact HEAD, branch, format and enrollment]
+    Keep --> Validate
+    Validate -->|Valid| Ready[Return refreshed preflight]
+    Validate -->|Invalid| Retain["Stop; retain retrieved history<br/>No rollback, capture or apply"]
+```
+
+`MigrationFastForward.Execute` is internal, not a public `migrate` command.
+It reuses the fetch helper's replacement-ref-free ancestry check, but performs
+no fetch itself. Only a behind, clean checkout may move: no merge commit, branch
+switch, reset, autostash, push or runtime write. Dirty-section integration remains
+a later slice. Ignored-file collisions abort rather than being overwritten.
+Per-command Git settings disable hooks, recursive submodule updates, automatic
+line-ending conversion and branch merge defaults without modifying user config.
+Git documents [per-command hook disabling](https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath)
+and [ignored-file collision refusal](https://git-scm.com/docs/git-merge#Documentation/git-merge.txt---no-overwrite-ignore).
+Configured external clean/smudge/process filters and enabled/custom fsmonitor
+stop before validation or advancement; this conservative boundary avoids invoking
+checkout tools automatically. It is not a sandbox for arbitrary Git transports or
+concurrent hostile changes. After advancement, failure retains the actual checkout
+and reports that inspection is needed; no destructive rollback is attempted.
+Native platform and real-harness verification remain separate from local fixtures.
+
+### Internal preparation composition
+
+```mermaid
+flowchart TD
+    Start[MigrationPreparation.Run] --> Local[Validate config, format and local enrollment]
+    Local --> Dirty[Inspect exact dirty section paths]
+    Dirty --> Choice["Clean: no prompt<br/>Dirty: Preserve / Overwrite"]
+    Choice -->|EOF or cancellation| Cancel["Return no preparation<br/>No remote access yet"]
+    Choice --> Review[Revalidate HEAD, enrollment, paths, bytes and staged entries]
+    Review --> Remote[Remote preflight then object-only fetch]
+    Remote -->|Cancellation| Objects["Stop before advancement<br/>Received objects may remain"]
+    Remote --> Advance[Existing clean-checkout advancement]
+    Advance --> Context["Return refreshed preflight, harnesses,<br/>dirty paths and advisory choice"]
+```
+
+The coordinator reuses the existing helpers; it does not route a public command.
+Pre-requested cancellation skips all inspection. EOF/cancellation at the dirty
+prompt stops before querying a remote; cancellation is checked between bounded
+remote operations and immediately before fast-forwarding. It does not interrupt
+an already running Git operation. Once HEAD has advanced, cancellation cannot
+return a misleading empty result: completed preparation or retained-history
+validation failure reports the actual outcome. Behind plus dirty still stops,
+even with Overwrite; equal/ahead retain drafts. Prompt-time byte or staging changes
+invalidate the choice before remote access. Returned choices authorize no writes;
+later capture/scaffolding must freshly validate their inputs. No backup, section
+generation, source/target commit, render, apply, version marker or push is added.
+
+### Internal legacy-capture preview
+
+```mermaid
+flowchart TD
+    Context["Prepared checkout + original pre-fetch commit"] --> Validate["Revalidate current context<br/>Prove original commit ancestry"]
+    Validate --> Read["Read bounded original/current Git files<br/>and selected legacy runtime inputs"]
+    Read --> Changed{Canonical changed since original?}
+    Changed -->|No| Preview[Preview runtime capture if different]
+    Changed -->|Yes| Matches{Runtime matches retrieved canonical?}
+    Matches -->|Yes| Noop[No capture needed]
+    Matches -->|No| Stop[Stop for reconciliation; never merge]
+    Preview --> Result[Return only after all selected resources validate]
+    Noop --> Result
+```
+
+Preparation retains `OriginalCommit` separately from its refreshed HEAD.
+`MigrationLegacyCapturePreview.Read` validates current format/enrollment and
+dirty-path scope, then checks original-to-current ancestry without replacement
+refs. Historical files require one exact regular-blob tree entry and a size check
+before raw reading. Current files also require clean index/worktree provenance
+and exact equality with the real Git blob. Instruction decisions compare bytes;
+Codex config compares only the managed personality enum and preserves retrieved
+canonical formatting with the existing config updater. Unrelated runtime TOML
+settings never enter proposed canonical bytes. Missing/invalid personality stops,
+without adding defaults. Only selected legacy providers are read; portable runtime
+blocks use the separate portable preview/handoff below, never legacy whole-file copying.
+Canonical legacy blocks may name another machine's checkout; local runtime must
+bind to this checkout. Results are advisory byte proposals, not write authority.
+No remote query, write, staging, commit, scaffolding, render or apply occurs.
+
+### Internal legacy-capture writer
+
+```mermaid
+flowchart TD
+    Reviewed[Reviewed legacy preview] --> Fresh[Recreate preview; compare branch and every input/proposal]
+    Fresh -->|Stale| Stop[Stop before replacement]
+    Fresh -->|No changes| Noop[Return no changed paths]
+    Fresh -->|Changed files| Guard[Verify HEAD, branch, index, marker, enrollment and bytes]
+    Guard --> Atomic[AtomicFile.ReplaceIfUnchanged for one canonical file]
+    Atomic --> Verify[Record completed path; recheck inputs]
+    Verify -->|More files| Guard
+    Verify -->|Finished| Paths[Return changed paths; no staging or commit]
+    Guard -->|Failure| Partial[Report completed paths; stop without rollback]
+    Atomic -->|Failure| Attempt[Also report attempted path as possibly changed]
+```
+
+`MigrationLegacyCaptureWriter.Write` uses freshly derived proposals, not mutable
+buffers supplied by the reviewer. The preview now pins its symbolic branch, so
+a same-HEAD branch switch still invalidates review. The writer pins the raw index
+and verifies that the legacy format marker remains absent around every replacement.
+Already-written canonical files must match their proposed bytes; remaining files
+must match their original bytes, and all selected runtime bytes stay unchanged.
+Existing guarded atomic replacement preserves file mode and checks the destination.
+Atomicity is per file, not across the batch. `MigrationLegacyCaptureWriteException`
+reports completed paths plus any attempted path that may have changed before an
+error was detected. Earlier replacements remain inspectable; there is no rollback.
+Authored drafts, runtime, unrelated config, unselected providers, HEAD and index
+are not written. No commit, stage, remote operation, scaffolding or public command
+is added; committing these working-file changes is a later boundary.
+
+The deterministic failure fixture uses an unwritable destination directory on
+Unix (normal non-root execution) or a non-delete-sharing file handle on Windows.
+Unix root may bypass that permission restriction; native platform proof remains
+separate from the current local managed-code run.
+
+### Internal legacy-capture write and commit
+
+```mermaid
+flowchart TD
+    Committer[MigrationLegacyCaptureCommitter.WriteAndCommit] --> Index[Require empty staged diff]
+    Index --> Preview[MigrationLegacyCapturePreview.Read: retain fresh private buffers]
+    Preview --> Writer[MigrationLegacyCaptureWriter.Write: revalidate and replace]
+    Writer --> Verify[Verify exact completed paths and all inputs]
+    Verify -->|No changed paths| Noop[Return null; no commit]
+    Verify -->|Changed paths| Stage[Stage only changed canonical paths]
+    Stage --> Objects[Compare staged object bytes to proposals; verify exact paths and modes]
+    Objects --> Pin[BackupCommand.CommitStagedIndex: pin tree; verify modes and blobs]
+    Pin --> Publish[Compare-and-swap reviewed branch and parent]
+    Publish --> Result[Verify commit and current inputs; return commit ID]
+    Writer -->|Failure| Stop[Report retained files, staging or commit; no rollback]
+    Stage -->|Failure| Stop
+    Pin -->|Failure| Stop
+    Result -->|Verification failure| Stop
+```
+
+The coordinator owns writing and committing; it does not accept already-written
+paths from callers. Private fresh buffers bind staged Git object bytes directly
+to the proposal. The shared commit helper optionally verifies expected modes in
+its pinned tree before publishing; existing callers retain their prior contract.
+HEAD, symbolic branch, enrollment, absent format marker and every selected
+canonical/runtime file are rechecked around staging and after commit. A preexisting
+staged diff stops before writing; unstaged authored drafts stay out of the commit.
+No-op still validates the reviewed snapshot. This is not a transaction or lock:
+later failure may retain working changes, staging or a new commit for inspection.
+No rollback, push, scaffolding, render/apply, public route or runtime write is added.
+
+### Internal portable-capture preview for interrupted migration
+
+```mermaid
+flowchart TD
+    Input[MigrationPortableCapturePreview.Read] --> Context[Validate prepared HEAD, original ancestry and local enrollment]
+    Context --> Kind{Selected runtime format}
+    Kind -->|Legacy| Skip[No portable proposal; retain legacy capture path]
+    Kind -->|Portable Codex| Codex[PortableCodexBackupPreview: instructions and managed personality]
+    Kind -->|Portable Copilot| Copilot[PortableCopilotBackupPreview: instructions only]
+    Codex --> Guards[Require clean committed sources/target and matching last-applied digest]
+    Copilot --> Guards
+    Guards --> Conflict{Ambiguous attribution, pulled personality conflict or differing same-source proposals?}
+    Conflict -->|Yes| Stop[Stop; no merge, overwrite or writes]
+    Conflict -->|No| Verify[Recheck context, runtime/config bytes and committed targets]
+    Skip --> Verify
+    Verify --> Result[Return nullable provider previews; no writes or commit]
+```
+
+The completion marker may still be absent after a prior migration applied one
+provider. Section-aware backup previews handle that portable runtime; generated
+instructions are never proposed as a legacy whole-file capture. A null provider
+preview means absent or legacy; an unchanged portable provider retains its preview.
+Historical regular-blob reads ignore replacement refs and reuse the legacy
+preview's bounded reader and original-ancestry check. All selected runtime bytes,
+including skipped legacy providers, are checked again before return.
+Dirty relevant authored drafts stop even after `Preserve`: that choice does not
+waive existing committed-target validation. A newly retrieved canonical personality
+must agree with runtime before capture; conflicting values stop for reconciliation.
+Matching proposals to the same shared/platform source are allowed; different
+proposals stop without choosing a winner. Missing/stale targets, digest mismatch,
+control-block edits and ambiguous sections retain existing backup refusal rules.
+This is read-only preparation, not the portable writer, scaffolding, deployment
+or public migration command. Later writers must freshly validate these proposals.
+
+### Internal single-provider portable-capture handoff
+
+```mermaid
+flowchart TD
+    Reviewed[MigrationPortableCaptureWriter.WriteAndCommit] --> Fresh[Require empty staged diff; recreate migration preview]
+    Fresh --> Match[Compare branch, provider presence and underlying snapshot/config inputs]
+    Match --> Count{Changed portable providers}
+    Count -->|Zero| Noop[Verify state; return null without commit]
+    Count -->|Both| Stop[Stop before writes; combined capture is deferred]
+    Count -->|One| Writer[Existing PortableCodexBackupWriter or PortableCopilotBackupWriter]
+    Writer --> Scope[Existing source/target writers and PortableBackupCommitter own exact commit scope]
+    Scope --> Verify[Verify returned HEAD, one reviewed parent, branch, marker, enrollment and runtime bytes]
+    Verify --> Result[Return commit; no runtime apply]
+    Writer -->|Failure| Inspect[Report retained files, index or commit; no rollback]
+    Verify -->|Failure| Inspect
+```
+
+This adapter dispatches fresh derived proposals rather than caller-supplied
+proposal fields. Existing backup code owns affected enrolled targets across all
+platforms/providers; the adapter does not duplicate its rendering/path rules.
+All selected runtime instruction files and Codex config—including skipped legacy
+state—are checked before and after handoff. Preexisting staging is never unstaged.
+No-op is validated; two changed providers stop even for identical shared proposals.
+The first provider's commit would otherwise invalidate the second preview's target
+baseline, so combined capture needs separate work, not a sequential fallback.
+After a successful backup, runtime digests deliberately remain unchanged until an
+approved apply. The adapter therefore verifies raw runtime bytes rather than
+recreating a migration preview after commit. A concurrent edit can be detected,
+not prevented atomically; failures may leave files, staging or a commit to inspect.
+No runtime write, push, scaffolding, public route or automatic rollback is added.
+
+### Internal combined portable authored-file writer
+
+```mermaid
+flowchart TD
+    Reviewed[MigrationPortableSourceWriter.Write] --> Recheck[Shared RecheckPreview: fresh inputs and empty staged diff]
+    Recheck --> Plan[Freeze one baseline; plan and deduplicate authored/config proposals]
+    Plan -->|Conflict| Stop[Stop before replacing files]
+    Plan --> Verify[Check HEAD, branch, raw index, absent marker, enrollment and frozen file bytes]
+    Verify -->|Next changed authored/config path| Atomic[AtomicFile.ReplaceIfUnchanged]
+    Atomic --> Record[Record completed path]
+    Record --> Verify
+    Verify -->|Finished or no-op| Paths[Return changed authored paths; no targets or Git changes]
+    Verify -->|Failure| Partial[Report completed and possibly changed attempted paths; no rollback]
+    Atomic -->|Failure| Partial
+```
+
+Identical shared/platform edits from both providers become one replacement;
+separate overlays and managed personality can change in the same working-file batch.
+Fresh proposals and fixed section paths supply destinations, not caller-held fields.
+Unchanged relevant sources/targets and all selected runtime instruction/config bytes
+are frozen too. A completed file must match its proposal; others retain baseline
+bytes. Raw index bytes must remain identical, and staging is refused throughout.
+Atomicity is per file, not a batch transaction. Failure retains inspectable partial
+changes; the existing non-root Unix failure-fixture constraint still applies.
+Targets intentionally remain at the old committed version. Regeneration, combined
+commit and public activation are separate unfinished steps; clean-source previews
+will reject these intentionally dirty authored files until resolved. The existing
+single-provider handoff still refuses two changed providers. No runtime deployment,
+new enrollment, scaffolding, network operation or public command is added.
 
 ## Cross-machine boundary
 
@@ -128,9 +480,11 @@ lifecycle/migration tests, Native AOT build, and isolated installer lifecycle in
 [run 40201089188](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40201089188)
 at `8878d04`. The prior clone-attachment failure was resolved by preserving
 checkout bytes in the test fixtures, not by relaxing production provenance checks.
-The Linux 2.0 script/workflow now follows the same two-provider lifecycle; its
-updated ARM64 runner/native execution is pending. Local macOS managed tests and
-shell/YAML checks do not establish Linux-native or real-harness behavior.
+The same Linux 2.0 two-provider sequence passed focused/migration tests, Native
+AOT build, and the complete isolated installer lifecycle in
+[run 40218058322](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40218058322)
+at `85fbd19`. This establishes Linux ARM64 runner/native behavior, not actual
+Codex/Copilot harness integration.
 
 ## Classes: source composition and runtime inspection
 

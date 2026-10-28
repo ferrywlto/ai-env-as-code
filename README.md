@@ -44,7 +44,8 @@ attributed instruction section and affected enrolled targets in one commit.
 Ordinary provider `init` retains its provider-specific flow.
 
 See the [architecture diagrams](docs/architecture.md) for current component
-boundaries and class relationships.
+boundaries and class relationships, and the [glossary](docs/reference.md#glossary)
+for capture, preflight, target, preview and fixture.
 
 ## Where should an instruction go?
 

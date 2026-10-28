@@ -1,5 +1,27 @@
 # Implementation Checklist
 
+## Current local checkpoint — 2026-10-28
+
+| Commit | Group |
+| --- | --- |
+| `6e5cb18` | Data-format, local-enrollment and dirty-section preflights |
+| `a1ed175` | Bounded remote retrieval and guarded preparation |
+| `b3b4ba4` | Legacy capture preview, replacement and guarded commit |
+| `c73ac62` | Portable capture preview |
+| `23ce4b1` | Single-provider portable capture handoff |
+| `f99e2eb` | Combined portable authored-file replacement |
+
+These code/test groups and this documentation checkpoint are local commits only;
+the last published checkpoint remains `85fbd19`. Earlier “uncommitted” notes below
+describe the state at their original verification boundary, not the current checkout.
+Grouping changed no source behavior and reran no builds/tests; existing scoped
+evidence remains recorded below. No new full-regression/native/harness claim.
+
+Commit gate: after Ferry approval and required verification, create a semantic
+commit containing only the reviewed paths **before starting the next slice**.
+Push still requires separate approval. No next implementation slice has started;
+combined target regeneration/commit, command orchestration and release gates remain.
+
 ## 2.0 development — shared instructions first
 
 - [x] Make the README diagram-first and move detailed command, release, build,
@@ -634,22 +656,350 @@
   results, not Linux Native AOT or actual harness execution; the Linux shell
   script itself was syntax-checked, not executed on macOS.
 - [x] Obtain review/approval before commit, push, and Linux ARM64 dispatch. The
-  current 2.0 native lifecycle remains unverified on Linux; historical passes
-  cover the old sequence only. Keep milestone 19 open until runner proof/review.
+  update was reviewed and approved for publication after the full Debug pass.
+  Keep milestone 19 open until the runner result also receives Ferry review.
 
 - [x] Pass the approved full pre-push Debug regression: 639/639 in 17m02s,
   with zero failures, skips, timeouts, or aborts. The completed TRX report is
   under `artifacts/linux-prepush-20261025/debug/`. Product/test compilation
   succeeded without warnings; whitespace and independent pre-push review passed.
+- [x] Publish semantic commit `85fbd19` and verify local/remote SHA
+  `85fbd192ebb7adf2be64eb56cbfbe9b76672bf18`. Explicit Linux ARM64
+  [run 40218058322](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40218058322)
+  at that commit completed successfully in 1m08s on 2026-10-25: focused lifecycle
+  110/110 (10s), migration 1/1 (2s), Native AOT prerequisites/build, version/help,
+  and isolated installer/both-provider/render/uninstaller lifecycle all passed.
+  Neither test scope skipped tests; no failure, timeout, or abort was reported.
+  This is current Linux ARM64 runner/native proof, not actual Codex/Copilot
+  harness integration. No personal runtime/data, installed binary, or skill changed.
+  Ticket #2 milestone 19 awaits Ferry review of this passing result.
 
-Ferry reviewed the Linux update and approved this full Debug gate, followed by
-semantic commit, push, and explicit Linux ARM64 workflow dispatch on a pass.
-Immediate next work: publish the reviewed checkpoint, verify the remote SHA,
-and inspect that manual runner result. Personal runtime/data, installed binary,
-and installed skills remain untouched. No automatic retry or unrelated
-implementation is authorized.
-Provider-first CLI work remains deferred; full Release regression remains a
-release gate rather than part of this pre-push Debug verification.
+## Interactive migration command — before provider-first CLI changes
+
+- [x] Document the agreed planned `aec migrate VERSION --repo PATH` contract in
+  [the reference Mermaid flow](docs/reference.md#planned-interactive-command--not-implemented)
+  and ticket #2. Versions mean repository data formats. One invocation pulls
+  fast-forward-only, captures through compatible legacy backup, scaffolds only
+  the used platform/harness sections, waits for exact `DONE`, then commits sources,
+  enrolls/renders and commits targets, applies, verifies, and records completion.
+  Incomplete runs restart from preflight; no continuation flag or resume state.
+  Dirty migration section files require an explicit Preserve/Overwrite choice;
+  unrelated dirt stops. No automatic classification or push. This documentation
+  slice changes no personal state; existing fixture/runner proof does not verify
+  this new command.
+- [x] Implement internal read-only format detection/version preflight. Keep both
+  binary major/minor capability and repository data format; `.aec-version` is a
+  committed completion marker containing `2.0`, not a CLI/block version. No marker
+  means legacy `1.0` only with valid original initialization history and usable
+  current committed canonical instructions/config; partial sections/targets do
+  not assert completion. Reject invalid/equal/older/unsupported targets and dirty,
+  untracked, deleted, malformed or unissued markers without mutation. Reuse narrow
+  history/metadata validators without imposing `main` or global cleanliness.
+  Release preflight tests passed 32/32 in 1m05s; the final additional `1.0`-marker
+  rejection passed 1/1 in 4s after rebuilding with warnings as errors. Adjacent
+  init/enrollment tests passed 22/22 in 1m11s. No failures, skips or aborts.
+  Read-only review found and closed the history-only/current-file gap and unissued
+  marker acceptance; diagrams/reference now explain the implemented boundary.
+- [x] Ferry reviewed and approved the internal preflight slice. Changes remain
+  uncommitted; no public command or personal state changed.
+- [x] Ferry reviewed and approved the implemented, verified read-only local
+  harness selection. `MigrationHarnessSelection` resolves
+  implicit homes, skips missing homes/files, rejects existing invalid/conflicting
+  bindings, links and repository-contained runtimes, and rechecks pinned HEAD.
+  It never infers enrollment from canonical/target folders or detects installed
+  harness applications. Valid portable runtime bindings remain selected on
+  incomplete migration; empty selection creates nothing. Independent source
+  review found no production blocker; architecture/reference are updated.
+  The warning-as-error Release build passed. Combined format/selection tests
+  finished 56/58 in 1m16s, zero skips/aborts. The two wrong-platform cases failed
+  during fixture generation because `windows` is not a valid platform ID, before
+  the selector ran. Corrected the fixture to use `windows-x64` / `linux-arm64`;
+  no automatic rerun. Ferry approved the focused retry on 2026-10-26: all four
+  portable-binding cases passed in 0.7s, zero failures/skips/aborts, after rebuilding
+  with warnings as errors. The original 56 passing cases and corrected cases are
+  covered across these scoped runs, not a new complete-suite pass. Original evidence:
+  `artifacts/migration-harness-selection-20261025/focused/`; successful retry:
+  `artifacts/migration-harness-selection-20261026/portable-binding-retry/`.
+- [x] Ferry reviewed and approved the implemented, verified dirty-section preflight/
+  prompt. `MigrationDirtySections` permits only exact shared/current-platform/
+  selected-provider source paths. It rejects unrelated dirt (including targets and
+  legacy files), renames, conflicts, type changes, links/gitlinks and ignored section
+  files. NUL-delimited status uses no optional index locks; history checks ignore
+  replacement refs. Clean sources return Unchanged without reading input; dirty
+  sources list exact paths and require exactly Preserve/Overwrite with no default.
+  EOF/cancellation returns Cancelled. The decision never edits, stages, pulls or
+  overwrites; later preparation must revalidate HEAD/paths before mutation.
+  Focused Release tests passed 37/37 in 11s with zero failures/skips/aborts and a
+  warning-as-error build. Filesystem cases verify unchanged HEAD, raw Git index,
+  files and directories. Independent review identified replacement-ref hardening;
+  fixed and covered by a passing regression. Final source/test review found no
+  remaining concrete blocker. Reference/architecture diagrams updated.
+  Evidence: `artifacts/migration-dirty-sections-20261026/focused/`.
+- [x] Ferry reviewed and approved the implemented, verified read-only remote/
+  default-branch preflight. `MigrationRemotePreflight` requires single configured
+  tracking values and a named remote with one URL; checkout/upstream/advertised
+  default branch must match. Never assume origin/main or classify ancestry using
+  stale tracking refs. Reject missing/ambiguous/local-only tracking, detached or
+  non-default checkouts, unresolved HEAD and transport failure without echoing
+  potentially credential-bearing stderr. `GitProcess.ReadRemoteHead` disables Git
+  terminal prompts, closes child stdin and bounds the query to 30s plus up to 1s
+  for confirming Git exit after timeout termination. Existing GitProcess.Run is
+  unchanged. No fetch/pull/checkout/ref update or public migrate route.
+  Final focused Release scope passed 34/34 in 8s, zero failures/skips/aborts,
+  after a warning-as-error build. Independent review identified bounded-query/
+  cleanup gaps; addressed before final verification, with no remaining blocker.
+  Whole-root snapshots cover checkout and bare-remote files/metadata/index/refs;
+  stale tracking does not hide a newer advertised tip or cause a fetch. Deadline
+  handling uses a tiny local-only budget; actual SSH/HTTPS helper termination and
+  authentication are not integration-verified. Architecture/reference updated.
+  Evidence: `artifacts/migration-remote-preflight-20261026/reviewed/`.
+- [x] Ferry reviewed and approved verified fetch-only preparation.
+  `MigrationFetchPreparation` rechecks the approved remote name, URL, default
+  branch and tip before/after a bounded pinned-commit fetch. It receives objects
+  only, without updating refs, tracking metadata or FETCH_HEAD; actual ancestry
+  ignores replacement refs and returns Equal/Behind/Ahead or stops divergence.
+  Final HEAD/branch revalidation precedes return. Received objects may remain
+  after a later stop, never worktree/index/runtime changes. Fetch deadline is
+  two minutes plus up to one second for timeout cleanup. No public migrate route,
+  fast-forward, merge or push. Independent read-only review found no concrete
+  blocker. Added 14 cases covering ancestry, changed inputs, hostile fetch
+  mappings, replacement refs, deadlines and preservation of all fixture files
+  except received local objects. Architecture/reference updated.
+  The selected 48-case Release scope (14 new + 34 remote preflight) did not run:
+  warning-as-error compilation stopped on CA1512 in the shared timeout guard.
+  Replaced the explicit throw with ArgumentOutOfRangeException's built-in guard;
+  no automatic retry. Ferry approved the same 48-case retry: warning-as-error
+  Release compilation passed; 47/48 tests passed in 22s, with zero skips, aborts
+  or timeouts. `FailedFetchLeavesCheckoutAndMetadataUntouched` expected nonzero
+  exit but received zero. Its missing-remote fetch requests the existing local
+  HEAD; Git can satisfy that object locally without transferring anything.
+  Ferry approved the fixture-only correction: request a remote-only commit,
+  assert it is absent locally, then verify missing-remote failure and unchanged
+  metadata. The corrected complete focused scope passed 48/48 in 21s after a
+  warning-as-error Release rebuild, zero failures/skips/aborts/timeouts.
+  Independent read-only review found no concrete blocker in the correction.
+  Earlier failed attempts remain recorded above. Successful evidence:
+  `artifacts/migration-fetch-preparation-20261026/fixture-correction/`.
+  Earlier evidence:
+  `artifacts/migration-fetch-preparation-20261026/focused/`.
+- [x] Ferry reviewed and approved clean-checkout fast-forward/revalidation,
+  verified across scoped runs. `MigrationFastForward.Execute`
+  revalidates format, enrollment, remote
+  snapshot and actual ancestry, reusing the fetch helper's no-replacement-ref
+  ancestry check. Equal/ahead keep HEAD and eligible drafts; behind requires a
+  clean tracked/untracked checkout and rechecks the remote before advancing to
+  the pinned commit. No merge commit, branch switch, stash/reset/discard, push,
+  runtime write or public migrate route. Git refuses ignored-file collisions;
+  per-command settings disable hooks, branch merge defaults, autostash,
+  recursive submodule updates and automatic line-ending conversion. Configured
+  external filters and enabled/custom fsmonitor stop before validation/writes;
+  user settings remain intact. Post-advancement format/enrollment/HEAD/branch
+  failure retains retrieved history and stops without rollback/capture/apply.
+  Independent read-only review found no concrete blocker; architecture/reference
+  diagrams and behavior updated. Focused scope includes the new advancement
+  cases plus 48 adjacent fetch/remote-preflight tests; warning-as-error Release
+  compilation passed. The selected 72-case scope completed 65 passed / 7 failed
+  in 2m16s, zero skips/aborts/timeouts. Two invalid pulled instruction/config
+  cases exposed missing InvalidDataException in the post-advancement error
+  wrapper; added that explicit type. Five fixtures failed before exercising
+  guards because empty-template init omits .git/info; the fixture now creates
+  that directory before writing attributes/exclude. Ferry approved a focused
+  eight-case retry: the three InvalidPulledFormat cases (one already passed),
+  four ExternalCheckoutCommands cases and one IgnoredIncomingCollision case
+  total eight cases, covering all seven original failures and the adjacent
+  successful marker branch. All eight passed in 39s after a warning-as-error
+  Release rebuild, zero failures/skips/aborts/timeouts. The earlier 65 passes
+  and all corrected cases are verified across scoped runs, not a fresh complete
+  72-case pass or full regression. Independent read-only correction review found
+  no concrete blocker; the reviewer did not rerun tests. Earlier evidence:
+  `artifacts/migration-fast-forward-20261026/focused/`; approved passing retry:
+  `artifacts/migration-fast-forward-20261026/correction-retry/`.
+- [x] Ferry reviewed and approved internal preparation composition, verified
+  locally. `MigrationPreparation.Run` validates local
+  config/format/enrollment, inspects dirty sections and prompts before querying
+  a remote. EOF/cancellation returns no preparation without remote activity;
+  cancellation between bounded operations and just before advancement stops
+  further work, but successful advancement is never hidden by a null result.
+  Revalidate prompt-time HEAD, enrollment, paths, exact bytes and index entries.
+  Reuse remote/fetch/clean-checkout advancement; behind plus dirty still stops
+  regardless of choice, equal/ahead retain drafts. Return refreshed context and
+  advisory choice only; later writers need fresh validation/approval. No capture,
+  scaffolding, commit, apply, marker or public command. Extracted the existing
+  disposable repository fixture for reuse without changing setup semantics.
+  Independent review found final dirty-section failures could lack retained-
+  history context after advancement; wrapped them and added an incoming-directory
+  regression without platform link privileges. Architecture/reference updated.
+  Final independent read-only review found no concrete blocker; no tests run by
+  the reviewer.
+  Initial focused attempt stopped on test analyzer CA1861, so no tests executed;
+  replaced the inline expected-provider array with Assert.Collection. Ferry
+  approved the focused retry: all 42 cases passed in 3m47s after a warning-as-error
+  Release rebuild, zero failures/skips/aborts/timeouts. This includes 18 new
+  composition cases plus 24 existing advancement tests using the shared fixture;
+  not a full regression, native runner or real-harness pass. Passing evidence:
+  `artifacts/migration-preparation-20261026/correction-retry/`.
+  Earlier compiler-blocked attempt:
+  `artifacts/migration-preparation-20261026/focused/`.
+- [x] Ferry reviewed and approved read-only legacy capture preview, implemented
+  and verified across scoped runs.
+  Preparation retains OriginalCommit. Validate original ancestry and bounded
+  regular historical blobs, exact current provenance, selected legacy bindings
+  and managed personality. Unchanged canonical may propose runtime capture;
+  changed canonical matching runtime is a no-op; differing retrieved/runtime
+  content stops without merging. Instructions compare bytes; config compares
+  managed values and preserves pulled formatting, never unrelated runtime TOML.
+  Missing personality or portable generated runtime stops. No writes, staging,
+  commits, network, scaffolding or deployment. Independent review found runtime
+  parent links needed checking immediately before reads; added both checks and
+  source review found no remaining blocker. Architecture/reference updated.
+  First focused Release scope passed 46/46 (28 preview + 18 preparation) in
+  6m44s, zero failures/skips/aborts/timeouts, with warning-as-error compilation.
+  The two parent checks were added after that build. A separate warning-as-error
+  rebuild and first run of three added cases passed 3/3 in 25s against latest
+  source: two invalid runtime-file shapes plus actual local-bare pull/original-
+  commit retention/read-only capture flow. This is 49 cases across scoped runs,
+  not a fresh complete 49-case pass or full regression/native/harness proof.
+  Whole-root snapshots verify preview does not change Git metadata/index/refs,
+  data, runtime files or directories. Final read-only review found no blocker.
+  Evidence: `artifacts/migration-legacy-capture-preview-20261026/focused/` and
+  `artifacts/migration-legacy-capture-preview-20261026/path-guards/`.
+- [x] Ferry reviewed and approved the internal legacy capture writer on
+  2026-10-27. Recreate and deep-compare the preview, including symbolic branch;
+  write only freshly derived proposals. Around each changed canonical replacement,
+  verify HEAD, branch, raw index, absent completion marker, enrollment and exact
+  canonical/runtime bytes. No-op preserves all state. Per-file atomicity is not
+  batch atomicity: report completed and possibly changed attempted paths on failure,
+  without rollback. No staging, commit, push, runtime write, render, scaffolding
+  or public route. Independent review identified a marker-absence check, now fixed;
+  final review found no concrete blocker. Warning-as-error Release build and all
+  18 focused tests passed in 3m24s, zero failures/skips/aborts/timeouts. Evidence:
+  `artifacts/migration-legacy-capture-writer-20261027/focused/`.
+  Unix permission-failure fixtures require normal non-root execution; Windows
+  sharing checks are implemented but not native-verified by this local macOS run.
+  Architecture/reference describe the boundary. A later progress/caveat patch
+  failed formatting validation without changing files; Ferry explicitly approved
+  this documentation-only correction. No code changes or test reruns in the retry.
+- [x] Ferry reviewed and approved the locally verified internal exact-path legacy
+  capture committer on 2026-10-27. Own the immediate write-and-commit operation, with
+  privately derived buffers and the existing revalidating writer. Refuse existing
+  staging before writes and before staging exact canonical paths. Compare staged
+  object bytes directly to proposals; pin expected modes/blobs in the existing
+  guarded commit helper. No-op validates but creates no commit. Unstaged authored
+  drafts and runtime stay untouched; failures retain inspectable files/index/HEAD
+  without rollback. Independent read-only review identified raw-hash and pinned-mode
+  gaps, now fixed; final source review found no concrete blocker. Warning-as-error
+  Release compilation passed; all 41 focused cases passed in 6m18s (16 new,
+  18 existing writer and 7 existing portable committer), with zero failures,
+  skips, aborts or timeouts. Evidence:
+  `artifacts/migration-legacy-capture-committer-20261027/focused/`.
+  This is local managed-code verification, not full regression, native OS-runner
+  or real-harness proof. Architecture/reference and independent documentation
+  review are complete. No public route, scaffolding, render/apply, push or personal
+  state change. All engine changes remain uncommitted.
+- [x] Ferry reviewed and approved the locally verified read-only portable-runtime
+  capture preview on 2026-10-27. Reuse existing Codex/Copilot backup previews for
+  selected portable runtimes; null means absent or legacy, not unchanged. Pin
+  prepared HEAD, local bindings and original ancestry; validate real bounded Git
+  blobs without replacement refs. Recheck all selected runtime bytes, portable
+  config and targets. Refuse dirty relevant drafts even after Preserve, stale
+  target digests, ambiguous attribution, retrieved personality conflicts and
+  differing same-source proposals; identical proposals are allowed. No writes,
+  commit, network, scaffolding or public route. Independent review found no source
+  blocker and corrected a missing-target test exception before execution. All
+  35 focused tests passed in 2m14s (22 new migration cases and 13 existing provider
+  preview cases), with a warning-as-error Release build and zero failures/skips/
+  aborts/timeouts. Whole-fixture snapshots verify unchanged Git metadata/index/refs,
+  authored/legacy files and runtime. Evidence:
+  `artifacts/migration-portable-capture-preview-20261027/focused/`.
+  Architecture/reference and independent documentation review are complete.
+  This is local managed-code proof, not full regression, native OS-runner or
+  real-harness verification. All engine changes remain uncommitted.
+- [x] Ferry reviewed and approved the locally verified single-provider portable
+  capture handoff on 2026-10-28. Recreate/compare the migration preview's branch,
+  provider presence and underlying snapshot/config inputs; dispatch only fresh
+  proposals to existing guarded backup writers. Refuse existing staging without
+  unstaging. Fully validated no-op creates no commit; two changed providers stop
+  before writing, even for identical shared proposals or config-only plus Copilot
+  drift. Existing writers own exact source/config/all-affected-target commit scope.
+  Verify returned HEAD, one reviewed parent, branch, absent marker, enrollment and
+  all selected runtime instructions/config, including skipped legacy state. Retain
+  partial files/index/commit with inspection guidance, no rollback or runtime apply.
+  Reuse the existing preview fixture through an access-only change. Independent
+  source and 24-case test review found no blocker. All 36 focused cases passed in
+  6m22s (24 new handoff cases and 12 existing provider-writer cases), with a
+  warning-as-error Release build and zero failures/skips/aborts/timeouts.
+  Evidence: `artifacts/migration-portable-capture-writer-20261027/focused/`.
+  Architecture/reference and independent documentation review are complete.
+  Local managed-code proof only, not full regression, native OS-runner or actual
+  harness verification. No public route, push, scaffolding or personal state change.
+  Combined portable capture remains deferred; all engine changes are uncommitted.
+- [x] Ferry authorized committing the verified combined portable authored-file
+  writer on 2026-10-28. Reuse shared reviewed-input recheck and empty-index
+  guard; single-provider handoff behavior is unchanged. Derive fixed source paths
+  from fresh proposals, deduplicate identical shared/platform edits, and plan all
+  replacements before writing. Freeze relevant changed/unchanged canonical sources,
+  targets and all selected runtime instruction/config bytes, including legacy.
+  Guard HEAD/branch/raw index/marker/enrollment and original-or-written bytes around
+  each atomic replacement. Report completed and possibly changed attempted paths;
+  no automatic rollback or batch-atomicity claim. Reuse the existing raw-index and
+  filesystem-failure guards. Whole-fixture assertions permit only exact declared
+  authored/config changes; targets, index/HEAD and runtime must remain untouched.
+  Independent source, test and documentation reviews found no blocker. All
+  45 focused cases passed in 7m37s (20 new, 24 single-provider regressions and
+  one legacy no-op), with a warning-as-error Release build and zero failures/
+  skips/aborts/timeouts. Shared fixture assertions require every expected changed
+  path to exist initially; the Unix failure fixture assumes non-root execution.
+  Evidence: `artifacts/migration-portable-source-writer-20261028/focused/`.
+  Architecture/reference updated. Local managed-code proof only, not full regression,
+  native OS-runner or real-harness verification. Included in local commit
+  `f99e2eb`; no push or personal state change.
+- [ ] After verification, slice review and separate approval, implement
+  combined portable target regeneration/commit and scaffolding
+  in further small increments. Preserve/Overwrite does not waive Git safety.
+- [x] Ferry reviewed and approved terminology documentation. One
+  glossary in docs/reference.md defines Capture, Preflight, Target, Preview and
+  Fixture with a directional Mermaid flow and concrete AEC examples. Distinguish
+  rendered targets, runtime destination files and migration target versions.
+  README/architecture link to this single definition instead of duplicating it.
+  Whitespace and glossary anchor/link checks passed; independent read-only
+  wording review found no substantive ambiguity. No rendered/deployed-page claim.
+  Documentation-only: no code, build/test, personal state, commit or push.
+- [ ] Implement the exact `DONE` gate, committed completion path, restart and
+  failure behavior; update help/skill guidance in a separately reviewed slice.
+- [ ] Rehearse the complete command on disposable copies of user-approved real
+  data/runtime, then add appropriate native smoke coverage before any live use.
+- [ ] Final cleanup, after remaining 2.0 implementation/CLI work and before the
+  release regression gate: replace repeated provider/platform identifier literals
+  such as `codex`, `copilot`, `macos-arm64`, `windows-x64` and `linux-arm64` with
+  shared compile-time constants in production and tests. Keep this mechanical:
+  no new abstraction framework or public identifier changes. Preserve exact
+  CLI/path/serialized/managed-block contracts and historical fixtures; keep a
+  small independent literal-value contract test so shared constants cannot mask
+  accidental identifier changes. Run affected tests and warning-as-error build;
+  retain full regression as the final release gate. Deferred, not implemented now.
+
+Current boundary: the verified combined authored-file writer is locally committed
+in `f99e2eb` after Ferry's explicit grouped-commit authorization. Only authored/config
+working files change when that internal writer runs; targets/index/HEAD/runtime stay
+untouched. Next implementation requires a separately approved target-regeneration
+slice before combined commit and activation. The existing single-provider adapter
+still refuses two changed providers. No new implementation has started.
+Ticket #2 remains Active. No personal state change, push or workflow dispatch is
+authorized. Choices still authorize no writes; dirty-behind stops.
+No public migrate route yet. Tests use disposable local bare
+remotes. Fast-forward may update local HEAD/index/checkout and Git metadata,
+never personal runtime/data or hosted remotes. Failure after advancement retains
+retrieved history for inspection, without automatic rollback.
+Internal format, harness, dirty-section and remote preflights are reviewed.
+Provider-first CLI remains on
+hold until migration is proven; identifier-constants cleanup is deferred until
+the end of implementation, before release regression.
+The migration code/test groups are committed locally; Linux post-run notes, migration
+design, architecture and verification progress are included in the documentation
+checkpoint. See the current checkpoint table above; historical per-slice uncommitted
+notes are retained as original verification records. This commit authorization adds
+no migration execution, personal runtime/data write, push or workflow dispatch.
+Full Release regression remains a release gate.
 
 ## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
 

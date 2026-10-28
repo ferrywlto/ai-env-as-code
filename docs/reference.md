@@ -14,6 +14,31 @@ development changes are not yet a released binary. See the
 [approved design](shared-instructions-design.md). Copilot remains alpha
 and is not verified against the real harness on any platform.
 
+## Glossary
+
+```mermaid
+flowchart LR
+    Runtime[Local harness runtime] -->|capture| Sources[Canonical sources]
+    Sources -->|render| Target[Generated platform/harness target]
+    Target -->|apply committed content| Runtime
+```
+
+These arrows show data directions, not an automatically executed sequence.
+
+| Term | Meaning in AEC | Example |
+|---|---|---|
+| **Capture** | Bring live runtime state into canonical sources in the selected data repository: runtime → repository. The term alone does not imply a commit or push. | Capture changed Codex instructions through `backup`. |
+| **Preflight** | Safety checks before proceeding with an operation. A check may query remote state, but does not perform the planned capture or deployment. | Verify repository format, branch and runtime binding before migration. |
+| **Target** | In 2.0 rendering, a generated, deployable instruction file for one platform/harness pair—not the authored source. | `environment/targets/macos-arm64/codex/AGENTS.md`. |
+| **Preview** | A read-only proposal showing what would change, or why the change must stop. It does not perform the proposed write. | List canonical files needing runtime capture, or identify a pulled/runtime conflict. |
+| **Fixture** | Controlled setup and data used by tests, separate from the user's personal environment. | A disposable Git repository and fake Codex/Copilot homes. |
+
+“Target version” means the destination data format, such as `2.0`, not a generated
+file. “Runtime target” means the destination file in the harness home. A preview
+of capture is therefore not a capture, just as passing preflight is not applying
+anything. Fixtures let tests exercise those operations without using personal
+runtime files or data repositories.
+
 ## Version history
 
 | Version | Increment |
@@ -78,7 +103,10 @@ flowchart TD
     Work -->|If remote-backed commit created| Push[Separately approved push and verification]
 ```
 
-The CLI itself never fetches, pulls, or pushes. The bundled skills run this
+The currently implemented CLI never fetches, pulls, or pushes. The
+[planned interactive migration](#planned-interactive-command--not-implemented)
+is a narrowly scoped future exception for fast-forward-only pull, never push.
+The bundled skills run this
 preflight only before an AEC canonical write or runtime apply—not on every
 reply. They identify a cloned repository's remote through the current branch's
 upstream and query its advertised `HEAD`, assuming neither `origin` nor `main`.
@@ -135,6 +163,204 @@ machine's checkout; it never rewrites that canonical block.
 
 ## Migrating an existing 1.x repository to 2.0
 
+### Planned interactive command — not implemented
+
+```mermaid
+flowchart TD
+    Validate["Validate forward data-format migration<br/>and selected local harness bindings"] --> Dirty{"Dirty migration section files?"}
+    Dirty -->|"Yes"| Choice["Warn: explicitly choose<br/>Preserve or Overwrite"]
+    Dirty -->|"No"| Pull["Fast-forward-only pull; revalidate<br/>then legacy-compatible backup"]
+    Choice --> Pull
+    Pull --> Scaffold["Prepare only required shared,<br/>current-platform and provider files"]
+    Scaffold --> Confirm{"User finishes editing<br/>and types exactly DONE"}
+    Confirm -->|"Other input: keep waiting"| Confirm
+    Confirm -->|"EOF or cancellation"| Stop["Stop; migration incomplete"]
+    Confirm -->|"DONE"| Commit["Validate and commit reviewed sources<br/>Enroll/render; commit targets"]
+    Commit --> Deploy["Apply each selected provider<br/>Verify status"]
+    Deploy --> Complete["Record target data-format version<br/>only after successful verification"]
+```
+
+Proposed syntax: `aec migrate 2.0 --repo ABSOLUTE_PATH`. One invocation runs
+through the prompt; there is no `--continue` flag, saved continuation, or resume
+checkpoint. Unless migration completes, the next invocation starts again at
+preflight, not at the prompt. Preserve any prior commits or partial writes for
+inspection; never silently reset them or report success after a failed step.
+
+| Boundary | Required behavior |
+|---|---|
+| Version | Check both binary capability and the **data repository format**, not the AEC block version. Use canonical `major.minor` targets such as `2.0`; reject invalid/unsupported, equal/current, or older targets. Git-tracked root `.aec-version` records the completed data format. Without it, recognize legacy `1.0` only through validated original AEC initialization history; draft sections/targets do not prove completion. |
+| Dirty initialization | Before pull/backup, list dirty migration-owned section paths and require an explicit Preserve/Overwrite choice. Preserve retains edits; Overwrite warns of lost edits and regenerates only those sections. No default choice; EOF/cancellation stops. Unrelated dirt stops migration. |
+| Pull and capture | Resolve the tracked remote/default branch without assuming `origin`/`main`; stop if safe fast-forward-only pull is unavailable. Revalidate after pull. Never silently back up stale runtime over newly pulled canonical changes. Use format-compatible legacy capture: current 2.0 `backup` requires targets that do not exist yet. No automatic stash, reset, merge commits, rebase, or push. |
+| Scope and review | Use confirmed locally enrolled pre-2.0 harnesses and the current platform, not repository folder presence alone. Preserve legacy files, config, manual backups, and history. The user initializes the sections; do not automatically classify instructions. |
+| Completion | Wait for exactly `DONE`; other text keeps this invocation waiting without source commits or deployment. EOF/cancellation stops. Validate/commit source paths; enroll and commit each selected target before the next, then render/commit changes and apply/status. Completion requires successful verification. No executable installation or skill upgrade. |
+
+Choosing Preserve does not waive Git safety checks. Stop rather than discard
+edits when pull or capture cannot proceed safely. Revalidate user edits before
+committing, and never overwrite dirty targets through render. Ordinary
+`status`, `backup`, `render`, and `apply` keep their existing directions and
+no-network behavior; the planned migration command alone owns this documented
+pull exception. Prove it on disposable data/runtime copies before live use.
+
+The internal read-only `MigrationPreflight` now validates format versions,
+original initialization history, and usable current committed legacy instructions
+and personality config. It requires an existing marker's working/index
+bytes to match its committed blob; a dirty, untracked, deleted, or malformed
+marker cannot fall back to legacy detection. Binary major/minor capability and
+an explicitly implemented migration path must both support the target; patch
+and prerelease labels are not data formats. The only recognized completed marker
+is `2.0`; legacy releases never issued a `1.0` marker. Only successful migration
+completion will write `.aec-version` containing `2.0`. The public command, marker
+writer, pull, and complete interactive workflow are not implemented yet.
+
+The internal `MigrationHarnessSelection` resolves only the existing implicit
+Codex/Copilot homes (`CODEX_HOME` / `COPILOT_HOME`, otherwise profile defaults).
+It skips missing homes/files, but stops on an existing unbound/malformed AEC file,
+links, repository-contained runtimes, or a different checkout/platform binding.
+It returns selected provider/home/runtime paths without creating anything or
+consulting canonical/target folders as enrollment evidence. All absent means an
+empty selection. Recognized portable blocks remain selected after an incomplete
+migration; backup routing and capture safety remain later preparation work.
+This checks runtime enrollment, not whether the harness application is installed.
+
+Internal `MigrationDirtySections` checks exact shared/current-platform/selected
+provider source paths only. Other dirt, renames, conflicts, type changes, links,
+nonregular Git entries, and ignored section files stop. Clean sections need no
+prompt. Otherwise it lists the exact dirty paths, warns of future loss, and accepts
+exactly `Preserve` or `Overwrite`; blank/other text repeats the prompt with no
+default. EOF/cancellation returns Cancelled. The result is a decision only: no
+overwrite, staging, network, or runtime change. Later preparation must revalidate
+HEAD and dirty paths; Preserve never bypasses Git safety.
+
+Internal `MigrationRemotePreflight` requires one named configured upstream and
+remote URL; it never guesses `origin`/`main`. A bounded `ls-remote --symref` query
+must advertise one default branch/tip matching both the checkout and its tracked
+branch. Missing/ambiguous config, local-only tracking, detached/non-default or
+unresolved HEAD, unreachable transport and timeouts stop without fetch/pull.
+Git terminal prompts are disabled and child stdin is closed; a 30-second query
+budget plus up to one second for timeout cleanup prevents an indefinite wait.
+The returned tip is advisory, not an ahead/behind classification from stale local
+tracking refs. Later pull preparation must revalidate. Tests use disposable local
+bare remotes only; SSH/HTTPS transport integration is not verified by that proof.
+
+Internal `MigrationFetchPreparation` revalidates the approved remote name, URL,
+default branch and advertised tip before and after a bounded, pinned-commit fetch.
+The configured URL is retained for comparison, never echoed in diagnostics.
+Fetch receives objects only: no destination ref, configured refmap, tags,
+submodules or `FETCH_HEAD` update. Its budget is two minutes plus up to one second
+for timeout cleanup. Actual commit ancestry, with replacement refs disabled,
+returns Equal, Behind or Ahead; divergence stops. Local HEAD/branch are checked
+again before returning. Received objects may remain on failure, but refs, index,
+authored files and runtime are not advanced. This is not a pull, fast-forward,
+merge or push, and adds no public command. Later advancement must revalidate;
+local bare-remote fixtures are not hosted-transport integration evidence.
+
+Internal `MigrationFastForward` consumes that preview, rechecks the actual format,
+local enrollment, remote identity/tip and ancestry, and returns a fresh preflight.
+Equal/ahead keep HEAD and drafts unchanged. Behind requires a clean tracked and
+untracked checkout; dirty files stop without stash/reset/discard. Git advances
+only to the pinned commit using fast-forward-only behavior, with hooks, branch
+merge defaults, autostash, recursive submodule updates and automatic line-ending
+conversion disabled per command. Ignored-file collisions stop too. Configured
+external clean/smudge/process filters or enabled/custom fsmonitor are refused,
+not removed from user settings. This is deliberately conservative, even for
+unused configured filters. Afterward the exact HEAD/branch, data format and local
+enrollment must still validate. A failure retains retrieved history for inspection
+without automatic rollback, backup or apply. This helper adds no public command,
+push, new commit or runtime write; acting on dirty-section choices is still pending.
+
+Internal `MigrationPreparation.Run` now composes format/enrollment and dirty-section
+review with remote preflight, object-only fetch and the clean-checkout advancement
+helper. Cancellation already requested returns no result without inspection;
+EOF/cancellation at the prompt stops before remote access. Between bounded remote
+operations and just before advancing HEAD, cancellation stops further work;
+already received objects may remain. In-flight Git operations use their existing
+deadlines, not immediate cancellation. Successful advancement is never hidden by
+a cancelled/null result afterward. Recheck HEAD, enrollment, dirty paths, exact
+working bytes and staged entries after the prompt. Equal/ahead retain drafts;
+behind plus dirty stops even after Overwrite. The returned context/choice is
+advisory, not permission for a later writer to use stale inputs. No capture,
+scaffolding, commit, deployment, public route or migration completion is added.
+
+Internal `MigrationLegacyCapturePreview` uses the original pre-fetch commit now
+retained by preparation. It validates original commit ancestry, bounded regular
+historical blobs, current committed/index/working provenance and selected local
+legacy bindings before returning any proposal. If canonical instructions did not
+change, runtime drift may be proposed for capture. If canonical changed, identical
+runtime needs no capture; differing runtime stops for reconciliation, never an
+automatic merge or overwrite. Instructions use exact bytes. Codex personality
+uses managed enum values, so retrieved comments/spacing survive and unrelated
+runtime TOML never becomes canonical. Missing/invalid personality stops without
+inserting defaults. Portable generated runtimes are refused by this legacy-only
+preview; portable previews and the single-provider handoff below avoid whole-file
+capture. Combined rendering/commit remain pending before public migration can be released.
+Canonical legacy paths may name
+another machine, but runtime must bind to the selected checkout. No write, commit,
+network operation, scaffolding or deployment is added; later writers must freshly
+revalidate all proposed inputs.
+
+Internal `MigrationLegacyCaptureWriter` recreates and compares that preview before
+writing, including its symbolic branch and exact canonical/runtime/proposed bytes.
+It replaces only changed selected legacy canonical files using the existing
+guarded atomic-file helper. No-op returns no paths. HEAD, branch, raw index, absent
+format marker, enrollment and selected bytes are checked around each replacement;
+completed files must match proposed bytes, not their intentionally replaced originals.
+Fresh proposals—not caller-held byte buffers—supply the writes. Authored drafts,
+runtime and unselected provider files remain untouched. Replacement is atomic per
+file, not a batch transaction: a failure reports completed paths and any attempted
+path that may have changed, then stops without rollback, staging or commit.
+Inspect partial working-file changes before retrying; rerunning preflight may
+refuse intentionally dirty canonical files until they are explicitly resolved.
+No public migration route, network, scaffolding, render or apply is added.
+
+Internal `MigrationLegacyCaptureCommitter.WriteAndCommit` coordinates that writer
+and an exact-path commit. It requires an empty staged diff before writing and
+staging, retains privately derived proposals, and validates staged object bytes,
+file modes and exact paths before the guarded branch update. Unstaged authored
+drafts remain outside the commit. A validated no-op creates no commit. On failure,
+working changes, staging or a new commit may remain: inspect HEAD/index/files;
+no automatic rollback or push occurs. This internal operation does not expose
+the planned migration command or perform scaffolding or deployment.
+
+Internal `MigrationPortableCapturePreview` handles already-portable runtimes in
+an incomplete migration using existing Codex/Copilot section-aware backup previews.
+Legacy or absent providers yield no portable preview; unchanged portable providers
+retain a non-null preview with no changes. Require the prepared HEAD, original
+ancestry, local binding, valid committed sources/target and matching last-applied
+digest. Dirty relevant sources stop even with a `Preserve` choice. Stop if pulled
+canonical personality conflicts with runtime, attribution is ambiguous, or the
+two harnesses propose different content for the same source. Identical proposals
+are allowed, not automatically written or merged. Runtime/config/context/target
+inputs are rechecked before return. No writes, commits, network, scaffolding,
+render/apply or public migration route are added by the preview.
+
+Internal `MigrationPortableCaptureWriter.WriteAndCommit` implements the bounded
+single-provider writing handoff. Refuse preexisting staging, recreate/compare the
+reviewed inputs, then use fresh proposals with the existing provider backup writer.
+No changed providers means no commit. Two changed providers stop before writes,
+even for identical shared proposals; combined rendering/commit remain deferred because
+the first commit would invalidate the second provider's reviewed baseline.
+Existing backup writers regenerate and commit only the affected enrolled targets
+and source/config paths. Verify the returned commit's single reviewed parent and
+unchanged branch, absent completion marker, enrollment and runtime bytes afterward.
+Runtime digests remain unchanged until separately approved apply; do not rerun
+the migration preview as post-commit validation. Failures retain inspectable files,
+staging or a commit without rollback. No push, runtime deployment, scaffolding or
+public command is added.
+
+Internal `MigrationPortableSourceWriter.Write` supplies the combined authored-file
+boundary only. Reuse the fresh-preview/input checks, deduplicate agreeing edits,
+and replace only changed authored shared/platform/provider sections and managed
+Codex config. Freeze relevant unchanged sources/targets and selected runtime files;
+check HEAD, branch, raw index, absent marker, enrollment and file bytes around each
+guarded atomic replacement. Refuse staging; no-op changes nothing. On failure,
+report completed and potentially changed attempted paths without rollback.
+Rendered targets, index/HEAD and runtime stay untouched. Targets therefore remain
+at their old committed version; this is not completed migration or permission to
+apply. Target regeneration, combined commit and public activation remain later
+work. The single-provider handoff still refuses two changed providers.
+
+### Existing manual migration — implemented and rehearsed
+
 ```mermaid
 flowchart TD
     Baseline["Clean, committed 1.x repository<br/>and matching local runtime"] --> Split["Review every instruction's destination:<br/>shared, current platform, or provider"]
@@ -149,7 +375,8 @@ flowchart TD
 
 This is the supported **2.0 development-branch data migration** using the current
 command syntax. Installing the executable or upgrading a skill does not migrate
-the data. There is no automatic instruction classification or migration command.
+the data. There is no automatic instruction classification; the interactive
+command above is planned, not available in the current executable.
 The example below covers Codex and Copilot used on the same machine; omit the
 Copilot source, enrollment, and deployment when that harness is not used.
 
@@ -218,15 +445,17 @@ With no further edits, repeating enrollment, render, and apply reports
 already-bound portable runtime. An explicitly authorized backup of that unchanged
 runtime reports `unchanged` without a commit. These reruns do not authorize a
 new instruction split, overwrite a dirty target, or replace manual ChatGPT data.
-The CLI performs no remote operations; use the separately approved Git workflow
-for publication and retrieval.
+These currently implemented commands perform no remote operations; use the
+separately approved Git workflow for publication and retrieval.
 
-`LegacyMigrationTests` rehearses this sequence through public commands with a
+`LegacyMigrationTests` rehearses the manual sequence through public commands with a
 disposable 1.x-format repository, both local homes, a supplied lossless split,
 non-default personality, unrelated runtime settings, and manual ChatGPT backup
 bytes. It checks preservation, per-provider commit boundaries, usable 2.0
 status/apply/backup, and safe reruns. This is local managed-code evidence, not
 execution of a historical binary, Native AOT smoke, or real-harness verification.
+It does not test the planned `migrate` command, its pull/backup orchestration,
+interactive choices, `DONE` gate, or restart policy.
 
 ## Sharing migrated instructions between machines
 
@@ -1244,7 +1473,10 @@ unapplied render changes), and the other provider's runtime/config/skill.
 
 The workflow runs focused lifecycle tests and a separate, two-minute-bounded
 legacy migration rehearsal before the native build. The updated 2.0 sequence
-awaits its Linux runner pass; local macOS checks are not Linux-native proof.
+[passed on Linux ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40218058322)
+at `85fbd19`: lifecycle 110/110, migration 1/1, Native AOT build, version/help,
+and the complete isolated installer lifecycle. Neither test scope skipped tests.
+This is Linux ARM64 runner/native proof; local macOS checks alone would not be.
 The [historical runner pass](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284376)
 covers the older single-file Copilot flow, not this update. Neither is proof of
 actual Codex/Copilot harness integration.
