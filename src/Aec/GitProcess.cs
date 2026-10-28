@@ -32,6 +32,57 @@ internal static class GitProcess
             standardError.GetAwaiter().GetResult());
     }
 
+    internal static GitResult ReadRemoteHead(string repository, string remote, TimeSpan? timeout = null) =>
+        RunRemoteCommand(repository, ["ls-remote", "--symref", "--", remote, "HEAD"],
+            "Remote HEAD query", timeout ?? TimeSpan.FromSeconds(30));
+
+    internal static GitResult FetchRemoteCommit(string repository, string remote, string commit, TimeSpan? timeout = null) =>
+        RunRemoteCommand(repository,
+            ["fetch", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--refmap=",
+                "--no-auto-maintenance", "--no-write-commit-graph", "--", remote, commit],
+            "Remote fetch", timeout ?? TimeSpan.FromMinutes(2));
+
+    private static GitResult RunRemoteCommand(
+        string repository, string[] arguments, string operation, TimeSpan limit)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(limit, TimeSpan.Zero);
+        var elapsed = Stopwatch.StartNew();
+        var startInfo = CreateStartInfo(repository, arguments);
+        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        startInfo.RedirectStandardInput = true;
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Git could not be started.");
+        // The remote query must not consume input intended for the migration's
+        // later review prompt. Custom SSH/helper waits are bounded by the deadline.
+        process.StandardInput.Close();
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        var completion = Task.WhenAll(process.WaitForExitAsync(), output, error);
+        try
+        {
+            var remaining = limit - elapsed.Elapsed;
+            if (remaining <= TimeSpan.Zero) throw new TimeoutException();
+            completion.WaitAsync(remaining).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException exception)
+        {
+            // Request termination only for this query's tree, then confirm Git's
+            // exit with a bounded cleanup wait rather than waiting indefinitely.
+            try
+            {
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException) { /* The process exited during cleanup. */ }
+            if (!process.WaitForExit(1000))
+            {
+                throw new InvalidOperationException($"{operation} timed out and Git termination could not be confirmed.", exception);
+            }
+            throw new InvalidOperationException($"{operation} timed out; migration preparation stopped.", exception);
+        }
+
+        return new GitResult(process.ExitCode, output.GetAwaiter().GetResult(), error.GetAwaiter().GetResult());
+    }
+
     public static byte[] RunRequiredBytes(
         string? workingDirectory,
         string failureMessage,
