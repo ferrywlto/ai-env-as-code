@@ -664,7 +664,8 @@ internal static class BackupCommand
         string commitMessage,
         IReadOnlyList<(string RelativePath, string Blob)> expectedFiles,
         string expectedBranch,
-        string? expectedParent)
+        string? expectedParent,
+        IReadOnlyDictionary<string, string>? expectedModes = null)
     {
         if (expectedFiles.Count == 0)
         {
@@ -677,7 +678,7 @@ internal static class BackupCommand
             repository,
             "Git could not pin the verified canonical index",
             "write-tree").Output.Trim();
-        VerifyPinnedTree(repository, expectedTree, expectedParent, expectedFiles);
+        VerifyPinnedTree(repository, expectedTree, expectedParent, expectedFiles, expectedModes);
 
         var arguments = new List<string> { "commit-tree", expectedTree };
         if (expectedParent is not null)
@@ -727,7 +728,8 @@ internal static class BackupCommand
         string repository,
         string tree,
         string? parent,
-        IReadOnlyList<(string RelativePath, string Blob)> expectedFiles)
+        IReadOnlyList<(string RelativePath, string Blob)> expectedFiles,
+        IReadOnlyDictionary<string, string>? expectedModes)
     {
         var allowedPaths = new HashSet<string>(
             expectedFiles.Select(file => file.RelativePath),
@@ -769,6 +771,17 @@ internal static class BackupCommand
 
         foreach (var expected in expectedFiles)
         {
+            // Migration capture preserves the baseline executable bit. Validate
+            // the pinned tree, not a mutable index checked before write-tree.
+            if (expectedModes is not null)
+            {
+                var entry = RunRequired(repository, "Git could not inspect pinned canonical mode",
+                    "--no-replace-objects", "ls-tree", "-z", tree, "--", expected.RelativePath).Output;
+                if (entry != $"{expectedModes[expected.RelativePath]} blob {expected.Blob}\t{expected.RelativePath}\0")
+                {
+                    throw new InvalidOperationException("Pinned canonical file mode or blob differs from review.");
+                }
+            }
             var actualBlob = RunRequired(
                 repository,
                 $"Git could not inspect pinned canonical path {expected.RelativePath}",
