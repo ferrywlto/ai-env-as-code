@@ -356,8 +356,19 @@ guarded atomic replacement. Refuse staging; no-op changes nothing. On failure,
 report completed and potentially changed attempted paths without rollback.
 Rendered targets, index/HEAD and runtime stay untouched. Targets therefore remain
 at their old committed version; this is not completed migration or permission to
-apply. Target regeneration, combined commit and public activation remain later
-work. The single-provider handoff still refuses two changed providers.
+apply. The single-provider handoff still refuses two changed providers.
+
+Internal `MigrationPortableTargetWriter.Prepare(reviewed)` must run before that
+authored-file stage. It retains a fresh private in-memory plan, validates committed
+target baselines and composes all affected enrollments across platforms together.
+After source writing, `Write(writtenSourcePaths)` requires the exact completed
+proposal paths **and bytes**, then changes only their affected existing targets.
+Shared/platform/provider scope is preserved; config-only/no-op capture changes no
+targets. Rechecks preserve authored files, raw index/HEAD, local bindings and all
+selected runtime state. Failure reports completed and possibly changed attempted
+targets without rollback. See the [architecture flow and classes](architecture.md#internal-combined-portable-target-only-writer).
+This is internal target-only code, not public migration, runtime deployment or a
+saved continuation. Combined staging/commit and public activation remain later work.
 
 ### Existing manual migration — implemented and rehearsed
 

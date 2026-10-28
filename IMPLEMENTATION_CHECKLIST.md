@@ -953,8 +953,36 @@ combined target regeneration/commit, command orchestration and release gates rem
   Architecture/reference updated. Local managed-code proof only, not full regression,
   native OS-runner or real-harness verification. Included in local commit
   `f99e2eb`; no push or personal state change.
+- [x] Ferry reviewed and approved combined portable target-only regeneration
+  and its engine commit on 2026-10-28.
+  Prepare a private in-memory plan before authored writes; require exact completed
+  authored/config proposals, then regenerate only affected committed enrollments
+  across platforms. Reuse the frozen-source guards; preserve authored files,
+  raw index/HEAD and runtime. Add focused tests and architecture/reference updates.
+  Independent source/test/documentation review found no remaining blocker after
+  correcting a refusal-test setup before execution. The approved focused run
+  stopped during the warning-as-error build: CA1861 at
+  `MigrationPortableTargetWriterTests.cs:282` requires the repeated platform array
+  to be a static readonly field. Production compiled; no tests executed and no
+  automatic remediation/retry was attempted. Ferry approved the fixture-only
+  static-readonly correction and the same focused run. The authorized retry passed
+  all 66 cases in 22m25s: 35 new target-only, 20 existing authored-source and
+  11 existing target-rendering cases. Warning-as-error Release build passed;
+  zero failures/skips/aborts/timeouts. TRX outcome is Completed. Evidence:
+  `artifacts/migration-portable-target-writer-20261028/focused/_Ferrys-MacBook-Pro_2026-10-28_21_44_08.trx`.
+  Whole-fixture snapshots permit only declared target changes during this stage;
+  source/config bytes, Git index/HEAD and runtime remain untouched. Tests cover
+  combined consumers across all three enrolled platform layouts, mixed formats,
+  no-op/config-only, exact completed paths and bytes, stale/tampered inputs,
+  malformed/inconsistent/oversized targets and first/later filesystem failures.
+  Independent fixture/documentation review found no remaining blocker. Architecture
+  class/flow diagrams and reference updated. This is local managed-code proof,
+  not full regression, native OS-runner or actual-harness verification. Ferry
+  authorized committing the exact reviewed engine paths before any next slice.
+  No push or personal-state change.
+  Combined staging/commit/public wiring are not included.
 - [ ] After verification, slice review and separate approval, implement
-  combined portable target regeneration/commit and scaffolding
+  combined portable commit and scaffolding
   in further small increments. Preserve/Overwrite does not waive Git safety.
 - [x] Ferry reviewed and approved terminology documentation. One
   glossary in docs/reference.md defines Capture, Preflight, Target, Preview and

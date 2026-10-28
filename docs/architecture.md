@@ -408,7 +408,7 @@ No runtime write, push, scaffolding, public route or automatic rollback is added
 ```mermaid
 flowchart TD
     Reviewed[MigrationPortableSourceWriter.Write] --> Recheck[Shared RecheckPreview: fresh inputs and empty staged diff]
-    Recheck --> Plan[Freeze one baseline; plan and deduplicate authored/config proposals]
+    Recheck --> Plan[MigrationPortableCapturePlan: freeze baseline and deduplicate authored/config proposals]
     Plan -->|Conflict| Stop[Stop before replacing files]
     Plan --> Verify[Check HEAD, branch, raw index, absent marker, enrollment and frozen file bytes]
     Verify -->|Next changed authored/config path| Atomic[AtomicFile.ReplaceIfUnchanged]
@@ -427,11 +427,67 @@ are frozen too. A completed file must match its proposal; others retain baseline
 bytes. Raw index bytes must remain identical, and staging is refused throughout.
 Atomicity is per file, not a batch transaction. Failure retains inspectable partial
 changes; the existing non-root Unix failure-fixture constraint still applies.
-Targets intentionally remain at the old committed version. Regeneration, combined
-commit and public activation are separate unfinished steps; clean-source previews
-will reject these intentionally dirty authored files until resolved. The existing
+Targets intentionally remain at the old committed version at this boundary.
+The target-only bridge below handles regeneration; combined commit and public
+activation remain unfinished. Clean-source previews reject these intentionally
+dirty authored files. The existing
 single-provider handoff still refuses two changed providers. No runtime deployment,
 new enrollment, scaffolding, network operation or public command is added.
+
+### Internal combined portable target-only writer
+
+```mermaid
+flowchart TD
+    Review[Reviewed portable capture] --> Prepare[MigrationPortableTargetWriter.Prepare: fresh private plan]
+    Prepare --> Enrolled[Read committed enrollments; validate baselines and compose combined desired targets]
+    Enrolled --> Source[Separate authored-file writer]
+    Source --> Paths[Exact completed authored/config path set]
+    Paths --> Verify[Verify proposal bytes, unchanged sources, targets, runtime and Git guards]
+    Verify -->|Next changed enrolled target| Replace[AtomicFile.ReplaceIfUnchanged]
+    Replace --> Verify
+    Verify -->|Finished or no-op| Result[Return target paths; no source, index, HEAD or runtime writes]
+    Verify -->|Failure| Inspect[Report completed and possibly changed attempted targets; no rollback]
+    Replace -->|Failure| Inspect
+```
+
+```mermaid
+classDiagram
+    class MigrationPortableCapturePlan {
+        ~Prepare(reviewed)
+        ~WriteSources()
+        ~ReadSource(relative)
+        ~ObserveCommitted(relative)
+        ~Verify(writtenSources, writtenTargets)
+    }
+    class MigrationPortableSourceWriter {
+        +Write(reviewed)
+    }
+    class MigrationPortableTargetWriter {
+        +Prepare(reviewed)
+        +Write(writtenSourcePaths)
+    }
+    MigrationPortableSourceWriter --> MigrationPortableCapturePlan : frozen source-stage guards
+    MigrationPortableTargetWriter *-- MigrationPortableCapturePlan : private pre-write baseline
+    MigrationPortableCapturePlan --> MigrationPortableCaptureWriter : fresh RecheckPreview
+    MigrationPortableTargetWriter --> InstructionSections : baseline and combined desired rendering
+    MigrationPortableTargetWriter --> AtomicFile : target-only replacements
+```
+
+The plan exists only in memory and must be prepared before authored writes;
+it is not a saved continuation or a public migration command. Shared edits affect
+every committed enrollment, platform edits only that platform, and provider edits
+that provider across platforms. Combined edits use the union and compose all
+proposals together. No target or provider enrollment is created; config-only and
+no-change capture render nothing. Unsupported committed target paths, dirty or
+inconsistent baselines, links and oversized rendering stop before target writes.
+
+The shared capture plan keeps fresh proposal buffers and enrollment private,
+freezes consumed sources and all committed targets, and reuses the authored
+writer's HEAD/branch/raw-index/marker/enrollment/runtime guards. The completed path
+list must match exactly, and every authored/config byte must match its proposal;
+it is not proof by path names alone. Rechecks surround each per-file replacement.
+Failures retain partial targets for inspection, without rollback or batch atomicity.
+No staging, commit, runtime write, network, scaffolding or public route is added.
 
 ## Cross-machine boundary
 
