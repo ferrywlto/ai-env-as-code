@@ -489,14 +489,7 @@ internal static class InitCommand
             ?? throw new InvalidDataException(
                 "Canonical instructions do not contain a supported initialized AEC block.");
 
-        var history = ReadFirstParentHistory(repository, required: true);
-        if (history.Length < 2 || !HasExpectedInitializationSubjects(repository, history))
-        {
-            throw new InvalidOperationException(
-                "Repository does not contain the expected AEC initialization history.");
-        }
-
-        ValidateInitializationHistory(repository, history[0], history[1]);
+        ValidateInitializationHistory(repository);
 
         // Pin the inspected snapshot after all history checks so a concurrent checkout
         // cannot silently redirect the later attachment apply.
@@ -509,6 +502,20 @@ internal static class InitCommand
 
         EnsureMainBranch(repository);
         return new CompletedSnapshot(commit, content, config, binding);
+    }
+
+    internal static void ValidateInitializationHistory(string repository)
+    {
+        // Migration needs the original history proof without init's main-branch
+        // or clean-worktree requirements: interrupted section edits are separate.
+        var history = ReadFirstParentHistory(repository, required: true);
+        if (history.Length < 2 || !HasExpectedInitializationSubjects(repository, history))
+        {
+            throw new InvalidOperationException(
+                "Repository does not contain the expected AEC initialization history.");
+        }
+
+        ValidateInitializationHistory(repository, history[0], history[1]);
     }
 
     private static bool HasCompletedInitializationHistory(string repository)
@@ -1246,7 +1253,7 @@ internal static class InitCommand
         EnsureContainedGitMetadata(repository, gitDirectory);
     }
 
-    private static void EnsureContainedGitMetadata(string repository, string gitDirectory)
+    internal static void EnsureContainedGitMetadata(string repository, string gitDirectory)
     {
         EnsureSamePath(
             gitDirectory,
