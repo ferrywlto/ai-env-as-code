@@ -428,8 +428,9 @@ bytes. Raw index bytes must remain identical, and staging is refused throughout.
 Atomicity is per file, not a batch transaction. Failure retains inspectable partial
 changes; the existing non-root Unix failure-fixture constraint still applies.
 Targets intentionally remain at the old committed version at this boundary.
-The target-only bridge below handles regeneration; combined commit and public
-activation remain unfinished. Clean-source previews reject these intentionally
+The target-only bridge below handles regeneration, and the separate combined
+coordinator handles its commit. Public activation remains unfinished.
+Clean-source previews reject these intentionally
 dirty authored files. The existing
 single-provider handoff still refuses two changed providers. No runtime deployment,
 new enrollment, scaffolding, network operation or public command is added.
@@ -465,6 +466,8 @@ classDiagram
     class MigrationPortableTargetWriter {
         +Prepare(reviewed)
         +Write(writtenSourcePaths)
+        ~VerifyRendered()
+        ~VerifyForCommit(expectedHead)
     }
     MigrationPortableSourceWriter --> MigrationPortableCapturePlan : frozen source-stage guards
     MigrationPortableTargetWriter *-- MigrationPortableCapturePlan : private pre-write baseline
@@ -488,6 +491,62 @@ list must match exactly, and every authored/config byte must match its proposal;
 it is not proof by path names alone. Rechecks surround each per-file replacement.
 Failures retain partial targets for inspection, without rollback or batch atomicity.
 No staging, commit, runtime write, network, scaffolding or public route is added.
+
+### Internal combined portable capture coordinator
+
+```mermaid
+flowchart TD
+    Reviewed[MigrationPortableCaptureCommitter.WriteAndCommit] --> Plan[One fresh private capture plan and affected target plan]
+    Plan --> Freeze[Freeze desired source/config/target bytes and baseline Git modes]
+    Freeze --> Sources[Existing authored-file writing stage]
+    Sources --> Targets[Existing target-only writing stage]
+    Targets --> Verify[Verify exact completed union, original index and frozen inputs]
+    Verify -->|No changes| Noop[Return no commit]
+    Verify -->|Changed paths only| Stage[Exact-path Git add]
+    Stage --> Objects[Verify exact stage-0 paths, modes and actual object bytes]
+    Objects --> Commit[CommitStagedIndex: pin tree, sign and compare-and-swap branch]
+    Commit --> Check[Verify single reviewed parent, exact committed paths/blobs/modes and frozen inputs]
+    Check --> Result[Return one commit; runtime unchanged]
+    Sources -->|Failure| Inspect[Retain files/index/possibly commit; no rollback or push]
+    Targets -->|Failure| Inspect
+    Verify -->|Failure| Inspect
+    Stage -->|Failure| Inspect
+    Objects -->|Failure| Inspect
+    Commit -->|Failure| Inspect
+    Check -->|Failure| Inspect
+```
+
+```mermaid
+classDiagram
+    class MigrationPortableCaptureCommitter {
+        +WriteAndCommit(reviewed)
+    }
+    MigrationPortableCaptureCommitter --> MigrationPortableCapturePlan : one private baseline and source writing
+    MigrationPortableCaptureCommitter --> MigrationPortableTargetWriter : same plan, target writing and revalidation
+    MigrationPortableCaptureCommitter --> BackupCommand : CommitStagedIndex
+    MigrationPortableCapturePlan --> MigrationPortableCaptureWriter : RecheckPreview
+```
+
+Both providers' agreeing or separate proposals share one commit, not sequential
+single-provider commits that invalidate each other's baseline. Desired bytes are
+copied from the private plan before writing, never hashed from mutable working
+files as authority. Staged object size is checked before reading; staged and pinned
+tree modes must match the original regular-file modes. Existing signing behavior
+and the guarded branch update are retained. No-op still validates the full plan.
+
+Default source/target-stage verification still requires the original raw index
+and HEAD. Only the explicitly named commit boundary accepts the staged index or
+new HEAD; it retains source/config/target bytes, branch, absent completion marker,
+local enrollment and all selected runtime guards. The coordinator separately
+verifies exact staged/committed paths and objects, and the final index must be clean.
+Checks run as named, sequential guards with descriptive local values and explicit
+runtime/canonical file loops. Staged entry, size parsing, expected size and content
+comparison are separate checks; diagnostics identify the failing input. This
+readability split does not add a validation framework or alter the boundaries above.
+An error may retain authored files, targets, staging or a published local commit;
+no batch atomicity, rollback, push or runtime deployment is claimed. The existing
+single-provider adapter remains unchanged. This coordinator has no public route;
+scaffolding, completion orchestration and activation remain separate work.
 
 ## Cross-machine boundary
 

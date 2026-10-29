@@ -16,9 +16,11 @@ internal sealed class MigrationPortableTargetWriter
         this.changes = changes;
     }
 
-    public static MigrationPortableTargetWriter Prepare(MigrationPortableCapturePreview reviewed)
+    public static MigrationPortableTargetWriter Prepare(MigrationPortableCapturePreview reviewed) =>
+        Prepare(MigrationPortableCapturePlan.Prepare(reviewed));
+
+    internal static MigrationPortableTargetWriter Prepare(MigrationPortableCapturePlan plan)
     {
-        var plan = MigrationPortableCapturePlan.Prepare(reviewed);
         var proposals = plan.ChangedSourcePaths;
         var changes = new List<TargetChange>();
         var enrolled = GitProcess.RunRequired(plan.Repository, "Could not list committed migration targets",
@@ -26,21 +28,14 @@ internal sealed class MigrationPortableTargetWriter
             .Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
         foreach (var relative in enrolled.Order(StringComparer.Ordinal))
         {
-            var parts = relative.Split('/');
-            if (parts.Length != 5 || parts[0] != "environment" || parts[1] != "targets" ||
-                parts[2] is not ("macos-arm64" or "windows-x64" or "linux-arm64") ||
-                parts[3] is not ("codex" or "copilot") ||
-                parts[4] != (parts[3] == "codex" ? "AGENTS.md" : "copilot-instructions.md"))
-            {
-                throw new InvalidDataException($"Unsupported committed target enrollment: {relative}");
-            }
+            var (platform, provider) = ReadEnrollment(relative);
 
             // Freeze even unaffected targets, but render only the union of
             // consumers of changed sources. Config alone does not affect targets.
             var before = plan.ObserveCommitted(relative);
             string[] sources = ["environment/shared/instructions.md",
-                $"environment/platforms/{parts[2]}/policy.md",
-                $"environment/providers/{parts[3]}/overlay.md"];
+                $"environment/platforms/{platform}/policy.md",
+                $"environment/providers/{provider}/overlay.md"];
             if (!sources.Any(source => proposals.Contains(source, StringComparer.Ordinal))) continue;
             var shared = plan.ReadSource(sources[0]);
             var policy = plan.ReadSource(sources[1]);
@@ -48,14 +43,60 @@ internal sealed class MigrationPortableTargetWriter
             var baseline = StrictUtf8.GetBytes(InstructionSections.Render(shared.Original, policy.Original, overlay.Original));
             var desired = StrictUtf8.GetBytes(InstructionSections.Render(shared.Desired, policy.Desired, overlay.Desired));
             if (!before.AsSpan().SequenceEqual(baseline))
+            {
                 throw new InvalidDataException($"Committed target does not match its authored sources: {relative}");
+            }
             if (desired.Length > AecApplication.MaximumTextBytes)
+            {
                 throw new InvalidDataException($"Rendered target exceeds 1 MiB: {relative}");
-            if (!before.AsSpan().SequenceEqual(desired)) changes.Add(new TargetChange(relative, before, desired));
+            }
+            if (!before.AsSpan().SequenceEqual(desired))
+            {
+                changes.Add(new TargetChange(relative, before, desired));
+            }
         }
         plan.Verify([]);
         return new MigrationPortableTargetWriter(plan, changes.ToArray());
     }
+
+    private static (string Platform, string Provider) ReadEnrollment(string relativePath)
+    {
+        var parts = relativePath.Split('/');
+        if (parts.Length != 5)
+        {
+            throw new InvalidDataException($"Unsupported committed target path structure: {relativePath}");
+        }
+        if (parts[0] != "environment" || parts[1] != "targets")
+        {
+            throw new InvalidDataException($"Unsupported committed target directory: {relativePath}");
+        }
+
+        var platform = parts[2];
+        if (platform is not ("macos-arm64" or "windows-x64" or "linux-arm64"))
+        {
+            throw new InvalidDataException($"Unsupported committed target platform: {relativePath}");
+        }
+        var provider = parts[3];
+        if (provider is not ("codex" or "copilot"))
+        {
+            throw new InvalidDataException($"Unsupported committed target provider: {relativePath}");
+        }
+
+        var expectedFileName = provider == "codex" ? "AGENTS.md" : "copilot-instructions.md";
+        if (parts[4] != expectedFileName)
+        {
+            throw new InvalidDataException($"Unsupported committed target file name: {relativePath}");
+        }
+        return (platform, provider);
+    }
+
+    internal Dictionary<string, byte[]> CopyProposals() => changes.ToDictionary(
+        change => change.RelativePath, change => change.Desired.ToArray(), StringComparer.Ordinal);
+
+    internal void VerifyRendered() => plan.Verify(plan.ChangedSourcePaths, CopyProposals());
+
+    internal void VerifyForCommit(string expectedHead) =>
+        plan.VerifyForCommit(plan.ChangedSourcePaths, CopyProposals(), expectedHead);
 
     public IReadOnlyList<string> Write(IReadOnlyList<string> writtenSourcePaths)
     {

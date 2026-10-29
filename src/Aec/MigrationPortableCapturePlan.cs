@@ -9,7 +9,7 @@ internal sealed class MigrationPortableCapturePlan
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private readonly MigrationPortableCapturePreview fresh;
-    private readonly byte[] index;
+    private readonly byte[] originalIndex;
     private readonly Dictionary<string, byte[]?> originals = new(StringComparer.Ordinal);
     private readonly Dictionary<string, byte[]> proposals = new(StringComparer.Ordinal);
     private readonly Dictionary<string, byte[]?> runtimes = new(StringComparer.Ordinal);
@@ -20,7 +20,7 @@ internal sealed class MigrationPortableCapturePlan
         {
             Preparation = fresh.Preparation with { Harnesses = fresh.Preparation.Harnesses.ToArray() }
         };
-        index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(Repository, ".git", "index"));
+        originalIndex = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(Repository, ".git", "index"));
         _ = ObserveCommitted(AecApplication.SourceRelativePath);
         _ = ObserveCommitted(AecApplication.ConfigSourceRelativePath);
         foreach (var harness in fresh.Preparation.Harnesses)
@@ -53,7 +53,13 @@ internal sealed class MigrationPortableCapturePlan
 
     internal string Repository => fresh.Preparation.Preflight.Repository;
     internal string Commit => fresh.Preparation.Preflight.Commit;
+    internal string Branch => fresh.Branch;
     internal string[] ChangedSourcePaths => proposals.Keys.Order(StringComparer.Ordinal).ToArray();
+
+    // The committer owns its copies; neither caller review buffers nor later
+    // working-file hashes can substitute different commit content.
+    internal Dictionary<string, byte[]> CopyProposals() => proposals.ToDictionary(
+        file => file.Key, file => file.Value.ToArray(), StringComparer.Ordinal);
 
     internal static MigrationPortableCapturePlan Prepare(MigrationPortableCapturePreview reviewed) =>
         new(MigrationPortableCaptureWriter.RecheckPreview(reviewed));
@@ -102,26 +108,120 @@ internal sealed class MigrationPortableCapturePlan
     }
 
     internal void Verify(IReadOnlyList<string> writtenSources, IReadOnlyDictionary<string, byte[]>? writtenTargets = null)
+        => VerifyCore(writtenSources, writtenTargets, Commit, preserveIndex: true);
+
+    // Explicit staging changes the index and committing changes HEAD. Skip only
+    // the original-index requirement at this boundary; retain every file guard.
+    internal void VerifyForCommit(IReadOnlyList<string> writtenSources,
+        IReadOnlyDictionary<string, byte[]> writtenTargets, string expectedHead)
+        => VerifyCore(writtenSources, writtenTargets, expectedHead, preserveIndex: false);
+
+    private void VerifyCore(IReadOnlyList<string> writtenSources,
+        IReadOnlyDictionary<string, byte[]>? writtenTargets, string expectedHead, bool preserveIndex)
     {
         AecApplication.EnsureNoLinksInExistingPath(Repository, "Repository path");
         AecApplication.EnsureNoLinksInExistingPath(Path.Combine(Repository, ".git"), "Git metadata path");
         MigrationFastForward.EnsureSafeGitConfiguration(Repository);
-        MigrationPortableCaptureWriter.EnsureEmptyIndex(Repository);
-        if (ApplyCommand.ResolveHeadCommit(Repository) != Commit ||
-            MigrationLegacyCapturePreview.ReadBranch(Repository) != fresh.Branch ||
-            !MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(Repository, ".git", "index")).AsSpan().SequenceEqual(index) ||
-            ReadFile(Path.Combine(Repository, MigrationPreflight.FormatRelativePath)) is not null ||
-            !MigrationHarnessSelection.Read(fresh.Preparation.Preflight).SequenceEqual(fresh.Preparation.Harnesses) ||
-            runtimes.Any(file => !SameBytes(file.Value, ReadFile(file.Key))))
+        if (preserveIndex)
         {
-            throw new InvalidOperationException("Migration HEAD, branch, index, marker, enrollment or runtime changed; no further files will be replaced.");
+            MigrationPortableCaptureWriter.EnsureEmptyIndex(Repository);
         }
-        foreach (var (relative, before) in originals)
+
+        VerifyHead(expectedHead);
+        VerifyBranch();
+        if (preserveIndex)
         {
-            var expected = writtenTargets is not null && writtenTargets.TryGetValue(relative, out var target)
-                ? target : writtenSources.Contains(relative) ? proposals[relative] : before;
-            if (!SameBytes(expected, ReadFile(Path.Combine(Repository, relative))))
-                throw new InvalidOperationException("Portable canonical inputs changed; no further files will be replaced.");
+            VerifyOriginalIndex();
+        }
+
+        VerifyCompletionMarkerAbsent();
+        VerifyHarnessEnrollment(expectedHead);
+        VerifyRuntimeFiles();
+        VerifyCanonicalFiles(writtenSources, writtenTargets);
+    }
+
+    private void VerifyHead(string expectedHead)
+    {
+        var currentHead = ApplyCommand.ResolveHeadCommit(Repository);
+        if (currentHead != expectedHead)
+        {
+            throw new InvalidOperationException("Migration HEAD changed; no further files will be replaced.");
+        }
+    }
+
+    private void VerifyBranch()
+    {
+        var currentBranch = MigrationLegacyCapturePreview.ReadBranch(Repository);
+        if (currentBranch != fresh.Branch)
+        {
+            throw new InvalidOperationException("Migration branch changed; no further files will be replaced.");
+        }
+    }
+
+    private void VerifyOriginalIndex()
+    {
+        var indexPath = Path.Combine(Repository, ".git", "index");
+        var currentIndex = MigrationLegacyCaptureWriter.ReadIndex(indexPath);
+        if (!SameBytes(currentIndex, originalIndex))
+        {
+            throw new InvalidOperationException("Migration Git index changed; no further files will be replaced.");
+        }
+    }
+
+    private void VerifyCompletionMarkerAbsent()
+    {
+        var markerPath = Path.Combine(Repository, MigrationPreflight.FormatRelativePath);
+        var markerContent = ReadFile(markerPath);
+        if (markerContent is not null)
+        {
+            throw new InvalidOperationException("Migration completion marker appeared during capture; no further files will be replaced.");
+        }
+    }
+
+    private void VerifyHarnessEnrollment(string expectedHead)
+    {
+        var expectedContext = fresh.Preparation.Preflight with { Commit = expectedHead };
+        var currentHarnesses = MigrationHarnessSelection.Read(expectedContext);
+        var expectedHarnesses = fresh.Preparation.Harnesses;
+        if (!currentHarnesses.SequenceEqual(expectedHarnesses))
+        {
+            throw new InvalidOperationException("Migration harness enrollment changed; no further files will be replaced.");
+        }
+    }
+
+    private void VerifyRuntimeFiles()
+    {
+        foreach (var (runtimePath, expectedContent) in runtimes)
+        {
+            var currentContent = ReadFile(runtimePath);
+            if (!SameBytes(expectedContent, currentContent))
+            {
+                throw new InvalidOperationException($"Runtime capture input changed: {runtimePath}; no further files will be replaced.");
+            }
+        }
+    }
+
+    private void VerifyCanonicalFiles(IReadOnlyList<string> writtenSources,
+        IReadOnlyDictionary<string, byte[]>? writtenTargets)
+    {
+        foreach (var (relativePath, originalContent) in originals)
+        {
+            var expectedContent = originalContent;
+            if (writtenTargets is not null && writtenTargets.TryGetValue(relativePath, out var renderedTarget))
+            {
+                expectedContent = renderedTarget;
+            }
+            else if (writtenSources.Contains(relativePath))
+            {
+                expectedContent = proposals[relativePath];
+            }
+
+            var canonicalPath = Path.Combine(Repository, relativePath);
+            var currentContent = ReadFile(canonicalPath);
+            if (!SameBytes(expectedContent, currentContent))
+            {
+                throw new InvalidOperationException($"Portable canonical input changed: {relativePath}; no further files will be replaced.");
+            }
         }
     }
 

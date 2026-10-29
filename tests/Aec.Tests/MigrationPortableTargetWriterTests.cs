@@ -193,6 +193,9 @@ public sealed class MigrationPortableTargetWriterTests
     [InlineData("missing-target")]
     [InlineData("inconsistent-target")]
     [InlineData("invalid-enrollment")]
+    [InlineData("invalid-provider")]
+    [InlineData("invalid-filename")]
+    [InlineData("invalid-structure")]
     [InlineData("oversize-render")]
     public void OtherPlatformProblemsAreRejectedDuringPreparation(string kind)
     {
@@ -209,8 +212,19 @@ public sealed class MigrationPortableTargetWriterTests
             case "missing-target": File.Delete(Path.Combine(layout.Repository, otherTarget)); break;
             case "inconsistent-target": layout.Files.Write(otherTarget, "Inconsistent committed target.\n"); layout.Commit(otherTarget); break;
             case "invalid-enrollment":
-                const string unknown = "environment/targets/unknown/codex/AGENTS.md";
-                layout.Files.Write(unknown, "Unknown target.\n"); layout.Commit(unknown); break;
+            case "invalid-provider":
+            case "invalid-filename":
+            case "invalid-structure":
+                var invalidTarget = kind switch
+                {
+                    "invalid-enrollment" => "environment/targets/unknown/codex/AGENTS.md",
+                    "invalid-provider" => $"environment/targets/{layout.Platform}/unknown/AGENTS.md",
+                    "invalid-filename" => $"environment/targets/{layout.Platform}/codex/wrong.md",
+                    _ => $"environment/targets/{layout.Platform}/wrong.md"
+                };
+                layout.Files.Write(invalidTarget, "Unknown target.\n");
+                layout.Commit(invalidTarget);
+                break;
             default:
                 var large = new string('x', AecApplication.MaximumTextBytes - 300);
                 layout.Files.Write(policy, large);
@@ -219,7 +233,11 @@ public sealed class MigrationPortableTargetWriterTests
                 layout.Commit([policy, .. targets.Where(path => path.Split('/')[2] == otherTarget.Split('/')[2])]);
                 break;
         }
-        if (kind is "inconsistent-target" or "invalid-enrollment" or "oversize-render") reviewed = Preview(layout);
+        if (kind is "inconsistent-target" or "invalid-enrollment" or "invalid-provider" or
+            "invalid-filename" or "invalid-structure" or "oversize-render")
+        {
+            reviewed = Preview(layout);
+        }
 
         layout.Files.AssertNoChanges(() =>
         {
@@ -277,7 +295,7 @@ public sealed class MigrationPortableTargetWriterTests
 
     // These are committed enrollments, not simulated operating systems or new
     // local harnesses. Only deterministic target composition is cross-platform.
-    private static string[] EnrollOtherPlatforms(Layout layout, params string[] providers)
+    internal static string[] EnrollOtherPlatforms(Layout layout, params string[] providers)
     {
         var committed = new List<string>();
         var targets = providers.Select(layout.Target).ToList();

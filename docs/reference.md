@@ -368,7 +368,20 @@ targets. Rechecks preserve authored files, raw index/HEAD, local bindings and al
 selected runtime state. Failure reports completed and possibly changed attempted
 targets without rollback. See the [architecture flow and classes](architecture.md#internal-combined-portable-target-only-writer).
 This is internal target-only code, not public migration, runtime deployment or a
-saved continuation. Combined staging/commit and public activation remain later work.
+saved continuation.
+
+Internal `MigrationPortableCaptureCommitter.WriteAndCommit(reviewed)` joins those
+stages through one fresh private plan, then stages and commits exactly their changed
+authored/config/affected-target union. Verify staged object bytes and regular-file
+modes against private proposals, retain the existing signed/pinned-tree/guarded
+branch update, then verify the single reviewed parent and exact committed paths,
+blobs, modes and unchanged runtime/bindings. No-op validates but makes no commit.
+Source/target-only stages still preserve the raw index and original HEAD; the
+explicit commit boundary alone accepts its own staging and new HEAD. Failure
+retains partial files/index/possibly a local commit for inspection without rollback,
+push or apply. See the [coordinator diagrams](architecture.md#internal-combined-portable-capture-coordinator).
+The earlier single-provider adapter still refuses two changed providers; public
+migration wiring, scaffolding and completion activation remain later work.
 
 ### Existing manual migration — implemented and rehearsed
 

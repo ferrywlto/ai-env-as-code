@@ -981,8 +981,58 @@ combined target regeneration/commit, command orchestration and release gates rem
   authorized committing the exact reviewed engine paths before any next slice.
   No push or personal-state change.
   Combined staging/commit/public wiring are not included.
-- [ ] After verification, slice review and separate approval, implement
-  combined portable commit and scaffolding
+- [x] Ferry reviewed and approved the combined portable capture coordinator,
+  readability cleanup and engine commit on 2026-10-29. Implementation was approved
+  on 2026-10-28: one private plan, authored/config capture, affected enrolled target
+  regeneration and one exact-path commit. Reuse guarded source/target writing and
+  the pinned-tree commit helper; verify exact stage-0 blobs/modes, parent, committed
+  paths and unchanged runtime/bindings. No-op creates no commit; refuse stale or
+  pre-staged inputs and retain partial state on failure without rollback/push.
+  Implementation and architecture class/flow diagrams, reference and current
+  progress summary are complete locally. Independent source/test/documentation
+  reviews found no concrete blocker. The approved warning-as-error Release build
+  passed, and all 48 focused tests passed (runner duration 16m36s): 23 new coordinator
+  cases, 18 selected target guards, six source guards and one pinned-mode regression.
+  TRX outcome Completed; zero failures/skips/errors/aborts/timeouts/unexecuted cases,
+  with a 90-second per-test hang limit. The existing run completed on 2026-10-28;
+  its result was checked on 2026-10-29 without restarting or retrying tests. Evidence:
+  `artifacts/migration-portable-capture-committer-20261028/focused/_Ferrys-MacBook-Pro_2026-10-28_23_23_27.trx`.
+  Coverage includes agreeing/shared/platform and separate-overlay/config commits,
+  combined consumers across enrolled platforms, no-op/config-only, mixed-format
+  draft/runtime preservation, stale/staged refusal, fresh-derived proposal authority,
+  baseline executable modes, signing failure, newline transformation and retained
+  first/later target-write failures. Existing source/target-only raw-index/HEAD
+  constraints remain intact; only the explicit commit boundary accepts staging
+  and the new commit. Final independent evidence/scope review found no blocker.
+  Scoped local managed-code proof only, not full regression, native OS-runner or
+  actual-harness verification. Ferry approved the feature on 2026-10-29 and
+  requested readability-only cleanup before commit. Split compound plan guards
+  into named checks, use explicit runtime/canonical loops, replace the file-mode
+  reading lambda and staged-object compound condition with straight-line checks,
+  and name validated target path components. Preserve guard order, safety checks,
+  exception types and retained-state wrapping; only diagnostics become specific.
+  Add three malformed enrollment cases and update the newline diagnostic assertion.
+  Independent pre-execution review found no blocker. The 48-case result above is
+  pre-cleanup evidence. The approved 57-case affected run stopped during the
+  warning-as-error build: CA1859 requires concrete Dictionary types for three
+  private helper parameters in MigrationPortableCaptureCommitter. No tests executed.
+  No automatic correction/retry was attempted. Ferry explicitly approved the three
+  Dictionary parameter annotations and the same affected run. That authorized
+  retry passed the warning-as-error Release build and all 57 affected cases:
+  23 coordinator, 27 target guards, six source guards and one pinned-mode case.
+  TRX Completed, with zero failures/skips/errors/timeouts/aborts/unexecuted cases.
+  Evidence: `artifacts/migration-portable-capture-readability-20261029/focused/_Ferrys-MacBook-Pro_2026-10-29_01_40_09.trx`.
+  Timing qualification: runner wall span is 8h11m (timestamps about 8h11m25s),
+  while summed recorded case durations are 27m40s and the longest is 45.8s.
+  Large timestamp gaps have no verified cause; this is not CPU-time or normal
+  performance evidence. The configured hang guard was 90s. Results were collected
+  from the existing completed process after an interrupted wait; no extra test
+  restart/retry was performed. Independent final evidence/scope review found no
+  blocker. Ferry reviewed the cleanup and authorized the exact reviewed engine
+  commit before the next slice. No tests were removed; proof remains scoped
+  local managed-code only.
+  No public migration wiring, scaffolding, runtime deployment, push or personal change.
+- [ ] After verification, slice review and separate approval, implement scaffolding
   in further small increments. Preserve/Overwrite does not waive Git safety.
 - [x] Ferry reviewed and approved terminology documentation. One
   glossary in docs/reference.md defines Capture, Preflight, Target, Preview and
@@ -1006,12 +1056,17 @@ combined target regeneration/commit, command orchestration and release gates rem
   accidental identifier changes. Run affected tests and warning-as-error build;
   retain full regression as the final release gate. Deferred, not implemented now.
 
-Current boundary: the verified combined authored-file writer is locally committed
-in `f99e2eb` after Ferry's explicit grouped-commit authorization. Only authored/config
-working files change when that internal writer runs; targets/index/HEAD/runtime stay
-untouched. Next implementation requires a separately approved target-regeneration
-slice before combined commit and activation. The existing single-provider adapter
-still refuses two changed providers. No new implementation has started.
+Current boundary: the reviewed authored-only writer (`f99e2eb`) and target-only
+regeneration (`7e4ba8e`) are locally committed. Both preserve index/HEAD/runtime;
+the target-only stage also preserves authored/config bytes. Ferry approved the
+next internal combined write/render/one-commit coordinator; it is implemented and
+locally verified before the approved readability cleanup (48/48). Cleanup is
+implemented; its first affected-test run stopped at CA1859 before execution.
+The approved three-parameter type correction and its retry are complete (57/57),
+with the timing qualification recorded above. Ferry reviewed the coordinator and
+cleanup and authorized their semantic engine commit. The existing
+single-provider adapter still refuses two changed providers.
+Scaffolding, exact-DONE orchestration and public activation remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices still authorize no writes; dirty-behind stops.
 No public migrate route yet. Tests use disposable local bare
@@ -1022,7 +1077,9 @@ Internal format, harness, dirty-section and remote preflights are reviewed.
 Provider-first CLI remains on
 hold until migration is proven; identifier-constants cleanup is deferred until
 the end of implementation, before release regression.
-The migration code/test groups are committed locally; Linux post-run notes, migration
+The earlier migration code/test groups are committed locally; the combined
+coordinator and cleanup now have explicit review and commit authorization.
+Linux post-run notes, migration
 design, architecture and verification progress are included in the documentation
 checkpoint. See the current checkpoint table above; historical per-slice uncommitted
 notes are retained as original verification records. This commit authorization adds
