@@ -383,6 +383,23 @@ push or apply. See the [coordinator diagrams](architecture.md#internal-combined-
 The earlier single-provider adapter still refuses two changed providers; public
 migration wiring, scaffolding and completion activation remain later work.
 
+Internal `MigrationScaffoldPreview.Read(preparation)` inventories only shared,
+current-platform and confirmed local provider sources after refreshing capture's
+HEAD. It rechecks enrollment, reviewed dirty paths, raw index and observed bytes;
+it creates no files or directories and grants no later write permission.
+
+| Source state | Preview action |
+| --- | --- |
+| Absent from commit, index and working tree; not ignored | Propose an empty Markdown seed |
+| Clean existing file | Preserve exact bytes, regardless of choice |
+| Dirty file + Preserve | Preserve working bytes; staged changes block later writing |
+| Deleted file + Preserve | Preserve deletion; required source remains unresolved |
+| Dirty file without a choice, or with Overwrite | Require choice or overwrite-content review; never implicitly empty it |
+
+Legacy instructions remain untouched; the user, not AEC, classifies their content.
+See the [scaffold preview diagrams](architecture.md#internal-migration-scaffold-preview).
+Writing scaffolds and the exact-DONE completion flow remain unimplemented.
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid

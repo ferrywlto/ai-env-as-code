@@ -1032,6 +1032,25 @@ combined target regeneration/commit, command orchestration and release gates rem
   commit before the next slice. No tests were removed; proof remains scoped
   local managed-code only.
   No public migration wiring, scaffolding, runtime deployment, push or personal change.
+- [x] Reviewed internal read-only scaffold preview: inventory shared/current-platform/
+  confirmed-local-provider source paths from fresh post-capture preparation.
+  Propose empty Markdown only for genuinely missing, non-ignored files. Preserve
+  clean text and reviewed dirty drafts/deletions; expose staging and unresolved
+  choices as blockers, without assuming Overwrite authorizes empty content.
+  Recheck context, raw index, runtime and source bytes. No scaffold writer,
+  automatic instruction classification, Git/transport or runtime writes.
+  Independent source/test/documentation review found no blocker after pre-execution
+  test-declaration corrections. Warning-as-error Release build and 38/38 focused
+  cases passed: 26 new preview cases plus 12 existing dirty-state/link/ignore guards.
+  TRX Completed in about 3m20s; zero failures/skips/errors/timeouts/aborts/unexecuted
+  cases, with a 90s per-test hang guard. Evidence:
+  `artifacts/migration-scaffold-preview-20261029/focused/_Ferrys-MacBook-Pro_2026-10-29_15_04_23.trx`.
+  Whole-fixture snapshots cover file/directory membership and exact Git/runtime
+  bytes. Tests include selected-provider/current-platform scope, every dirty state,
+  hidden edits, stale post-capture context, ignored missing paths and invalid links.
+  Scoped local managed-code proof only, not full regression, native-runner or actual
+  harness verification. Ferry approved the slice and its exact-path semantic
+  engine commit on 2026-10-29. No push is authorized.
 - [ ] After verification, slice review and separate approval, implement scaffolding
   in further small increments. Preserve/Overwrite does not waive Git safety.
 - [x] Ferry reviewed and approved terminology documentation. One
@@ -1056,17 +1075,16 @@ combined target regeneration/commit, command orchestration and release gates rem
   accidental identifier changes. Run affected tests and warning-as-error build;
   retain full regression as the final release gate. Deferred, not implemented now.
 
-Current boundary: the reviewed authored-only writer (`f99e2eb`) and target-only
-regeneration (`7e4ba8e`) are locally committed. Both preserve index/HEAD/runtime;
-the target-only stage also preserves authored/config bytes. Ferry approved the
-next internal combined write/render/one-commit coordinator; it is implemented and
-locally verified before the approved readability cleanup (48/48). Cleanup is
-implemented; its first affected-test run stopped at CA1859 before execution.
-The approved three-parameter type correction and its retry are complete (57/57),
-with the timing qualification recorded above. Ferry reviewed the coordinator and
-cleanup and authorized their semantic engine commit. The existing
-single-provider adapter still refuses two changed providers.
-Scaffolding, exact-DONE orchestration and public activation remain later slices.
+Current boundary: authored-only (`f99e2eb`), target-only (`7e4ba8e`) and combined
+capture/commit (`e41b3e1`) stages are reviewed and locally committed. The combined
+coordinator's approved readability cleanup passed 57/57, with the timing
+qualification above. The existing single-provider adapter still refuses two
+changed providers. Ferry approved read-only scaffold inventory with missing-only
+empty seeds. Source/tests and diagram-first documentation are implemented;
+focused verification passed 38/38 with a warning-as-error build. Ferry reviewed
+the slice and authorized its exact-path semantic engine commit. No scaffold files
+are created. Scaffold writing,
+exact-DONE orchestration and public activation remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices still authorize no writes; dirty-behind stops.
 No public migrate route yet. Tests use disposable local bare

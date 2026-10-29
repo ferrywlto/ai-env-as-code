@@ -548,6 +548,39 @@ no batch atomicity, rollback, push or runtime deployment is claimed. The existin
 single-provider adapter remains unchanged. This coordinator has no public route;
 scaffolding, completion orchestration and activation remain separate work.
 
+### Internal migration scaffold preview
+
+```mermaid
+flowchart TD
+    Context[Fresh post-capture preparation] --> Validate[Validate HEAD, enrollment and reviewed dirty paths]
+    Validate --> Scope[Shared + current platform + confirmed local provider overlays]
+    Scope --> Observe[Read committed regular blobs, index entries and working bytes]
+    Observe --> Missing{Genuinely missing?}
+    Missing -->|Yes, not ignored| Empty[Propose empty Markdown seed]
+    Missing -->|No| Preserve[Preserve clean text; report dirty choice, staging or deletion]
+    Empty --> Recheck[Recheck context, raw index, runtime and section bytes]
+    Preserve --> Recheck
+    Recheck --> Preview[Return inventory only; no files created]
+```
+
+```mermaid
+classDiagram
+    MigrationScaffoldPreview --> MigrationPreparation : fresh post-capture context
+    MigrationScaffoldPreview --> MigrationHarnessSelection : confirm local scope
+    MigrationScaffoldPreview --> MigrationDirtySections : validate reviewed paths
+    MigrationScaffoldPreview --> MigrationScaffoldFile : required source inventory
+    MigrationScaffoldFile --> MigrationScaffoldAction : proposed disposition
+```
+
+`MigrationScaffoldPreview.Read` proposes zero bytes only when a source is absent
+from the prepared commit, index and working tree. Clean files remain unchanged under every
+choice. Preserve retains draft bytes or deletions; staged changes and preserved
+deletions block a future writer. Overwrite remains unresolved: approving empty
+missing-file seeds does not authorize erasing existing text. No instruction
+classification, scaffold writing, staging, commit, transport or runtime write is
+performed. The returned observations are advisory, not reusable write authority;
+a later writer must validate fresh state. Legacy instructions remain intact.
+
 ## Cross-machine boundary
 
 ```mermaid
