@@ -176,7 +176,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
         return MigrationScaffoldAction.NeedsDirtyChoice;
     }
 
-    private static void VerifyMissingPathNotIgnored(string repository, string relativePath)
+    internal static void VerifyMissingPathNotIgnored(string repository, string relativePath)
     {
         var ignored = GitProcess.Run(repository, "check-ignore", "--no-index", "--quiet", "--", relativePath);
         if (ignored.ExitCode == 0)

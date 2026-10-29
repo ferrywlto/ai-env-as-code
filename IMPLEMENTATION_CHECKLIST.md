@@ -1084,6 +1084,27 @@ combined target regeneration/commit, command orchestration and release gates rem
   deadlock. Local Git waits are unbounded but unchanged since 7e4ba8e; the test
   fixture also creates a real local remote/clone and cases run serially.
   Ferry authorized a reviewed checkpoint commit before the focused performance fix.
+  Final review found no correctness blocker; checkpoint committed as `7bbc46e`.
+- [x] Reviewed focused scaffold-validation performance fix: keep one fresh full
+  preview at entry, then named mutable-state guards instead of rebuilding preview/
+  history/committed blobs around each file. Retain metadata containment/link and
+  safe-config checks, HEAD/branch/raw index, absent marker, enrollment, dirty-path
+  restrictions, missing-path ignore rules and exact working/protected bytes.
+  Preserve CreateNew and partial reporting. No Git timeout or fixture redesign.
+  Added direct between-step drift tests and Git trace proof that focused checks
+  perform no rev-list/cat-file commands; no timing-dependent assertions or generic
+  observer framework. Independent source/test/documentation review found no blocker.
+  Warning-as-error Release build and 47/47 affected cases passed (28 existing writer
+  plus 19 focused guard/trace cases). TRX Completed in 6m28s, zero failures/skips/
+  errors/timeouts/aborts/unexecuted cases; longest case 16.6s, hang guard 90s.
+  Evidence: `artifacts/migration-scaffold-focused-guards-20261029/focused/_Ferrys-MacBook-Pro_2026-10-29_19_29_02.trx`.
+  The trace case confirms focused guards run no rev-list/cat-file commands.
+  Matching the same 28 existing test names, summed recorded case durations changed
+  from 489.6s to 257.4s (about 8m10s to 4m17s); the 19 new cases took 130.8s.
+  Observed single-run comparison, not a controlled performance benchmark. No tests
+  removed or retries performed. Scoped local managed-code proof only; no full
+  regression, native runner or actual harness claim. Ferry approved the verified
+  fix and its exact-path semantic engine commit. No push authorized.
 - [ ] After verification, slice review and separate approval, implement remaining
   scaffolding/completion in small increments. Preserve/Overwrite does not waive Git safety.
 - [x] Ferry reviewed and approved terminology documentation. One
@@ -1120,7 +1141,10 @@ Ferry approved the missing-only writer next; source/tests and diagrams are now
 implemented and reviewed; the original 54-case run passed. Ferry then requested
 the approved redundant-validation simplification, now verified by 28/28 affected
 writer-only cases and the warning-as-error build. Ferry authorized its checkpoint
-commit after correctness review, then the focused validation-performance fix.
+commit after correctness review, completed as `7bbc46e`. The approved focused
+validation-performance fix is implemented and independently reviewed; warning-as-error
+build and all 47 affected cases passed. Ferry reviewed and approved the fix and
+its exact-path semantic engine commit. No next implementation slice started.
 It creates only absent
 empty source files when invoked; no personal data/runtime invocation is authorized.
 Overwrite handling, exact-DONE orchestration and public activation remain later slices.

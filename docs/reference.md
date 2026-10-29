@@ -403,9 +403,11 @@ and rejects every staged or unresolved source before creating any directory.
 It creates only missing parents and zero-byte files using non-overwriting
 `CreateNew`; existing clean files and reviewed unstaged drafts stay byte-exact.
 Rechecks preserve HEAD, branch, raw index, legacy files and current runtime bytes,
-allowing only this call's own new dirty source paths. Full validation runs once
-initially and around each file creation; directory creation uses local path
-guards without rebuilding the whole preview. Failure reports retained
+allowing only this call's own new dirty source paths. The full preview validates
+history and committed blobs once. Focused checks inspect mutable state initially
+and around each file creation, retaining dirty-path restrictions and missing-path
+ignore checks without rebuilding the preview. Directory creation uses local path
+guards. Failure reports retained
 files/directories and a possibly changed attempted path; no automatic rollback,
 staging, commit or deployment. A retry requires a fresh preview. See the
 [writer flow](architecture.md#internal-missing-only-scaffold-writer).

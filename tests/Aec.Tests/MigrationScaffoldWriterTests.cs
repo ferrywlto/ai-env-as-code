@@ -184,6 +184,108 @@ public sealed class MigrationScaffoldWriterTests
         }
     }
 
+    [Theory]
+    [InlineData("head")]
+    [InlineData("branch")]
+    [InlineData("index-flags")]
+    [InlineData("marker")]
+    [InlineData("enrollment")]
+    [InlineData("runtime")]
+    [InlineData("runtime-config")]
+    [InlineData("legacy-agents")]
+    [InlineData("legacy-config")]
+    [InlineData("legacy-copilot")]
+    [InlineData("hidden-section")]
+    [InlineData("unexpected-dirt")]
+    [InlineData("ignored-missing")]
+    [InlineData("alternates")]
+    [InlineData("unsafe-filter")]
+    [InlineData("metadata-routing")]
+    public void FocusedGuardRejectsBetweenStepChangesWithoutChangingFiles(string kind)
+    {
+        using var layout = new Layout();
+        if (kind == "hidden-section")
+        {
+            layout.Files.Write(Shared, "Committed shared section.\n");
+            layout.Commit(Shared);
+            layout.Files.Git("update-index", "--assume-unchanged", "--", Shared);
+        }
+        var baseline = Preview(layout);
+        var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(layout.Repository, ".git", "index"));
+        var protectedFiles = MigrationScaffoldWriter.ReadProtectedFiles(baseline);
+        switch (kind)
+        {
+            case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
+            case "branch": layout.Files.Git("switch", "-c", "other-branch"); break;
+            case "index-flags": layout.Files.Git("update-index", "--assume-unchanged", "--", "notes.md"); break;
+            case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
+            case "enrollment": File.Delete(layout.Runtime("copilot")); break;
+            case "runtime": File.AppendAllText(layout.Runtime("codex"), "Later runtime edit.\n"); break;
+            case "runtime-config": File.AppendAllText(layout.ConfigRuntime, "# Later config edit.\n"); break;
+            case "legacy-agents": File.AppendAllText(Path.Combine(layout.Repository, AecApplication.SourceRelativePath), "Later legacy edit.\n"); break;
+            case "legacy-config": File.AppendAllText(Path.Combine(layout.Repository, AecApplication.ConfigSourceRelativePath), "# Later legacy edit.\n"); break;
+            case "legacy-copilot": File.AppendAllText(Path.Combine(layout.Repository, AecApplication.CopilotSourceRelativePath), "Later legacy edit.\n"); break;
+            case "hidden-section": layout.Files.Write(Shared, "Hidden later edit.\n"); break;
+            case "unexpected-dirt": layout.Files.Write("unexpected.md", "Unreviewed edit.\n"); break;
+            case "ignored-missing": layout.Files.Write(".git/info/exclude", Shared + "\n"); break;
+            case "alternates": layout.Files.Write(".git/objects/info/alternates", ""); break;
+            case "unsafe-filter": layout.Files.Git("config", "filter.untrusted.clean", "unexpected-helper"); break;
+            default:
+                var other = Path.Combine(layout.Files.Root, "other-work-tree");
+                Directory.CreateDirectory(other);
+                layout.Files.Git("config", "core.worktree", other);
+                break;
+        }
+        layout.Files.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() =>
+            MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [])));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FocusedGuardAdmitsOnlyExactEmptyCompletedCreations(bool changedContent)
+    {
+        using var layout = new Layout();
+        var baseline = Preview(layout);
+        var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(layout.Repository, ".git", "index"));
+        var protectedFiles = MigrationScaffoldWriter.ReadProtectedFiles(baseline);
+        var created = baseline.Files[0].RelativePath;
+        layout.Files.Write(created, changedContent ? "Unexpected content.\n" : "");
+        layout.Files.AssertNoChanges(() =>
+        {
+            if (changedContent)
+                Assert.Throws<InvalidOperationException>(() => MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [created]));
+            else
+                MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [created]);
+        });
+    }
+
+    [Fact]
+    public void FocusedGuardDoesNotRepeatGitHistoryOrBlobReads()
+    {
+        using var layout = new Layout();
+        var baseline = Preview(layout);
+        var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(layout.Repository, ".git", "index"));
+        var protectedFiles = MigrationScaffoldWriter.ReadProtectedFiles(baseline);
+        var tracePath = Path.Combine(layout.Files.Root, "guard-git.trace");
+        var previousTrace = Environment.GetEnvironmentVariable("GIT_TRACE");
+        try
+        {
+            // Built-in Git tracing verifies the work removed, without a timer,
+            // production observer hook or dependency on machine performance.
+            Environment.SetEnvironmentVariable("GIT_TRACE", tracePath);
+            MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, []);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GIT_TRACE", previousTrace);
+        }
+        var trace = File.ReadAllText(tracePath);
+        Assert.Contains(" status ", trace, StringComparison.Ordinal);
+        Assert.DoesNotContain("rev-list", trace, StringComparison.Ordinal);
+        Assert.DoesNotContain("cat-file", trace, StringComparison.Ordinal);
+    }
+
     private static MigrationScaffoldPreview Preview(Layout layout) => MigrationScaffoldPreview.Read(layout.Context());
 
     private static void AssertOnlyAdditions(Layout layout, string[] addedPaths, Action action)

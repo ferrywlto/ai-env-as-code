@@ -585,16 +585,16 @@ the writer below validates fresh state. Legacy instructions remain intact.
 
 ```mermaid
 flowchart TD
-    Review[Reviewed scaffold preview] --> Fresh[Recreate preview; compare inputs and actions]
+    Review[Reviewed scaffold preview] --> Fresh[One fresh full preview; compare inputs and actions]
     Fresh --> Block{Any staged or unresolved source?}
     Block -->|Yes| Stop[Stop before creating directories or files]
     Block -->|No| Freeze[Freeze raw index, legacy files and current runtime bytes]
-    Freeze --> Guard[Initial full validation; also covers no-op]
+    Freeze --> Guard[Focused mutable-state checks; also cover no-op]
     Guard -->|Missing files| Dirs[Local path guards; create missing parents and record directories]
     Guard -->|No missing files| Return
-    Dirs --> GuardAgain[Revalidate before file creation]
+    Dirs --> GuardAgain[Focused checks before file creation]
     GuardAgain --> Create[CreateNew empty file; never overwrite]
-    Create --> Check[Revalidate; admit only our completed dirty-path additions]
+    Create --> Check[Focused checks; admit only completed dirty-path additions]
     Check -->|More missing files| Dirs
     Check -->|Complete| Return[Return created paths; existing content unchanged]
     Dirs -->|Failure| Retain[Report retained files, directories and attempted path; no rollback]
@@ -605,7 +605,8 @@ flowchart TD
 
 ```mermaid
 classDiagram
-    MigrationScaffoldWriter --> MigrationScaffoldPreview : fresh validation and private inventory
+    MigrationScaffoldWriter --> MigrationScaffoldPreview : one fresh eligibility/history validation
+    MigrationScaffoldWriter --> MigrationDirtySections : current dirty-path restrictions
     MigrationScaffoldWriter --> AtomicFile : WriteNew uses CreateNew
     MigrationScaffoldWriter --> MigrationScaffoldWriteException : partial creation report
 ```
@@ -613,10 +614,14 @@ classDiagram
 `MigrationScaffoldWriter.Write` ignores caller seed buffers and creates exactly
 zero-byte files from its fresh fixed-path inventory. Existing clean files and
 reviewed unstaged drafts are never opened for writing. Every blocker stops the
-whole operation before directory creation. Full validation runs initially and
-before/after each file creation, not around every directory creation or again
-after the final post-file check. Directory creation retains local link/directory
-guards. Rechecks allow only original reviewed
+whole operation before directory creation. Repository eligibility, initialization
+history and committed blobs are validated in the entry preview, not rebuilt by
+the write-boundary guards. Named,
+focused checks then inspect mutable metadata/configuration, HEAD/branch/raw index,
+marker, enrollment, dirty paths/ignore rules and working/protected bytes initially
+and before/after each file creation. With HEAD and index pinned, committed baseline
+bytes and modes do not need rereading. Directory creation retains local link/
+directory guards. Rechecks allow only original reviewed
 dirty paths plus files this call successfully created. Captured runtime/config
 bytes protect this operation; the advisory preview did not store earlier runtime
 bytes. A concurrent arrival is not overwritten. Checks are best-effort, not a

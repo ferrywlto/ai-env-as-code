@@ -30,8 +30,8 @@ internal static class MigrationScaffoldWriter
         string? attemptedPath = null;
         try
         {
-            // Also validates a no-op. Full checks belong at file-write
-            // boundaries; directory creation below uses local path guards.
+            // Also validates a no-op. Eligibility/history was checked once by
+            // the fresh preview; these boundaries inspect mutable state only.
             VerifyInputs();
             foreach (var file in fresh.Files)
             {
@@ -67,44 +67,88 @@ internal static class MigrationScaffoldWriter
                 createdDirectories.ToArray(), attemptedPath, exception);
         }
 
-        void VerifyInputs()
+        void VerifyInputs() => VerifyCurrentInputs(fresh, index, protectedFiles, createdFiles);
+    }
+
+    // Read-only and internal for deterministic between-step guard tests. Write
+    // owns the fresh baseline and snapshots; callers cannot supply write authority.
+    internal static void VerifyCurrentInputs(MigrationScaffoldPreview baseline,
+        byte[] originalIndex, Dictionary<string, byte[]?> protectedFiles,
+        IReadOnlyList<string> createdFiles)
+    {
+        var preparation = baseline.Preparation;
+        var repository = preparation.Preflight.Repository;
+        AecApplication.EnsureNoLinksInExistingPath(repository, "Scaffold repository path");
+        AecApplication.EnsureRealDirectory(repository, "Scaffold repository");
+        var gitDirectory = Path.Combine(repository, ".git");
+        AecApplication.EnsureNoLinksInExistingPath(gitDirectory, "Scaffold Git path");
+        AecApplication.EnsureRealDirectory(gitDirectory, "Scaffold Git directory");
+        MigrationFastForward.EnsureSafeGitConfiguration(repository);
+        InitCommand.EnsureContainedGitMetadata(repository, gitDirectory);
+        VerifyGitState(baseline, originalIndex);
+        VerifyMarkerAbsent(repository);
+        VerifyEnrollment(preparation);
+        VerifyDirtyPaths(preparation, createdFiles);
+        VerifyWorkingSections(baseline, createdFiles);
+        VerifyProtectedFiles(protectedFiles);
+        VerifyGitState(baseline, originalIndex);
+    }
+
+    private static void VerifyGitState(MigrationScaffoldPreview baseline, byte[] originalIndex)
+    {
+        var repository = baseline.Preparation.Preflight.Repository;
+        if (ApplyCommand.ResolveHeadCommit(repository) != baseline.Preparation.Preflight.Commit)
+            throw new InvalidOperationException("HEAD changed during scaffold creation.");
+        VerifyBranch(baseline.Branch, MigrationLegacyCapturePreview.ReadBranch(repository));
+        var currentIndex = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
+        if (!originalIndex.AsSpan().SequenceEqual(currentIndex))
+            throw new InvalidOperationException("Git index changed during scaffold creation.");
+    }
+
+    private static void VerifyMarkerAbsent(string repository)
+    {
+        if (ReadFile(Path.Combine(repository, MigrationPreflight.FormatRelativePath)) is not null)
+            throw new InvalidOperationException("Migration completion marker appeared during scaffold creation.");
+    }
+
+    private static void VerifyEnrollment(MigrationPreparation preparation)
+    {
+        var current = MigrationHarnessSelection.Read(preparation.Preflight);
+        if (!current.SequenceEqual(preparation.Harnesses))
+            throw new InvalidOperationException("Local harness enrollment changed during scaffold creation.");
+    }
+
+    private static void VerifyDirtyPaths(MigrationPreparation preparation, IReadOnlyList<string> createdFiles)
+    {
+        // Only our completed creations may extend the reviewed dirty-path set.
+        // Reuse conflict/type/rename/ignore restrictions without a history scan.
+        var expected = preparation.DirtySections.Paths.Concat(createdFiles)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        var current = MigrationDirtySections.Read(preparation.Preflight, preparation.Harnesses);
+        if (!current.Paths.SequenceEqual(expected, StringComparer.Ordinal))
+            throw new InvalidOperationException("Dirty paths changed during scaffold creation.");
+    }
+
+    private static void VerifyWorkingSections(MigrationScaffoldPreview baseline, IReadOnlyList<string> createdFiles)
+    {
+        var repository = baseline.Preparation.Preflight.Repository;
+        foreach (var file in baseline.Files)
         {
-            // Our own new files legitimately add dirty paths. Admit only those
-            // exact additions; every other preview safety check still runs.
-            var dirtyPaths = fresh.Preparation.DirtySections.Paths.Concat(createdFiles)
-                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            var preparation = fresh.Preparation with
-            {
-                DirtySections = new MigrationDirtySections(dirtyPaths),
-                SectionChoice = MigrationSectionChoice.Preserve
-            };
-            var current = MigrationScaffoldPreview.Read(preparation);
-            VerifyBranch(fresh.Branch, current.Branch);
-            VerifyFileCount(fresh.Files.Count, current.Files.Count);
-            for (var position = 0; position < fresh.Files.Count; position++)
-            {
-                var original = fresh.Files[position];
-                var observed = current.Files[position];
-                VerifyFileIdentity(original, observed);
-                byte[]? expectedContent = createdFiles.Contains(original.RelativePath)
-                    ? [] : original.WorkingContent;
-                if (!SameBytes(expectedContent, observed.WorkingContent))
-                {
-                    throw new InvalidOperationException($"Scaffold working bytes changed: {original.RelativePath}.");
-                }
-            }
-            var currentIndex = MigrationLegacyCaptureWriter.ReadIndex(indexPath);
-            if (!index.AsSpan().SequenceEqual(currentIndex))
-            {
-                throw new InvalidOperationException("Git index changed during scaffold creation.");
-            }
-            foreach (var (path, content) in protectedFiles)
-            {
-                if (!SameBytes(content, ReadFile(path)))
-                {
-                    throw new InvalidOperationException($"Protected migration input changed during scaffold creation: {path}.");
-                }
-            }
+            byte[]? expected = createdFiles.Contains(file.RelativePath) ? [] : file.WorkingContent;
+            var current = ReadFile(Path.Combine(repository, file.RelativePath));
+            if (!SameBytes(expected, current))
+                throw new InvalidOperationException($"Scaffold working bytes changed: {file.RelativePath}.");
+            if (expected is null)
+                MigrationScaffoldPreview.VerifyMissingPathNotIgnored(repository, file.RelativePath);
+        }
+    }
+
+    private static void VerifyProtectedFiles(Dictionary<string, byte[]?> protectedFiles)
+    {
+        foreach (var (path, content) in protectedFiles)
+        {
+            if (!SameBytes(content, ReadFile(path)))
+                throw new InvalidOperationException($"Protected migration input changed during scaffold creation: {path}.");
         }
     }
 
@@ -168,7 +212,7 @@ internal static class MigrationScaffoldWriter
         return missing;
     }
 
-    private static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationScaffoldPreview fresh)
+    internal static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationScaffoldPreview fresh)
     {
         var files = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         var repository = fresh.Preparation.Preflight.Repository;
