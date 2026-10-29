@@ -381,7 +381,7 @@ explicit commit boundary alone accepts its own staging and new HEAD. Failure
 retains partial files/index/possibly a local commit for inspection without rollback,
 push or apply. See the [coordinator diagrams](architecture.md#internal-combined-portable-capture-coordinator).
 The earlier single-provider adapter still refuses two changed providers; public
-migration wiring, scaffolding and completion activation remain later work.
+migration wiring and completion activation remain later work.
 
 Internal `MigrationScaffoldPreview.Read(preparation)` inventories only shared,
 current-platform and confirmed local provider sources after refreshing capture's
@@ -398,7 +398,19 @@ it creates no files or directories and grants no later write permission.
 
 Legacy instructions remain untouched; the user, not AEC, classifies their content.
 See the [scaffold preview diagrams](architecture.md#internal-migration-scaffold-preview).
-Writing scaffolds and the exact-DONE completion flow remain unimplemented.
+Internal `MigrationScaffoldWriter.Write(reviewed)` freshly validates that inventory
+and rejects every staged or unresolved source before creating any directory.
+It creates only missing parents and zero-byte files using non-overwriting
+`CreateNew`; existing clean files and reviewed unstaged drafts stay byte-exact.
+Rechecks preserve HEAD, branch, raw index, legacy files and current runtime bytes,
+allowing only this call's own new dirty source paths. Full validation runs once
+initially and around each file creation; directory creation uses local path
+guards without rebuilding the whole preview. Failure reports retained
+files/directories and a possibly changed attempted path; no automatic rollback,
+staging, commit or deployment. A retry requires a fresh preview. See the
+[writer flow](architecture.md#internal-missing-only-scaffold-writer).
+Overwrite-content handling, exact-DONE completion and public command wiring
+remain unimplemented; this internal stage does not complete migration.
 
 ### Existing manual migration — implemented and rehearsed
 

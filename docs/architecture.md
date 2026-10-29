@@ -546,7 +546,7 @@ readability split does not add a validation framework or alter the boundaries ab
 An error may retain authored files, targets, staging or a published local commit;
 no batch atomicity, rollback, push or runtime deployment is claimed. The existing
 single-provider adapter remains unchanged. This coordinator has no public route;
-scaffolding, completion orchestration and activation remain separate work.
+scaffold writing, completion orchestration and activation are separate stages.
 
 ### Internal migration scaffold preview
 
@@ -573,13 +573,57 @@ classDiagram
 ```
 
 `MigrationScaffoldPreview.Read` proposes zero bytes only when a source is absent
-from the prepared commit, index and working tree. Clean files remain unchanged under every
-choice. Preserve retains draft bytes or deletions; staged changes and preserved
-deletions block a future writer. Overwrite remains unresolved: approving empty
+from the prepared commit, index and working tree. Clean files remain unchanged
+under every choice. Preserve retains draft bytes or deletions; staged changes
+and preserved deletions block a future writer. Overwrite remains unresolved: approving empty
 missing-file seeds does not authorize erasing existing text. No instruction
 classification, scaffold writing, staging, commit, transport or runtime write is
 performed. The returned observations are advisory, not reusable write authority;
-a later writer must validate fresh state. Legacy instructions remain intact.
+the writer below validates fresh state. Legacy instructions remain intact.
+
+### Internal missing-only scaffold writer
+
+```mermaid
+flowchart TD
+    Review[Reviewed scaffold preview] --> Fresh[Recreate preview; compare inputs and actions]
+    Fresh --> Block{Any staged or unresolved source?}
+    Block -->|Yes| Stop[Stop before creating directories or files]
+    Block -->|No| Freeze[Freeze raw index, legacy files and current runtime bytes]
+    Freeze --> Guard[Initial full validation; also covers no-op]
+    Guard -->|Missing files| Dirs[Local path guards; create missing parents and record directories]
+    Guard -->|No missing files| Return
+    Dirs --> GuardAgain[Revalidate before file creation]
+    GuardAgain --> Create[CreateNew empty file; never overwrite]
+    Create --> Check[Revalidate; admit only our completed dirty-path additions]
+    Check -->|More missing files| Dirs
+    Check -->|Complete| Return[Return created paths; existing content unchanged]
+    Dirs -->|Failure| Retain[Report retained files, directories and attempted path; no rollback]
+    GuardAgain -->|Failure| Retain
+    Create -->|Failure| Retain
+    Check -->|Failure| Retain
+```
+
+```mermaid
+classDiagram
+    MigrationScaffoldWriter --> MigrationScaffoldPreview : fresh validation and private inventory
+    MigrationScaffoldWriter --> AtomicFile : WriteNew uses CreateNew
+    MigrationScaffoldWriter --> MigrationScaffoldWriteException : partial creation report
+```
+
+`MigrationScaffoldWriter.Write` ignores caller seed buffers and creates exactly
+zero-byte files from its fresh fixed-path inventory. Existing clean files and
+reviewed unstaged drafts are never opened for writing. Every blocker stops the
+whole operation before directory creation. Full validation runs initially and
+before/after each file creation, not around every directory creation or again
+after the final post-file check. Directory creation retains local link/directory
+guards. Rechecks allow only original reviewed
+dirty paths plus files this call successfully created. Captured runtime/config
+bytes protect this operation; the advisory preview did not store earlier runtime
+bytes. A concurrent arrival is not overwritten. Checks are best-effort, not a
+filesystem-wide transaction. Failures retain and report completed additions and
+possibly changed attempted paths, including directories created before a later
+pre-file validation detects drift. No staging, commit,
+render, apply, transport, completion marker or public migration route is added.
 
 ## Cross-machine boundary
 

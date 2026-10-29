@@ -1051,8 +1051,41 @@ combined target regeneration/commit, command orchestration and release gates rem
   Scoped local managed-code proof only, not full regression, native-runner or actual
   harness verification. Ferry approved the slice and its exact-path semantic
   engine commit on 2026-10-29. No push is authorized.
-- [ ] After verification, slice review and separate approval, implement scaffolding
-  in further small increments. Preserve/Overwrite does not waive Git safety.
+- [x] Reviewed internal missing-only scaffold writer: rederive and compare the
+  reviewed preview, reject every blocker before any creation, then create only
+  missing parents and zero-byte required source files with CreateNew. Preserve
+  existing text, including reviewed unstaged drafts, index/HEAD/branch, legacy
+  instructions/config and selected runtime bytes. Revalidate between creations;
+  admit only this call's completed additions to the original dirty-path list.
+  Report retained files/directories/attempted path on failure; no rollback,
+  staging, commit, transport, rendering, deployment, marker or public route.
+  Source/tests and architecture/reference updates are implemented. Independent
+  review identified an InvalidDataException partial-reporting gap; corrected
+  before execution, with no remaining review blocker. Warning-as-error Release
+  build and all 54 focused cases passed: 28 writer plus 26 preview cases. TRX
+  Completed in 12m29s; zero failures/skips/errors/timeouts/aborts/unexecuted cases.
+  Longest recorded case was 64.1s, below the 90s per-test hang guard. Evidence:
+  `artifacts/migration-scaffold-writer-20261029/focused/_Ferrys-MacBook-Pro_2026-10-29_16_20_30.trx`.
+  Whole-fixture file/directory/byte snapshots allow only expected empty additions;
+  cover local scope, preserved drafts, no-op retry, blocked/stale/tampered inputs
+  and first/later Unix permission failures with retained-path reporting. The same
+  original test run was collected after Ferry's continue message; no retry or
+  restart occurred. Scoped local managed-code proof, not full regression, native
+  runner or actual-harness verification. Unix permission denial is not Windows
+  ACL-denial proof. Ferry requested removal of redundant full validations:
+  retain the initial check and checks immediately before/after file creation;
+  directory creation keeps local path/link guards, without a full preview rebuild.
+  Remove the duplicate final check; a no-op still receives initial validation.
+  The 54-case result above predates this simplification. Its affected writer-only
+  run completed 28/28 with the warning-as-error build: 8m09s, zero failures/skips/
+  errors/timeouts/aborts/unexecuted cases, longest case 49.2s. Evidence:
+  `artifacts/migration-scaffold-writer-simplified-20261029/focused/_Ferrys-MacBook-Pro_2026-10-29_18_53_22.trx`.
+  Diagnosis found repeated full-preview/history validation, not a demonstrated
+  deadlock. Local Git waits are unbounded but unchanged since 7e4ba8e; the test
+  fixture also creates a real local remote/clone and cases run serially.
+  Ferry authorized a reviewed checkpoint commit before the focused performance fix.
+- [ ] After verification, slice review and separate approval, implement remaining
+  scaffolding/completion in small increments. Preserve/Overwrite does not waive Git safety.
 - [x] Ferry reviewed and approved terminology documentation. One
   glossary in docs/reference.md defines Capture, Preflight, Target, Preview and
   Fixture with a directional Mermaid flow and concrete AEC examples. Distinguish
@@ -1082,9 +1115,15 @@ qualification above. The existing single-provider adapter still refuses two
 changed providers. Ferry approved read-only scaffold inventory with missing-only
 empty seeds. Source/tests and diagram-first documentation are implemented;
 focused verification passed 38/38 with a warning-as-error build. Ferry reviewed
-the slice and authorized its exact-path semantic engine commit. No scaffold files
-are created. Scaffold writing,
-exact-DONE orchestration and public activation remain later slices.
+the slice and authorized its exact-path semantic engine commit (`bd1dbbb`).
+Ferry approved the missing-only writer next; source/tests and diagrams are now
+implemented and reviewed; the original 54-case run passed. Ferry then requested
+the approved redundant-validation simplification, now verified by 28/28 affected
+writer-only cases and the warning-as-error build. Ferry authorized its checkpoint
+commit after correctness review, then the focused validation-performance fix.
+It creates only absent
+empty source files when invoked; no personal data/runtime invocation is authorized.
+Overwrite handling, exact-DONE orchestration and public activation remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices still authorize no writes; dirty-behind stops.
 No public migrate route yet. Tests use disposable local bare
