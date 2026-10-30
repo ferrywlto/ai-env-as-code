@@ -398,7 +398,7 @@ it creates no files or directories and grants no later write permission.
 | Dirty file/deletion + Overwrite, unstaged | Propose zero-byte reset for user refilling; do not execute it |
 | Staged or mixed staged/unstaged changes | Block; expose no proposal bytes, including with Overwrite |
 
-Reset proposals remain blocked by the missing-only writer; staged changes are
+Only the separately validated internal writer executes resets; staged changes are
 never implicitly unstaged. Discarded uncommitted content may not be recoverable
 from Git history. Legacy instructions remain untouched; the user, not AEC,
 classifies their content. This choice handles drafts present when an incomplete
@@ -409,18 +409,25 @@ the earlier Overwrite choice.
 See the [scaffold preview diagrams](architecture.md#internal-migration-scaffold-preview).
 Internal `MigrationScaffoldWriter.Write(reviewed)` freshly validates that inventory
 and rejects every staged or unresolved source before creating any directory.
-It creates only missing parents and zero-byte files using non-overwriting
-`CreateNew`; existing clean files and reviewed unstaged drafts stay byte-exact.
+It creates missing parents and zero-byte files using non-overwriting `CreateNew`,
+or resets reviewed unstaged sources after explicit Overwrite using snapshot-checked
+replacement. Clean files and Preserve drafts stay byte-exact. Already-empty resets
+perform no replacement and report no changed path. Existing Unix permissions stay
+exact; recreated deleted sections use owner-only `0600`, even if Git recorded an
+executable bit. Sections are instruction data, not programs. Genuinely missing
+seeds retain normal creation defaults; Windows uses native permissions.
 Rechecks preserve HEAD, branch, raw index, legacy files and current runtime bytes,
-allowing only this call's own new dirty source paths. The full preview validates
+allowing only this call's own new dirty source paths. A completed reset may become
+Git-clean when it restores committed empty bytes; no other dirty path may disappear.
+The full preview validates
 history and committed blobs once. Focused checks inspect mutable state initially
-and around each file creation, retaining dirty-path restrictions and missing-path
+and around each file write, retaining dirty-path restrictions and missing-path
 ignore checks without rebuilding the preview. Directory creation uses local path
 guards. Failure reports retained
 files/directories and a possibly changed attempted path; no automatic rollback,
 staging, commit or deployment. A retry requires a fresh preview. See the
-[writer flow](architecture.md#internal-missing-only-scaffold-writer).
-Overwrite execution, exact-DONE completion and public command wiring
+[writer flow](architecture.md#internal-scaffold-creation-and-reset-writer).
+Exact-DONE completion and public command wiring
 remain unimplemented; this internal stage does not complete migration.
 
 ### Existing manual migration — implemented and rehearsed

@@ -1128,6 +1128,31 @@ combined target regeneration/commit, command orchestration and release gates rem
   Scoped local managed-code proof only, not full regression/native/actual-harness
   verification. Ferry approved the verified slice and its exact-path semantic
   engine commit on 2026-10-30. No push authorized.
+- [x] Reviewed internal scaffold reset writer: execute only reviewed explicit
+  Overwrite resets, recreate reviewed deletions, and preserve clean/Preserve
+  sources, existing Unix modes, raw index/HEAD/branch and protected runtime/legacy
+  bytes. Already-empty resets do no file I/O; only completed resets may remove
+  original dirt by restoring committed empty bytes. Recreated deleted Unix files
+  use owner-only 0600, ignoring Git's executable bit, per Ferry's security choice.
+  Keep focused guards and report actual written paths/directories/attempted path
+  without rollback. Source/tests and architecture/reference updates implemented;
+  independent source/test/documentation review found no blocker. Final
+  warning-as-error Release build and 22/22 policy cases passed in 25ms. Separate
+  Git-backed scopes passed 18/18 new reset cases (3m11s), 10/10 affected preview
+  cases (1m53s), and 47/47 existing writer cases (7m22s), using the same read-only
+  build with isolated processes, fixtures and result directories. All four TRX
+  runs Completed, with zero failures/errors/skips/timeouts/aborts/unexecuted
+  cases; longest Git case 17.7s, per-test hang guard 90s. Evidence under
+  `artifacts/migration-scaffold-resets-20261030/`: `policy-final/`,
+  `reset-and-preview/` (18 reset cases only), `affected-preview/` and
+  `existing-writer/`. Initial preview filter names did not match; the ten affected
+  preview cases ran once in their separately named scope. No tests were removed
+  or restarted. One worker corrected a read-only TRX parser after its API error;
+  that metadata retry changed no source or test evidence. Scoped local
+  managed-code proof only, not full regression, Windows ACL/native runner or
+  actual-harness verification. Ferry reviewed and approved the slice and its
+  exact-path semantic engine commit on 2026-10-30. No public migrate route,
+  DONE handling, personal data invocation or push.
 - [ ] After verification, slice review and separate approval, implement remaining
   scaffolding/completion in small increments. Preserve/Overwrite does not waive Git safety.
 - [x] Ferry reviewed and approved terminology documentation. One
@@ -1173,10 +1198,15 @@ empty source files when invoked; no personal data/runtime invocation is authoriz
 Ferry approved the next read-only Overwrite preview. Source/tests/docs are
 implemented and reviewed; 22 policy plus 40 Git-backed cases passed, with the
 final prompt-only clarification separately rechecked. Ferry reviewed the slice
-and authorized its exact-path semantic commit. No reset execution is added.
-Overwrite writing, exact-DONE orchestration and public activation remain later slices.
+and authorized its exact-path semantic commit (`758fd64`). The next approved
+internal reset-writing slice is implemented with fixed Unix 0600 for recreated
+deletions; independent review, warning-as-error build and 97/97 affected cases
+passed across four scoped runs. Ferry reviewed the slice and authorized its
+exact-path semantic engine commit. Next: propose the smallest exact-DONE gate
+slice for approval; no next implementation is authorized yet. Public activation
+and completion orchestration remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
-authorized. Choices still authorize no writes; dirty-behind stops.
+authorized. Choices alone grant no reusable write authority; dirty-behind stops.
 No public migrate route yet. Tests use disposable local bare
 remotes. Fast-forward may update local HEAD/index/checkout and Git metadata,
 never personal runtime/data or hosted remotes. Failure after advancement retains

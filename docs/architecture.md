@@ -588,8 +588,8 @@ classDiagram
 or explicit pre-start Overwrite of dirty owned sections, including deletions.
 Clean files remain unchanged under every choice. Preserve retains drafts/deletions;
 An absent choice never authorizes a reset. Staged files expose no proposal bytes and stay
-blocked. `ResetEmpty` is still blocked by the missing-only writer below: this
-stage describes a replacement, never executes it. Null `ProposedContent` means
+blocked. This preview describes replacements; only the separately validated writer
+below executes them. Null `ProposedContent` means
 no content proposal, not deletion. Uncommitted drafts may not be recoverable from
 Git, as the choice prompt warns. No instruction classification, file/index write,
 commit, transport or runtime write occurs; observations grant no reusable write authority.
@@ -597,28 +597,34 @@ commit, transport or runtime write occurs; observations grant no reusable write 
 The version preflight rejects an already completed 2.0 migration first. Sections
 can exist during an incomplete attempt; their presence alone proves no completion.
 The pre-start Overwrite choice must not be reapplied to expected user edits before
-`DONE`. That later boundary validates and commits the edited sources. Reset
-execution and the DONE completion path remain separate, unimplemented stages.
+`DONE`. That later boundary validates and commits the edited sources. The DONE
+completion path remains unimplemented.
 
-### Internal missing-only scaffold writer
+### Internal scaffold creation and reset writer
 
 ```mermaid
 flowchart TD
     Review[Reviewed scaffold preview] --> Fresh[One fresh full preview; compare inputs and actions]
-    Fresh --> Block{Any staged, reset or unresolved source?}
+    Fresh --> Block{Any staged or unresolved source?}
     Block -->|Yes| Stop[Stop before creating directories or files]
-    Block -->|No| Freeze[Freeze raw index, legacy files and current runtime bytes]
+    Block -->|No| Freeze[Freeze raw index, protected bytes and existing Unix modes]
     Freeze --> Guard[Focused mutable-state checks; also cover no-op]
-    Guard -->|Missing files| Dirs[Local path guards; create missing parents and record directories]
-    Guard -->|No missing files| Return
-    Dirs --> GuardAgain[Focused checks before file creation]
-    GuardAgain --> Create[CreateNew empty file; never overwrite]
-    Create --> Check[Focused checks; admit only completed dirty-path additions]
-    Check -->|More missing files| Dirs
-    Check -->|Complete| Return[Return created paths; existing content unchanged]
+    Guard --> Next{Next planned action}
+    Next -->|Preserve or already empty| NoWrite[No file replacement]
+    NoWrite --> Next
+    Next -->|Create or reset| Dirs[Local path guards; create missing parents and record directories]
+    Next -->|Complete| Return[Return actually written paths]
+    Dirs --> GuardAgain[Focused checks before file write]
+    GuardAgain --> Missing{Working file absent?}
+    Missing -->|Yes| Create[CreateNew empty file; never overwrite arrivals]
+    Missing -->|No| Replace[Replace only matching reviewed bytes; retain permissions]
+    Create --> Check[Focused checks; allow only completed creations and resets]
+    Replace --> Check
+    Check --> Next
     Dirs -->|Failure| Retain[Report retained files, directories and attempted path; no rollback]
     GuardAgain -->|Failure| Retain
     Create -->|Failure| Retain
+    Replace -->|Failure| Retain
     Check -->|Failure| Retain
 ```
 
@@ -626,25 +632,31 @@ flowchart TD
 classDiagram
     MigrationScaffoldWriter --> MigrationScaffoldPreview : one fresh eligibility/history validation
     MigrationScaffoldWriter --> MigrationDirtySections : current dirty-path restrictions
-    MigrationScaffoldWriter --> AtomicFile : WriteNew uses CreateNew
-    MigrationScaffoldWriter --> MigrationScaffoldWriteException : partial creation report
+    MigrationScaffoldWriter --> AtomicFile : WriteNew or ReplaceIfUnchanged
+    MigrationScaffoldWriter --> MigrationScaffoldWriteException : partial write report
 ```
 
-`MigrationScaffoldWriter.Write` ignores caller seed buffers and creates exactly
-zero-byte files from its fresh fixed-path inventory. Existing clean files and
-reviewed unstaged drafts are never opened for writing. Every blocker stops the
+`MigrationScaffoldWriter.Write` ignores caller seed buffers and writes exactly
+zero-byte files from its fresh fixed-path inventory. Clean files and Preserve
+drafts remain unchanged; explicit Overwrite resets only reviewed unstaged sources.
+Already-empty resets perform no file I/O and report no changed path. Every blocker stops the
 whole operation before directory creation. Repository eligibility, initialization
 history and committed blobs are validated in the entry preview, not rebuilt by
 the write-boundary guards. Named,
 focused checks then inspect mutable metadata/configuration, HEAD/branch/raw index,
 marker, enrollment, dirty paths/ignore rules and working/protected bytes initially
-and before/after each file creation. With HEAD and index pinned, committed baseline
+and before/after each file write. With HEAD and index pinned, committed baseline
 bytes and modes do not need rereading. Directory creation retains local link/
-directory guards. Rechecks allow only original reviewed
-dirty paths plus files this call successfully created. Captured runtime/config
+directory guards. Rechecks admit new dirty paths only for completed creations;
+only a completed reset may remove an original dirty path by restoring committed
+empty bytes. Exact section bytes remain pinned throughout. Existing Unix modes
+are retained. Recreated deletions use owner-only `0600`, never restoring Git's
+executable bit: instruction sections are data, not programs. Ordinary genuinely
+missing seeds retain normal creation defaults; Windows uses native permissions.
+Captured runtime/config
 bytes protect this operation; the advisory preview did not store earlier runtime
 bytes. A concurrent arrival is not overwritten. Checks are best-effort, not a
-filesystem-wide transaction. Failures retain and report completed additions and
+filesystem-wide transaction. Failures retain and report completed writes and
 possibly changed attempted paths, including directories created before a later
 pre-file validation detects drift. No staging, commit,
 render, apply, transport, completion marker or public migration route is added.

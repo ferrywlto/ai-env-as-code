@@ -26,14 +26,14 @@ public sealed class MigrationScaffoldPolicyTests
     [Theory]
     [InlineData(nameof(MigrationScaffoldAction.CreateEmpty), false, true, false)]
     [InlineData(nameof(MigrationScaffoldAction.CreateEmpty), true, false, true)]
-    [InlineData(nameof(MigrationScaffoldAction.ResetEmpty), false, true, true)]
+    [InlineData(nameof(MigrationScaffoldAction.ResetEmpty), false, true, false)]
     [InlineData(nameof(MigrationScaffoldAction.ResetEmpty), true, false, true)]
     [InlineData(nameof(MigrationScaffoldAction.PreserveExisting), false, false, false)]
     [InlineData(nameof(MigrationScaffoldAction.PreserveDirty), false, false, false)]
     [InlineData(nameof(MigrationScaffoldAction.PreserveDirty), true, false, true)]
     [InlineData(nameof(MigrationScaffoldAction.PreserveDeletion), false, false, true)]
     [InlineData(nameof(MigrationScaffoldAction.NeedsDirtyChoice), false, false, true)]
-    public void ProposalBytesNeverAuthorizeAResetOrUnstage(string actionName, bool staged, bool hasProposal, bool blocked)
+    public void ProposalBytesDoNotBypassStagingOrRequiredChoices(string actionName, bool staged, bool hasProposal, bool blocked)
     {
         var file = new MigrationScaffoldFile("environment/shared/instructions.md",
             null, null, "", null, staged, Enum.Parse<MigrationScaffoldAction>(actionName));

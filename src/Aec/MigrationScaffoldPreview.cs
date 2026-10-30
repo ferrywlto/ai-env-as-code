@@ -30,10 +30,8 @@ internal sealed record MigrationScaffoldFile(string RelativePath, byte[]? Commit
         get
         {
             if (HasStagedChanges) return true;
-            // Reset proposals remain blocked: the current writer creates only
-            // missing files. Executing resets is a separately reviewed boundary.
             return Action is MigrationScaffoldAction.PreserveDeletion or
-                MigrationScaffoldAction.NeedsDirtyChoice or MigrationScaffoldAction.ResetEmpty;
+                MigrationScaffoldAction.NeedsDirtyChoice;
         }
     }
 }

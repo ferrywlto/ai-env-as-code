@@ -67,7 +67,7 @@ public sealed class MigrationScaffoldWriterTests
     [InlineData("deleted")]
     [InlineData("staged-deleted")]
     [InlineData("no-choice")]
-    [InlineData("overwrite")]
+    [InlineData("staged-overwrite")]
     public void AnyBlockedSourceStopsBeforeCreatingOtherMissingFilesOrDirectories(string state)
     {
         using var layout = new Layout();
@@ -75,18 +75,18 @@ public sealed class MigrationScaffoldWriterTests
         if (state is "staged-modified" or "deleted" or "staged-deleted") layout.Commit(Shared);
         layout.Files.Write(Shared, "Draft.\n");
         if (state is "deleted" or "staged-deleted") File.Delete(Path.Combine(layout.Repository, Shared));
-        if (state is "staged-add" or "staged-modified" or "staged-deleted") layout.Files.Git("add", "--", Shared);
+        if (state is "staged-add" or "staged-modified" or "staged-deleted" or "staged-overwrite") layout.Files.Git("add", "--", Shared);
         var choice = state switch
         {
             "no-choice" => MigrationSectionChoice.Unchanged,
-            "overwrite" => MigrationSectionChoice.Overwrite,
+            "staged-overwrite" => MigrationSectionChoice.Overwrite,
             _ => MigrationSectionChoice.Preserve
         };
         var reviewed = MigrationScaffoldPreview.Read(layout.Context() with { SectionChoice = choice });
         layout.Files.AssertNoChanges(() =>
         {
             var error = Assert.Throws<InvalidOperationException>(() => MigrationScaffoldWriter.Write(reviewed));
-            Assert.Contains("before any creation", error.Message, StringComparison.Ordinal);
+            Assert.Contains("before any write", error.Message, StringComparison.Ordinal);
         });
     }
 
@@ -169,7 +169,7 @@ public sealed class MigrationScaffoldWriterTests
             AssertOnlyAdditions(layout, expected, () =>
             {
                 var error = Assert.Throws<MigrationScaffoldWriteException>(() => MigrationScaffoldWriter.Write(reviewed));
-                Assert.Equal(expected, error.CreatedPaths);
+                Assert.Equal(expected, error.WrittenPaths);
                 Assert.Equal(blocked, error.AttemptedPath);
                 Assert.IsType<UnauthorizedAccessException>(error.InnerException);
                 foreach (var directory in error.CreatedDirectories)
@@ -237,7 +237,7 @@ public sealed class MigrationScaffoldWriterTests
                 break;
         }
         layout.Files.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() =>
-            MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [])));
+            MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [], [])));
     }
 
     [Theory]
@@ -254,9 +254,9 @@ public sealed class MigrationScaffoldWriterTests
         layout.Files.AssertNoChanges(() =>
         {
             if (changedContent)
-                Assert.Throws<InvalidOperationException>(() => MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [created]));
+                Assert.Throws<InvalidOperationException>(() => MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [created], []));
             else
-                MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [created]);
+                MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [created], []);
         });
     }
 
@@ -274,7 +274,7 @@ public sealed class MigrationScaffoldWriterTests
             // Built-in Git tracing verifies the work removed, without a timer,
             // production observer hook or dependency on machine performance.
             Environment.SetEnvironmentVariable("GIT_TRACE", tracePath);
-            MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, []);
+            MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [], []);
         }
         finally
         {

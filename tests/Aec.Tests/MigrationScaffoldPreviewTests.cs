@@ -127,7 +127,7 @@ public sealed class MigrationScaffoldPreviewTests
         {
             var file = Assert.Single(MigrationScaffoldPreview.Read(context).Files, file => file.RelativePath == Shared);
             Assert.Equal(action, file.Action);
-            Assert.True(file.BlockedForFutureWrite);
+            Assert.Equal(action != MigrationScaffoldAction.ResetEmpty, file.BlockedForFutureWrite);
             if (action == MigrationScaffoldAction.ResetEmpty)
                 Assert.Empty(Assert.IsType<byte[]>(file.ProposedContent));
             else
@@ -155,7 +155,7 @@ public sealed class MigrationScaffoldPreviewTests
             var file = Assert.Single(MigrationScaffoldPreview.Read(context).Files, file => file.RelativePath == Shared);
             Assert.Equal(MigrationScaffoldAction.ResetEmpty, file.Action);
             Assert.Equal(staged, file.HasStagedChanges);
-            Assert.True(file.BlockedForFutureWrite);
+            Assert.Equal(staged, file.BlockedForFutureWrite);
             if (staged) Assert.Null(file.ProposedContent);
             else Assert.Empty(Assert.IsType<byte[]>(file.ProposedContent));
             if (state is "deleted" or "staged-deleted") Assert.Null(file.WorkingContent);
