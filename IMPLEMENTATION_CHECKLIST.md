@@ -1163,7 +1163,25 @@ combined target regeneration/commit, command orchestration and release gates rem
   Whitespace and glossary anchor/link checks passed; independent read-only
   wording review found no substantive ambiguity. No rendered/deployed-page claim.
   Documentation-only: no code, build/test, personal state, commit or push.
-- [ ] Implement the exact `DONE` gate, committed completion path, restart and
+- [x] Reviewed internal prompt-only `DONE` gate (ticket #2, 13e.1): exact ordinal
+  `DONE` requests later validation; blank/other input keeps waiting. EOF or
+  cancellation returns Cancelled; pre-cancellation does no input/output, and
+  cancellation during a synchronous read wins over DONE when the read returns.
+  Source/tests and architecture/reference diagrams implemented; independent
+  review found no blocker. Warning-as-error Release build and 38/38 focused
+  in-memory cases passed in 32ms: 13 gate, 22 scaffold policy and three existing
+  choice-prompt cases. TRX Completed with zero failures/errors/skips/timeouts/
+  aborts/unexecuted cases. Evidence:
+  `artifacts/migration-done-gate-20261030/focused/_Ferrys-MacBook-Pro_2026-10-30_22_22_16.trx`.
+  A later documentation-only evidence/wording patch failed because checklist
+  context was placed under the wrong file; that call changed no files. Ferry
+  approved the corrected documentation-only retry; no code changes or test
+  reruns. Scoped managed-code proof only, not full regression/native/harness
+  verification. Ferry reviewed and approved this slice and its exact-path
+  semantic engine commit on 2026-10-30.
+  No files/Git/runtime writes by the gate, source validation, saved continuation,
+  public route or completion claim.
+- [ ] Implement the committed completion path, restart and
   failure behavior; update help/skill guidance in a separately reviewed slice.
 - [ ] Rehearse the complete command on disposable copies of user-approved real
   data/runtime, then add appropriate native smoke coverage before any live use.
@@ -1202,8 +1220,13 @@ and authorized its exact-path semantic commit (`758fd64`). The next approved
 internal reset-writing slice is implemented with fixed Unix 0600 for recreated
 deletions; independent review, warning-as-error build and 97/97 affected cases
 passed across four scoped runs. Ferry reviewed the slice and authorized its
-exact-path semantic engine commit. Next: propose the smallest exact-DONE gate
-slice for approval; no next implementation is authorized yet. Public activation
+exact-path semantic engine commit (`14adaf3`). Ferry approved the next internal
+prompt-only exact-DONE gate (13e.1): source/tests/diagrams are implemented and
+independently reviewed; warning-as-error build and 38/38 focused in-memory cases
+passed. Ferry approved the documentation-only evidence/wording retry, reviewed
+the completed slice, and authorized its exact-path semantic engine commit.
+Next: propose the smallest read-only post-DONE source-validation slice for approval.
+No next implementation is authorized yet. Public activation, edited-source validation
 and completion orchestration remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices alone grant no reusable write authority; dirty-behind stops.

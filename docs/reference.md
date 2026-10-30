@@ -427,8 +427,18 @@ guards. Failure reports retained
 files/directories and a possibly changed attempted path; no automatic rollback,
 staging, commit or deployment. A retry requires a fresh preview. See the
 [writer flow](architecture.md#internal-scaffold-creation-and-reset-writer).
-Exact-DONE completion and public command wiring
+Post-DONE validation/completion and public command wiring
 remain unimplemented; this internal stage does not complete migration.
+
+Internal `MigrationDoneGate.Wait(input, output, cancellationToken)` now implements
+only confirmation: exact `DONE` returns `Done`; other/blank input keeps waiting,
+and EOF/cancellation returns `Cancelled`. No trimming, case folding or saved
+continuation. Pre-cancellation performs no input/output. Like the existing choice
+prompt, a blocked synchronous read observes cancellation only when it returns;
+`DONE` read during cancellation is discarded. Confirmation requests later source
+validation, not migration success. No files/Git/runtime change or source validation
+occurs here; the public command and completion coordinator remain unimplemented.
+See the [gate diagrams](architecture.md#internal-done-confirmation-gate).
 
 ### Existing manual migration — implemented and rehearsed
 

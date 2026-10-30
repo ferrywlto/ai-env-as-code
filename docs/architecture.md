@@ -597,8 +597,8 @@ commit, transport or runtime write occurs; observations grant no reusable write 
 The version preflight rejects an already completed 2.0 migration first. Sections
 can exist during an incomplete attempt; their presence alone proves no completion.
 The pre-start Overwrite choice must not be reapplied to expected user edits before
-`DONE`. That later boundary validates and commits the edited sources. The DONE
-completion path remains unimplemented.
+`DONE`. Post-confirmation validation and completion remain unimplemented; the
+internal confirmation-only gate is described below.
 
 ### Internal scaffold creation and reset writer
 
@@ -660,6 +660,37 @@ filesystem-wide transaction. Failures retain and report completed writes and
 possibly changed attempted paths, including directories created before a later
 pre-file validation detects drift. No staging, commit,
 render, apply, transport, completion marker or public migration route is added.
+
+### Internal DONE confirmation gate
+
+```mermaid
+flowchart TD
+    Enter[Internal Wait call] --> Pre{Already cancelled?}
+    Pre -->|Yes| Cancelled[Return Cancelled; no migration work]
+    Pre -->|No| Explain[Explain prepared sections and later validation]
+    Explain --> Read[Read line; check cancellation before and after]
+    Read -->|EOF or cancellation| Cancelled
+    Read -->|Line available| Exact{Exactly DONE?}
+    Exact -->|No| Reminder[Print reminder; no default confirmation]
+    Reminder --> Read
+    Exact -->|Yes| Done[Return Done; later validation still required]
+```
+
+```mermaid
+classDiagram
+    MigrationDoneGate --> TextReader : synchronous line input
+    MigrationDoneGate --> TextWriter : guidance and reminders
+    MigrationDoneGate --> MigrationDoneResult : Done or Cancelled
+```
+
+`MigrationDoneGate.Wait` is an internal prompt only, not connected to the public
+CLI or completion coordinator. It accepts exact ordinal `DONE`, without trimming
+or case folding. Pre-cancellation performs no input/output; cancellation during
+a read wins over `DONE`. A synchronous blocked read is not interrupted: cancellation
+is observed when it returns. The gate touches no files or Git state and does not
+validate or commit sources, render, apply, or record migration completion.
+Edited sections are expected; later orchestration must freshly validate them,
+never reapply the pre-start Overwrite choice.
 
 ## Cross-machine boundary
 
