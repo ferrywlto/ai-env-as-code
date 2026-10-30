@@ -7,24 +7,33 @@ internal enum MigrationScaffoldAction
     PreserveDirty,
     PreserveDeletion,
     NeedsDirtyChoice,
-    NeedsOverwriteReview
+    ResetEmpty
 }
 
 internal sealed record MigrationScaffoldFile(string RelativePath, byte[]? CommittedContent,
     string? CommittedMode, string IndexEntry, byte[]? WorkingContent,
     bool HasStagedChanges, MigrationScaffoldAction Action)
 {
-    // Only a genuinely absent file has an approved seed. Null means no content
-    // proposal, never permission to erase a draft or recreate a preserved deletion.
-    public byte[]? InitialContent => Action == MigrationScaffoldAction.CreateEmpty ? [] : null;
+    // Zero bytes describe a missing-file seed or an explicitly chosen reset.
+    // Null means no content proposal, never deletion or permission to unstage.
+    public byte[]? ProposedContent
+    {
+        get
+        {
+            if (HasStagedChanges) return null;
+            return Action is MigrationScaffoldAction.CreateEmpty or MigrationScaffoldAction.ResetEmpty ? [] : null;
+        }
+    }
 
     public bool BlockedForFutureWrite
     {
         get
         {
             if (HasStagedChanges) return true;
+            // Reset proposals remain blocked: the current writer creates only
+            // missing files. Executing resets is a separately reviewed boundary.
             return Action is MigrationScaffoldAction.PreserveDeletion or
-                MigrationScaffoldAction.NeedsDirtyChoice or MigrationScaffoldAction.NeedsOverwriteReview;
+                MigrationScaffoldAction.NeedsDirtyChoice or MigrationScaffoldAction.ResetEmpty;
         }
     }
 }
@@ -155,7 +164,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
         return (content, mode, $"{mode} {blob} 0\t{relativePath}\0");
     }
 
-    private static MigrationScaffoldAction ChooseAction(
+    internal static MigrationScaffoldAction ChooseAction(
         bool isDirty, byte[]? workingContent, MigrationSectionChoice choice)
     {
         if (!isDirty)
@@ -170,8 +179,9 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
         }
         if (choice == MigrationSectionChoice.Overwrite)
         {
-            // Missing-file seeds do not authorize erasing existing dirty text.
-            return MigrationScaffoldAction.NeedsOverwriteReview;
+            // This describes pre-start retry handling only. It must not be
+            // reapplied to the user's expected section edits before DONE.
+            return MigrationScaffoldAction.ResetEmpty;
         }
         return MigrationScaffoldAction.NeedsDirtyChoice;
     }

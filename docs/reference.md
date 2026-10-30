@@ -394,9 +394,18 @@ it creates no files or directories and grants no later write permission.
 | Clean existing file | Preserve exact bytes, regardless of choice |
 | Dirty file + Preserve | Preserve working bytes; staged changes block later writing |
 | Deleted file + Preserve | Preserve deletion; required source remains unresolved |
-| Dirty file without a choice, or with Overwrite | Require choice or overwrite-content review; never implicitly empty it |
+| Dirty file without a choice | Require an explicit choice; no content proposal |
+| Dirty file/deletion + Overwrite, unstaged | Propose zero-byte reset for user refilling; do not execute it |
+| Staged or mixed staged/unstaged changes | Block; expose no proposal bytes, including with Overwrite |
 
-Legacy instructions remain untouched; the user, not AEC, classifies their content.
+Reset proposals remain blocked by the missing-only writer; staged changes are
+never implicitly unstaged. Discarded uncommitted content may not be recoverable
+from Git history. Legacy instructions remain untouched; the user, not AEC,
+classifies their content. This choice handles drafts present when an incomplete
+migration restarts. Section existence alone does not prove format 2.0; the format
+preflight rejects already completed migrations before this choice. Expected dirty
+edits made while waiting for `DONE` are validated/committed, never reset using
+the earlier Overwrite choice.
 See the [scaffold preview diagrams](architecture.md#internal-migration-scaffold-preview).
 Internal `MigrationScaffoldWriter.Write(reviewed)` freshly validates that inventory
 and rejects every staged or unresolved source before creating any directory.
@@ -411,7 +420,7 @@ guards. Failure reports retained
 files/directories and a possibly changed attempted path; no automatic rollback,
 staging, commit or deployment. A retry requires a fresh preview. See the
 [writer flow](architecture.md#internal-missing-only-scaffold-writer).
-Overwrite-content handling, exact-DONE completion and public command wiring
+Overwrite execution, exact-DONE completion and public command wiring
 remain unimplemented; this internal stage does not complete migration.
 
 ### Existing manual migration — implemented and rehearsed

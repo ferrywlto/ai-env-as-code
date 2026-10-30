@@ -89,7 +89,9 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
         output.WriteLine("Dirty migration section files:");
         foreach (var path in Paths) output.WriteLine($"- {path}");
         output.WriteLine("""
-            Preserve keeps these edits. Overwrite will discard them when sections are regenerated.
+            Preserve keeps these edits. Overwrite proposes resetting dirty section files to empty Markdown for you to refill.
+            Clean files are preserved.
+            Discarded uncommitted section edits may not be recoverable from Git history.
             This prompt records your choice only; it does not change any files.
             """);
         while (!cancellationToken.IsCancellationRequested)

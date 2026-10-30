@@ -555,16 +555,28 @@ flowchart TD
     Context[Fresh post-capture preparation] --> Validate[Validate HEAD, enrollment and reviewed dirty paths]
     Validate --> Scope[Shared + current platform + confirmed local provider overlays]
     Scope --> Observe[Read committed regular blobs, index entries and working bytes]
-    Observe --> Missing{Genuinely missing?}
-    Missing -->|Yes, not ignored| Empty[Propose empty Markdown seed]
-    Missing -->|No| Preserve[Preserve clean text; report dirty choice, staging or deletion]
+    Observe --> State{Source state}
+    State -->|Missing, not ignored| Empty[Propose empty Markdown seed]
+    State -->|Clean| Preserve[Keep exact existing bytes]
+    State -->|Dirty| Choice{Recorded pre-start choice}
+    Choice -->|Preserve| Draft[Keep draft or deletion]
+    Choice -->|Unchanged| Need[Require explicit choice]
+    Choice -->|Overwrite| Reset[Propose empty reset; staged files expose no bytes]
     Empty --> Recheck[Recheck context, raw index, runtime and section bytes]
     Preserve --> Recheck
+    Draft --> Recheck
+    Need --> Recheck
+    Reset --> Recheck
     Recheck --> Preview[Return inventory only; no files created]
 ```
 
 ```mermaid
 classDiagram
+    class MigrationScaffoldFile {
+        +ProposedContent
+        +HasStagedChanges
+        +BlockedForFutureWrite
+    }
     MigrationScaffoldPreview --> MigrationPreparation : fresh post-capture context
     MigrationScaffoldPreview --> MigrationHarnessSelection : confirm local scope
     MigrationScaffoldPreview --> MigrationDirtySections : validate reviewed paths
@@ -572,21 +584,28 @@ classDiagram
     MigrationScaffoldFile --> MigrationScaffoldAction : proposed disposition
 ```
 
-`MigrationScaffoldPreview.Read` proposes zero bytes only when a source is absent
-from the prepared commit, index and working tree. Clean files remain unchanged
-under every choice. Preserve retains draft bytes or deletions; staged changes
-and preserved deletions block a future writer. Overwrite remains unresolved: approving empty
-missing-file seeds does not authorize erasing existing text. No instruction
-classification, scaffold writing, staging, commit, transport or runtime write is
-performed. The returned observations are advisory, not reusable write authority;
-the writer below validates fresh state. Legacy instructions remain intact.
+`MigrationScaffoldPreview.Read` proposes zero bytes for genuinely missing sources
+or explicit pre-start Overwrite of dirty owned sections, including deletions.
+Clean files remain unchanged under every choice. Preserve retains drafts/deletions;
+An absent choice never authorizes a reset. Staged files expose no proposal bytes and stay
+blocked. `ResetEmpty` is still blocked by the missing-only writer below: this
+stage describes a replacement, never executes it. Null `ProposedContent` means
+no content proposal, not deletion. Uncommitted drafts may not be recoverable from
+Git, as the choice prompt warns. No instruction classification, file/index write,
+commit, transport or runtime write occurs; observations grant no reusable write authority.
+
+The version preflight rejects an already completed 2.0 migration first. Sections
+can exist during an incomplete attempt; their presence alone proves no completion.
+The pre-start Overwrite choice must not be reapplied to expected user edits before
+`DONE`. That later boundary validates and commits the edited sources. Reset
+execution and the DONE completion path remain separate, unimplemented stages.
 
 ### Internal missing-only scaffold writer
 
 ```mermaid
 flowchart TD
     Review[Reviewed scaffold preview] --> Fresh[One fresh full preview; compare inputs and actions]
-    Fresh --> Block{Any staged or unresolved source?}
+    Fresh --> Block{Any staged, reset or unresolved source?}
     Block -->|Yes| Stop[Stop before creating directories or files]
     Block -->|No| Freeze[Freeze raw index, legacy files and current runtime bytes]
     Freeze --> Guard[Focused mutable-state checks; also cover no-op]

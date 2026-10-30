@@ -1105,6 +1105,29 @@ combined target regeneration/commit, command orchestration and release gates rem
   removed or retries performed. Scoped local managed-code proof only; no full
   regression, native runner or actual harness claim. Ferry approved the verified
   fix and its exact-path semantic engine commit. No push authorized.
+- [x] Reviewed read-only Overwrite preview: explicit pre-start Overwrite proposes
+  zero-byte resets of dirty owned sections/deletions; clean files stay unchanged.
+  Staged changes expose no proposal bytes and remain blocked. ResetEmpty is still
+  blocked by the missing-only writer; no reset execution in this slice. Rename
+  InitialContent to ProposedContent and warn discarded uncommitted drafts may not
+  be recoverable from Git history. Separate retry-time dirty sections from expected
+  edits before DONE; completed data format is checked before dirty-section choice.
+  Source/docs implemented; independent review found no correctness blocker.
+  Warning-as-error Release build and 22 in-memory policy/prompt cases passed in
+  23ms. Then 40 Git-backed cases passed in 3m42s: 34 preview and six existing
+  missing-only writer refusals, with whole-fixture byte/membership preservation.
+  Git TRX Completed; zero failures/skips/errors/timeouts/aborts/unexecuted cases;
+  longest case 15.8s, hang guard 90s. After Git verification, clarified the prompt
+  to say empty Markdown for refilling and clean-file preservation, then rebuilt
+  with warnings as errors and reran only 22 policy cases: 22/22, 23ms, Completed,
+  all failure/skip/error/timeout/abort/unexecuted counters zero. Git-tested logic
+  was unchanged by that final prompt-only edit. Evidence:
+  `artifacts/migration-overwrite-preview-20261030/git/_Ferrys-MacBook-Pro_2026-10-30_00_55_49.trx`;
+  `artifacts/migration-overwrite-preview-20261030/policy-final/_Ferrys-MacBook-Pro_2026-10-30_00_59_37.trx`.
+  No tests removed, failed-run retry or new writer-loop full-preview rebuilding.
+  Scoped local managed-code proof only, not full regression/native/actual-harness
+  verification. Ferry approved the verified slice and its exact-path semantic
+  engine commit on 2026-10-30. No push authorized.
 - [ ] After verification, slice review and separate approval, implement remaining
   scaffolding/completion in small increments. Preserve/Overwrite does not waive Git safety.
 - [x] Ferry reviewed and approved terminology documentation. One
@@ -1147,7 +1170,11 @@ build and all 47 affected cases passed. Ferry reviewed and approved the fix and
 its exact-path semantic engine commit. No next implementation slice started.
 It creates only absent
 empty source files when invoked; no personal data/runtime invocation is authorized.
-Overwrite handling, exact-DONE orchestration and public activation remain later slices.
+Ferry approved the next read-only Overwrite preview. Source/tests/docs are
+implemented and reviewed; 22 policy plus 40 Git-backed cases passed, with the
+final prompt-only clarification separately rechecked. Ferry reviewed the slice
+and authorized its exact-path semantic commit. No reset execution is added.
+Overwrite writing, exact-DONE orchestration and public activation remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices still authorize no writes; dirty-behind stops.
 No public migrate route yet. Tests use disposable local bare

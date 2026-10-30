@@ -28,7 +28,7 @@ public sealed class MigrationScaffoldPreviewTests
                 Assert.Null(file.CommittedMode);
                 Assert.Empty(file.IndexEntry);
                 Assert.Null(file.WorkingContent);
-                Assert.Empty(Assert.IsType<byte[]>(file.InitialContent));
+                Assert.Empty(Assert.IsType<byte[]>(file.ProposedContent));
                 Assert.False(file.HasStagedChanges);
                 Assert.False(file.BlockedForFutureWrite);
             });
@@ -78,7 +78,7 @@ public sealed class MigrationScaffoldPreviewTests
                 Assert.Equal(file.CommittedContent, file.WorkingContent);
                 Assert.True(file.CommittedMode is "100644" or "100755");
                 Assert.NotEmpty(file.IndexEntry);
-                Assert.Null(file.InitialContent);
+                Assert.Null(file.ProposedContent);
                 Assert.False(file.HasStagedChanges);
                 Assert.False(file.BlockedForFutureWrite);
             });
@@ -97,13 +97,7 @@ public sealed class MigrationScaffoldPreviewTests
     {
         var action = Enum.Parse<MigrationScaffoldAction>(actionName);
         using var layout = new Layout();
-        layout.Files.Write(Shared, "Committed section.\n");
-        if (state is not ("untracked" or "staged-add")) layout.Commit(Shared);
-        layout.Files.Write(Shared, "Draft section.\n");
-        if (state is "staged-add" or "staged-modified" or "staged-and-unstaged") layout.Files.Git("add", "--", Shared);
-        if (state == "staged-and-unstaged") layout.Files.Write(Shared, "Unstaged revision.\n");
-        if (state is "deleted" or "staged-deleted") File.Delete(Path.Combine(layout.Repository, Shared));
-        if (state == "staged-deleted") layout.Files.Git("add", "--", Shared);
+        PrepareDirtySection(layout, state);
         var context = layout.Context() with { SectionChoice = MigrationSectionChoice.Preserve };
 
         layout.Files.AssertNoChanges(() =>
@@ -113,7 +107,7 @@ public sealed class MigrationScaffoldPreviewTests
             Assert.Equal(action, file.Action);
             Assert.Equal(staged, file.HasStagedChanges);
             Assert.Equal(staged || action == MigrationScaffoldAction.PreserveDeletion, file.BlockedForFutureWrite);
-            Assert.Null(file.InitialContent);
+            Assert.Null(file.ProposedContent);
             if (action == MigrationScaffoldAction.PreserveDeletion) Assert.Null(file.WorkingContent);
             else Assert.Equal(File.ReadAllBytes(Path.Combine(layout.Repository, Shared)), file.WorkingContent);
         });
@@ -121,8 +115,8 @@ public sealed class MigrationScaffoldPreviewTests
 
     [Theory]
     [InlineData(nameof(MigrationSectionChoice.Unchanged), nameof(MigrationScaffoldAction.NeedsDirtyChoice))]
-    [InlineData(nameof(MigrationSectionChoice.Overwrite), nameof(MigrationScaffoldAction.NeedsOverwriteReview))]
-    public void DirtyContentNeverBecomesAnImplicitEmptySeed(string choiceName, string actionName)
+    [InlineData(nameof(MigrationSectionChoice.Overwrite), nameof(MigrationScaffoldAction.ResetEmpty))]
+    public void DirtyContentNeedsExplicitOverwriteBeforeAnEmptyProposal(string choiceName, string actionName)
     {
         var choice = Enum.Parse<MigrationSectionChoice>(choiceName);
         var action = Enum.Parse<MigrationScaffoldAction>(actionName);
@@ -134,8 +128,38 @@ public sealed class MigrationScaffoldPreviewTests
             var file = Assert.Single(MigrationScaffoldPreview.Read(context).Files, file => file.RelativePath == Shared);
             Assert.Equal(action, file.Action);
             Assert.True(file.BlockedForFutureWrite);
-            Assert.Null(file.InitialContent);
+            if (action == MigrationScaffoldAction.ResetEmpty)
+                Assert.Empty(Assert.IsType<byte[]>(file.ProposedContent));
+            else
+                Assert.Null(file.ProposedContent);
             Assert.Equal(Encoding.UTF8.GetBytes("Keep this draft.\n"), file.WorkingContent);
+        });
+    }
+
+    [Theory]
+    [InlineData("untracked", false)]
+    [InlineData("untracked-empty", false)]
+    [InlineData("modified", false)]
+    [InlineData("deleted", false)]
+    [InlineData("staged-add", true)]
+    [InlineData("staged-modified", true)]
+    [InlineData("staged-and-unstaged", true)]
+    [InlineData("staged-deleted", true)]
+    public void OverwriteOnlyProposesResetAndNeverChangesFilesOrIndex(string state, bool staged)
+    {
+        using var layout = new Layout();
+        PrepareDirtySection(layout, state);
+        var context = layout.Context() with { SectionChoice = MigrationSectionChoice.Overwrite };
+        layout.Files.AssertNoChanges(() =>
+        {
+            var file = Assert.Single(MigrationScaffoldPreview.Read(context).Files, file => file.RelativePath == Shared);
+            Assert.Equal(MigrationScaffoldAction.ResetEmpty, file.Action);
+            Assert.Equal(staged, file.HasStagedChanges);
+            Assert.True(file.BlockedForFutureWrite);
+            if (staged) Assert.Null(file.ProposedContent);
+            else Assert.Empty(Assert.IsType<byte[]>(file.ProposedContent));
+            if (state is "deleted" or "staged-deleted") Assert.Null(file.WorkingContent);
+            else Assert.Equal(File.ReadAllBytes(Path.Combine(layout.Repository, Shared)), file.WorkingContent);
         });
     }
 
@@ -242,5 +266,16 @@ public sealed class MigrationScaffoldPreviewTests
         using var layout = new Layout();
         var context = layout.Context() with { SectionChoice = MigrationSectionChoice.Cancelled };
         layout.Files.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() => MigrationScaffoldPreview.Read(context)));
+    }
+
+    private static void PrepareDirtySection(Layout layout, string state)
+    {
+        layout.Files.Write(Shared, "Committed section.\n");
+        if (state is not ("untracked" or "untracked-empty" or "staged-add")) layout.Commit(Shared);
+        layout.Files.Write(Shared, state == "untracked-empty" ? "" : "Draft section.\n");
+        if (state is "staged-add" or "staged-modified" or "staged-and-unstaged") layout.Files.Git("add", "--", Shared);
+        if (state == "staged-and-unstaged") layout.Files.Write(Shared, "Unstaged revision.\n");
+        if (state is "deleted" or "staged-deleted") File.Delete(Path.Combine(layout.Repository, Shared));
+        if (state == "staged-deleted") layout.Files.Git("add", "--", Shared);
     }
 }
