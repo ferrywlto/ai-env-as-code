@@ -463,6 +463,16 @@ Failure retains inspectable staged state or a new commit, without rollback.
 No render, deployment, push, completion marker or public command is added.
 See the [source-commit diagrams](architecture.md#internal-source-only-migration-commit).
 
+Internal `MigrationTargetPreview.Read(preparation, provider)` previews one confirmed
+local harness on the current platform after required sources are committed and
+byte-clean. Return selected source snapshots, the target's committed/working
+baseline, desired bytes and Create/Unchanged/Regenerate action. A clean older
+target is a valid regeneration proposal; dirty, staged, deleted, linked or
+untracked targets refuse. Missing targets must also be absent from the index and
+not ignored. Recheck mutable inputs before returning advisory observations.
+No target files, Git state, runtime or public command change.
+See the [target-preview diagrams](architecture.md#internal-single-harness-migration-target-preview).
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid

@@ -1239,6 +1239,25 @@ combined target regeneration/commit, command orchestration and release gates rem
   Ferry reviewed and approved the slice and its exact-path semantic engine commit
   on 2026-10-31. No full-regression,
   Native AOT or real-harness verification claimed.
+- [x] Reviewed read-only single-harness target preview (ticket #2, 13e.4): after
+  committed source validation, select one confirmed local harness/current
+  platform. Observe target Git/index/working baseline and desired composition;
+  propose Create, Unchanged or Regenerate. Accept a clean older target; refuse
+  dirty, deleted, staged, untracked, unsafe or ignored missing targets. No writes,
+  commit, apply, marker or public command. Implementation/diagrams drafted;
+  independent production/docs review found no blocker. Pre-build test review
+  found enrolled-provider/unsafe-mutation fixture issues. The correction patch
+  failed on unmatched context and changed no files; test workstream stopped.
+  Ferry explicitly approved test-only corrections; root applied fixture ordering,
+  enrollment and precise assertion fixes, with hidden-target and combined-size
+  coverage. Independent pre-execution review found no blocker. Warning-as-error
+  Release build and 38/38 fast policy/gate cases passed. Both target-preview
+  batches passed: proposals 10/10, refusals 16/16; total 64/64 focused checks,
+  zero failures/skips and all process exits zero. TRX counters verified under
+  `artifacts/migration-target-preview-20261031/`. Production hash unchanged by
+  test corrections; diff check passed. Ferry reviewed and approved the slice and
+  its exact-path semantic engine commit on 2026-10-31. No full regression,
+  Native AOT or real-harness evidence claimed.
 - [ ] Implement the remaining completion path, restart and
   failure behavior; update help/skill guidance in a separately reviewed slice.
 - [ ] Rehearse the complete command on disposable copies of user-approved real
@@ -1300,9 +1319,17 @@ correction applied and independently reviewed. Warning-as-error rebuild and61/61
 scoped rerun checks passed with zero failures/skips; production hashes unchanged.
 Earlier source-validation32/32 remains separate prior evidence. Ferry reviewed
 and approved the slice and its exact-path semantic engine commit on 2026-10-31.
-No push. Next: propose the smallest internal target-rendering completion boundary
-and wait for approval; public activation
-and completion orchestration remain later slices.
+No push. Ferry approved read-only single-harness target preview 13e.4. Production
+and diagrams drafted; independent production/docs review found no blocker.
+Test correction patch failed on unmatched context, leaving pre-build fixture
+issues; no automatic retry. Ferry approved test-only corrections; applied for
+independent pre-execution review, with no blocker. Warning-as-error build and
+64/64 focused checks passed (38 fast, 10 proposals, 16 refusals). Production
+hash unchanged during test corrections; diagrams reflect the read-only preview.
+Ferry reviewed and approved the slice and its exact-path semantic engine commit
+on 2026-10-31. No push. Next: propose one-harness target writing and wait for
+approval. Target commits, runtime deployment, public activation and completion
+orchestration remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices alone grant no reusable write authority; dirty-behind stops.
 No public migrate route yet. Tests use disposable local bare

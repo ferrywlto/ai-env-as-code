@@ -771,6 +771,42 @@ after publication; legitimate `write-tree` cache-extension updates are not mista
 for user staging. Failure may retain index changes or a local commit for inspection;
 there is no rollback, target generation, apply, push, marker or public CLI wiring.
 
+### Internal single-harness migration target preview
+
+```mermaid
+flowchart TD
+    Context[Post-source-commit preparation] --> Sources[Validate required sources: committed and byte-clean]
+    Sources --> Select[Select one confirmed local harness and current platform]
+    Select --> Target[Read exact target commit, index and working baseline]
+    Target --> Clean{Working and index match baseline?}
+    Clean -->|No| Stop[Refuse dirty, deleted, staged or untracked target]
+    Clean -->|Yes| Render[Render selected shared, platform and provider sources in memory]
+    Render --> Action{Target baseline?}
+    Action -->|Absent| Create[Propose Create; require nonignored destination]
+    Action -->|Matches render| Unchanged[Propose Unchanged]
+    Action -->|Older than render| Regenerate[Propose Regenerate]
+    Create --> Guard[Recheck mutable context, index and observed source, target and protected bytes]
+    Unchanged --> Guard
+    Regenerate --> Guard
+    Guard --> Preview[Return advisory preview only]
+```
+
+```mermaid
+classDiagram
+    MigrationTargetPreview --> MigrationSourceValidationPreview : committed sources and final guard
+    MigrationTargetPreview --> MigrationScaffoldPreview : fixed-path Git baseline and index readers
+    MigrationTargetPreview --> InstructionSections : render selected three sources
+    MigrationTargetPreview --> MigrationHarness : confirmed local selection
+```
+
+An older committed target may legitimately lag newly committed sections. Compare
+it with its own exact Git baseline, not the new composition; do not use
+`CommittedTargetValidator.Read`, which requires already-rendered parity. Create
+requires absence from commit, index and working tree. Other harnesses and
+platforms are not rendered. Observations cover this read, not earlier user edits,
+and grant no write authority. No target write, staging, commit, apply, completion
+marker or public command is added.
+
 ## Cross-machine boundary
 
 ```mermaid
