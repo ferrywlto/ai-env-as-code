@@ -285,7 +285,7 @@ internal static class MigrationScaffoldWriter
             throw new InvalidOperationException("Scaffold inventory membership changed after review.");
     }
 
-    private static List<string> MissingDirectories(string repository, string parent)
+    internal static List<string> MissingDirectories(string repository, string parent)
     {
         var missing = new List<string>();
         var directory = parent;

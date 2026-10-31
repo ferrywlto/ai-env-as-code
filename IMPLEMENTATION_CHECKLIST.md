@@ -1258,6 +1258,37 @@ combined target regeneration/commit, command orchestration and release gates rem
   test corrections; diff check passed. Ferry reviewed and approved the slice and
   its exact-path semantic engine commit on 2026-10-31. No full regression,
   Native AOT or real-harness evidence claimed.
+- [x] Reviewed single-harness target writer (ticket #2, 13e.5): freshly validate
+  the reviewed target, create missing parents/target with Unix 0600 or atomically
+  regenerate while preserving permissions. Validated Unchanged is mutation-free.
+  Pin required sources, raw index, HEAD/branch, protected runtime/config and
+  other target bytes; post-write status admits only this exact target change.
+  Report retained directories/attempt on failure, no rollback. No staging,
+  target commit, apply, marker or public CLI. Production/diagrams drafted;
+  production/docs review found no blocker. Draft test fixtures were corrected
+  before execution; independent test review found no blocker in 27 cases.
+  Warning-as-error Release build and 38/38 fast checks passed. New writer and
+  affected dirty-section/source-validation scopes used the same read-only
+  assembly with isolated fixtures/output. Dirty-section regression: 35/37 passed;
+  two existing choice-prompt rows expect the old "Overwrite will discard" text.
+  HEAD already has reset/unrecoverable-edit wording from `758fd64`; this slice
+  does not change that prompt. Ferry approved the test-only assertion fix and
+  scoped rebuild/rerun. Original writer 27/27 and source-validation 32/32 passed,
+  with zero failures/skips and process exits zero; TRX counters verified. Once
+  both original runs finished, the stale assertion was replaced with current
+  empty-reset and unrecoverable-draft warning assertions, preserving no-mutation
+  and choice checks. Production source/binary hashes captured unchanged before
+  correction. Independent correction review found no blocker. Approved
+  warning-as-error rebuild and combined dirty-section/fast rerun passed 72/72
+  (three overlapping fast cases counted once). Together with writer 27/27 and
+  source-validation 32/32, 131 distinct focused cases passed; all process exits
+  zero, no failures/skips and TRX counters verified. Production source and
+  binary hashes remained identical across the test-only correction. Evidence:
+  `artifacts/migration-target-writer-20261031/`. Diff check passed; architecture
+  and reference diagrams reflect this writer. Permission evidence is local Unix,
+  not Windows ACL proof. Ferry reviewed and approved the slice and its exact-path
+  semantic engine commit on 2026-10-31. No push or full regression/Native AOT/
+  real-harness verification claimed.
 - [ ] Implement the remaining completion path, restart and
   failure behavior; update help/skill guidance in a separately reviewed slice.
 - [ ] Rehearse the complete command on disposable copies of user-approved real
@@ -1327,9 +1358,20 @@ independent pre-execution review, with no blocker. Warning-as-error build and
 64/64 focused checks passed (38 fast, 10 proposals, 16 refusals). Production
 hash unchanged during test corrections; diagrams reflect the read-only preview.
 Ferry reviewed and approved the slice and its exact-path semantic engine commit
-on 2026-10-31. No push. Next: propose one-harness target writing and wait for
-approval. Target commits, runtime deployment, public activation and completion
-orchestration remain later slices.
+on 2026-10-31. No push. Ferry approved one-harness target writer 13e.5. Production
+and diagrams drafted; independent production/test review found no blocker.
+Warning-as-error Release build and38/38 fast checks passed; writer and affected
+dirty-section regression35/37 passed, two stale prompt-assertion failures traced
+to wording changed in `758fd64`, not this slice. Ferry approved the test-only
+fix/scoped rerun. Original writer27/27 and source-validation32/32 passed; both
+runs finished before the assertion-only correction. Approved correction was
+independently reviewed; warning-as-error rebuild and72/72 affected rerun passed.
+Production source/binary hashes unchanged; 131 distinct focused cases passed
+across writer27/source32/rerun72 scopes. Ferry reviewed and approved the slice
+and its exact-path semantic engine commit on 2026-10-31. No automatic retry or
+push. Next: propose one-harness target committing and wait for approval.
+Runtime deployment, public activation and completion orchestration remain
+later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices alone grant no reusable write authority; dirty-behind stops.
 No public migrate route yet. Tests use disposable local bare

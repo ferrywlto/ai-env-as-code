@@ -231,7 +231,8 @@ public sealed class MigrationDirtySectionsTests
         var expected = overwrite ? MigrationSectionChoice.Overwrite : MigrationSectionChoice.Preserve;
         layout.AssertNoChanges(() => Assert.Equal(expected, layout.Read().Prompt(input, output)));
         Assert.Contains(Shared, output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Overwrite will discard", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Overwrite proposes resetting dirty section files to empty Markdown", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Discarded uncommitted section edits may not be recoverable from Git history.", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("does not change any files", output.ToString(), StringComparison.Ordinal);
     }
 

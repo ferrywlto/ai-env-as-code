@@ -99,7 +99,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
     // validates observations, never grants write authority to caller buffers.
     internal static void VerifyFinalState(MigrationPreparation expected, string branch,
         byte[] index, MigrationDirtySections dirty, IReadOnlyList<MigrationValidatedSource> files,
-        Dictionary<string, byte[]?> protectedFiles)
+        Dictionary<string, byte[]?> protectedFiles, string? targetRelativePath = null)
     {
         var repository = expected.Preflight.Repository;
         // History and committed blobs were checked once at entry. Recheck only
@@ -124,7 +124,9 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             if (!SameBytes(content, ReadFile(path)))
                 throw new InvalidOperationException($"Protected migration input changed during source validation: {path}.");
         }
-        var currentDirty = MigrationDirtySections.Read(expected.Preflight, expected.Harnesses);
+        var currentDirty = targetRelativePath is null
+            ? MigrationDirtySections.Read(expected.Preflight, expected.Harnesses)
+            : MigrationDirtySections.ReadForTarget(expected.Preflight, expected.Harnesses, targetRelativePath);
         if (!currentDirty.Paths.SequenceEqual(dirty.Paths, StringComparer.Ordinal))
             throw new InvalidOperationException("Dirty paths changed during source validation.");
         if (!index.AsSpan().SequenceEqual(ReadIndex(repository)))

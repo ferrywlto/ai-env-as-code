@@ -473,6 +473,17 @@ not ignored. Recheck mutable inputs before returning advisory observations.
 No target files, Git state, runtime or public command change.
 See the [target-preview diagrams](architecture.md#internal-single-harness-migration-target-preview).
 
+Internal `MigrationTargetWriter.Write(reviewed)` freshly validates the review and
+writes only the selected repository target, returning its relative path or null
+for a validated no-op. New targets use CreateNew and Unix `0600`; replacements
+retain existing Unix permission bits; Windows ACL behavior is not verified by
+these local tests. Preserve raw index, HEAD/branch, required sources,
+other targets and protected runtime/config bytes. Post-write guards admit only
+the selected target's exact intended change. Failure reports retained created
+directories and the attempted path, without rollback. No staging, commit, apply,
+completion marker or public command is added.
+See the [target-writer diagrams](architecture.md#internal-single-harness-migration-target-writer).
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid

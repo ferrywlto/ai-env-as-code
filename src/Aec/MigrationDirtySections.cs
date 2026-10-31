@@ -8,6 +8,23 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
 {
     public static MigrationDirtySections Read(
         MigrationPreflight preflight, IReadOnlyList<MigrationHarness> harnesses)
+        => ReadCore(preflight, harnesses, null);
+
+    // Only the target writer admits its one intentional target change. Ordinary
+    // source preparation must continue rejecting every dirty target.
+    internal static MigrationDirtySections ReadForTarget(MigrationPreflight preflight,
+        IReadOnlyList<MigrationHarness> harnesses, string targetRelativePath)
+    {
+        var (platform, provider) = MigrationPortableTargetWriter.ReadEnrollment(targetRelativePath);
+        if (platform != RenderCommand.CurrentPlatform())
+            throw new InvalidOperationException("Migration target must use the current platform.");
+        if (!harnesses.Any(harness => harness.Provider == provider))
+            throw new InvalidOperationException("Migration target must belong to a confirmed local harness.");
+        return ReadCore(preflight, harnesses, targetRelativePath);
+    }
+
+    private static MigrationDirtySections ReadCore(MigrationPreflight preflight,
+        IReadOnlyList<MigrationHarness> harnesses, string? targetRelativePath)
     {
         if (harnesses.Count == 0)
         {
@@ -27,6 +44,7 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
             }
             allowed.Add($"environment/providers/{harness.Provider}/overlay.md");
         }
+        if (targetRelativePath is not null) allowed.Add(targetRelativePath);
 
         foreach (var path in allowed)
         {

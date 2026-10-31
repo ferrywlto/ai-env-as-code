@@ -14,6 +14,10 @@ internal sealed record MigrationTargetPreview(MigrationPreparation Preparation,
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
+    // Sources is the selected composition; the writer also freezes required
+    // sources for other confirmed harnesses without rereading their history.
+    internal IReadOnlyList<MigrationValidatedSource> RequiredSources { get; init; } = [];
+
     public static MigrationTargetPreview Read(MigrationPreparation preparation, string provider)
     {
         ArgumentNullException.ThrowIfNull(preparation);
@@ -83,7 +87,10 @@ internal sealed record MigrationTargetPreview(MigrationPreparation Preparation,
         if (baseline.Content is null)
             MigrationScaffoldPreview.VerifyMissingPathNotIgnored(repository, relative);
         return new MigrationTargetPreview(validated.Preparation, validated.Branch, platform, harness,
-            sources, relative, baseline.Content, baseline.Mode, working, desired, action);
+            sources, relative, baseline.Content, baseline.Mode, working, desired, action)
+        {
+            RequiredSources = validated.Files
+        };
     }
 
     private static bool SameBytes(byte[]? before, byte[]? current)

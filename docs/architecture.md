@@ -807,6 +807,47 @@ platforms are not rendered. Observations cover this read, not earlier user edits
 and grant no write authority. No target write, staging, commit, apply, completion
 marker or public command is added.
 
+### Internal single-harness migration target writer
+
+```mermaid
+flowchart TD
+    Review[Reviewed target preview] --> Fresh[Fresh preview; compare review, selection and source snapshots]
+    Fresh --> Freeze[Pin raw index, permissions, required sources and protected working bytes]
+    Freeze --> Guard[Validate mutable inputs]
+    Guard --> Action{Fresh action?}
+    Action -->|Unchanged| Noop[Return null without mutation]
+    Action -->|Create| Parents[Create missing parents with link checks; recheck inputs]
+    Parents --> Create[CreateNew target; Unix 0600]
+    Action -->|Regenerate| Replace[Snapshot-checked atomic replacement; preserve Unix permissions]
+    Create --> Verify[Verify exact target bytes and permissions; only selected target may be dirty]
+    Replace --> Verify
+    Verify --> Written[Return selected relative path]
+    Parents -->|Failure| Stop[Report retained directories and attempted path; no rollback]
+    Create -->|Failure| Stop
+    Replace -->|Failure| Stop
+    Verify -->|Failure| Stop
+```
+
+```mermaid
+classDiagram
+    MigrationTargetWriter --> MigrationTargetPreview : fresh private plan and all required sources
+    MigrationTargetWriter --> AtomicFile : CreateNew or snapshot-checked replacement
+    MigrationTargetWriter --> MigrationSourceValidationPreview : mutable-state guard
+    MigrationSourceValidationPreview --> MigrationDirtySections : optional exact target context
+    MigrationTargetWriter --> MigrationTargetWriteException : retained-state diagnostics
+```
+
+`RequiredSources` freezes every confirmed harness's required sources; `Sources`
+remains the selected three-file composition. No caller buffer authorizes writes.
+The target-aware dirty check validates one fixed target path, current platform
+and confirmed provider. Ordinary source checks still reject every dirty target;
+the writer admits only its exact intended change, not a general allowed-path
+list. Guards inspect mutable state at write boundaries, without rebuilding full
+preflight/history around each directory. Protected snapshots cover this write,
+not earlier user review. Local permission tests cover Unix bits, not Windows ACLs.
+Failures retain inspectable state; no staging, target
+commit, runtime apply, marker, public CLI, rollback or remote operation is added.
+
 ## Cross-machine boundary
 
 ```mermaid
