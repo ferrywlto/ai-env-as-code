@@ -59,7 +59,7 @@ internal sealed class MigrationPortableTargetWriter
         return new MigrationPortableTargetWriter(plan, changes.ToArray());
     }
 
-    private static (string Platform, string Provider) ReadEnrollment(string relativePath)
+    internal static (string Platform, string Provider) ReadEnrollment(string relativePath)
     {
         var parts = relativePath.Split('/');
         if (parts.Length != 5)

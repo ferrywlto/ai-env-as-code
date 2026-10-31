@@ -1208,7 +1208,38 @@ combined target regeneration/commit, command orchestration and release gates rem
   and approved the slice and its exact-path semantic engine commit on 2026-10-31.
   The preview performs no writes, source commits, deployment or remote operation;
   no public command or personal state changed.
-- [ ] Implement the committed completion path, restart and
+- [x] Reviewed internal source-only commit (ticket #2, 13e.3): fresh private
+  validation, exact source staging and one signed/pinned-tree local commit.
+  Include every new required file even when empty; skip commit only when all
+  required sources are already tracked and unchanged. Preserve committed regular
+  modes; new files require 100644. No working-file rewrite/chmod, target generation,
+  apply, push, marker or public route. Production and diagrams drafted; review
+  added the local refs/heads branch guard before any execution. Test workstream's
+  follow-up patch failed at JavaScript syntax. Ferry explicitly approved test-only
+  corrections; snapshot, argument and assertion fixes are applied for independent
+  pre-execution review. Independent review found no blocker. Warning-as-error
+  Release build and 38/38 fast policy/gate cases passed. New source-commit scope
+  completed 23 cases: 21 passed, two symbolic-HEAD fixture cases failed before
+  reaching their assertion because existing preflight already rejects non-local
+  HEAD. Independent source-validation regression passed 32/32 (TRX verified;
+  worker discarded process exit metadata). No correction or retry attempted.
+  Independent review confirms the test-only fix: obtain the valid preview before
+  redirecting HEAD, then assert commit refusal without mutation for changed/no-op
+  cases; do not claim coverage of a particular redundant guard. Ferry approved
+  the test-only fixture correction and scoped rebuild/recheck. The preview now
+  precedes HEAD redirection; renamed test describes that after-review change.
+  Independent review found no blocker. Approved warning-as-error rebuild and
+  40/40 focused checks passed (38 fast checks plus both corrected HEAD cases);
+  remaining 21 source-commit checks passed against the same built assembly.
+  Retry total: 61/61, no failures/skips; both process exit codes were zero and
+  TRX counters verified. Earlier source-validation regression was 32/32; not
+  rerun for this test-only correction. Evidence:
+  `artifacts/migration-source-commit-20261031/correction-retry/`.
+  Production hashes are unchanged by the test corrections; diff check passed.
+  Ferry reviewed and approved the slice and its exact-path semantic engine commit
+  on 2026-10-31. No full-regression,
+  Native AOT or real-harness verification claimed.
+- [ ] Implement the remaining completion path, restart and
   failure behavior; update help/skill guidance in a separately reviewed slice.
 - [ ] Rehearse the complete command on disposable copies of user-approved real
   data/runtime, then add appropriate native smoke coverage before any live use.
@@ -1257,8 +1288,20 @@ intentionally empty sections. Source/tests/diagrams are implemented; first test
 build stopped at CS9176 before any tests ran. Ferry approved the test-helper
 correction and scoped retry; warning-as-error build and 104/104 focused cases
 passed across three scopes. Ferry reviewed the slice and authorized its exact-path
-semantic engine commit. Next work requires a separately approved source-commit
-slice; no next implementation has started. Public activation, source commit
+semantic engine commit (`43f6a4e`). Ferry approved source-only commit slice 13e.3,
+explicitly including new empty files. Production/docs are drafted; the test
+workstream stopped after a failed follow-up patch. Ferry approved test-only
+corrections, now applied and independently reviewed. Warning-as-error Release
+build and 38/38 fast cases passed. Source-commit scope: 21/23 passed; both failures
+are symbolic-HEAD fixture setup, rejected by existing preflight before assertions.
+Independent source-validation scope passed 32/32 (TRX verified).
+Ferry approved the test-only fixture ordering fix and scoped rebuild/recheck;
+correction applied and independently reviewed. Warning-as-error rebuild and61/61
+scoped rerun checks passed with zero failures/skips; production hashes unchanged.
+Earlier source-validation32/32 remains separate prior evidence. Ferry reviewed
+and approved the slice and its exact-path semantic engine commit on 2026-10-31.
+No push. Next: propose the smallest internal target-rendering completion boundary
+and wait for approval; public activation
 and completion orchestration remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices alone grant no reusable write authority; dirty-behind stops.

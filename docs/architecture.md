@@ -728,6 +728,49 @@ user-editing wait; preparation contains no earlier byte snapshot. Observations
 remain advisory: later commit code must revalidate them. No files, targets, Git
 history/index, runtime, remote, completion marker or public command are changed.
 
+### Internal source-only migration commit
+
+```mermaid
+flowchart TD
+    Review[Reviewed source preview] --> Fresh[Fresh private validation; compare all reviewed sources]
+    Fresh --> Freeze[Require local branch and empty staged diff; snapshot protected files and targets]
+    Freeze --> Guard[Check context, index and working bytes]
+    Guard --> Changes{Changed required sources?}
+    Changes -->|No| Noop[Return null; no commit]
+    Changes -->|Yes, including new empty files| Stage[Stage exact source paths only]
+    Stage --> Verify[Verify stage-0 paths, modes, object sizes and exact bytes]
+    Verify --> Publish[Existing signing-aware pinned-tree commit; compare old branch value]
+    Publish --> After[Verify one parent, exact source tree, clean index and protected bytes]
+    After --> Result[Return new commit ID]
+    Stage -->|Failure| Retain[Retain staged state or new commit; no rollback]
+    Verify -->|Failure| Retain
+    Publish -->|Failure| Retain
+    After -->|Failure| Retain
+```
+
+```mermaid
+classDiagram
+    MigrationSourceCommitter --> MigrationSourceValidationPreview : fresh private source buffers and guards
+    MigrationSourceCommitter --> MigrationPortableTargetWriter : target path validation only
+    MigrationSourceCommitter --> PortableBackupCommitter : require local branch
+    MigrationSourceCommitter --> BackupCommand : CommitStagedIndex
+```
+
+`MigrationSourceCommitter.Commit` never rewrites authored files. Newly created
+required files are committed even when zero-byte; no-op means every required
+source is already tracked and unchanged. Existing committed regular modes are
+preserved; new sources require Git mode `100644`. Git transformations, hidden
+index omissions or staged mode mismatches stop publication rather than changing
+working files or clearing flags.
+
+Only fresh private observations authorize staging. Existing target working bytes,
+legacy/config/runtime bytes and source bytes are guarded around the index/commit
+boundary. The shared helper preserves signing, pins the verified tree and updates
+the expected local branch with its old commit as a guard. Index contents are checked
+after publication; legitimate `write-tree` cache-extension updates are not mistaken
+for user staging. Failure may retain index changes or a local commit for inspection;
+there is no rollback, target generation, apply, push, marker or public CLI wiring.
+
 ## Cross-machine boundary
 
 ```mermaid

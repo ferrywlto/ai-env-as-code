@@ -451,6 +451,18 @@ within the read; these snapshots do not cover the earlier user-editing wait.
 No writes or completion wiring; later commit code must freshly validate again.
 See the [source-validation diagrams](architecture.md#internal-post-done-source-validation).
 
+Internal `MigrationSourceCommitter.Commit(reviewed)` freshly validates the reviewed
+sources, requires a local branch/empty staged diff, and commits exact changed-source
+paths through the existing signing-aware pinned-tree helper. New required empty
+files are included; no commit is made only when every required source is already
+tracked and unchanged. Preserve existing committed modes; new files require Git
+mode `100644`. Verify staged object bytes/modes, one parent and exact committed
+paths, while retaining source, target and runtime working bytes. Refuse Git
+transformations or hidden-index omissions; never clear flags or chmod files.
+Failure retains inspectable staged state or a new commit, without rollback.
+No render, deployment, push, completion marker or public command is added.
+See the [source-commit diagrams](architecture.md#internal-source-only-migration-commit).
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid
