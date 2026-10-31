@@ -597,8 +597,8 @@ commit, transport or runtime write occurs; observations grant no reusable write 
 The version preflight rejects an already completed 2.0 migration first. Sections
 can exist during an incomplete attempt; their presence alone proves no completion.
 The pre-start Overwrite choice must not be reapplied to expected user edits before
-`DONE`. Post-confirmation validation and completion remain unimplemented; the
-internal confirmation-only gate is described below.
+`DONE`. The internal confirmation gate and post-confirmation source checks are
+described below; completion orchestration remains unimplemented.
 
 ### Internal scaffold creation and reset writer
 
@@ -689,8 +689,44 @@ or case folding. Pre-cancellation performs no input/output; cancellation during
 a read wins over `DONE`. A synchronous blocked read is not interrupted: cancellation
 is observed when it returns. The gate touches no files or Git state and does not
 validate or commit sources, render, apply, or record migration completion.
-Edited sections are expected; later orchestration must freshly validate them,
-never reapply the pre-start Overwrite choice.
+Edited sections are expected; the source preview below validates them without
+reapplying the pre-start Overwrite choice. Completion orchestration is not wired.
+
+### Internal post-DONE source validation
+
+```mermaid
+flowchart TD
+    Input[Internal Read request; not public CLI] --> Entry[One entry preflight and ancestry check]
+    Entry --> Snapshot[Capture branch, raw index and protected file bytes]
+    Snapshot --> Dirty[Inspect current owned edits; ignore old dirty list and reset actions]
+    Dirty --> Sources[Require regular bounded UTF-8 sources; reject staging]
+    Sources --> Compose[Check markers and combined size by rendering in memory]
+    Compose --> Recheck[Recheck mutable context, index and observed bytes]
+    Recheck --> Preview[Return source snapshots and changed paths; no writes]
+```
+
+```mermaid
+classDiagram
+    MigrationSourceValidationPreview --> MigrationPreparation : pinned context and local harnesses
+    MigrationSourceValidationPreview --> MigrationDirtySections : current owned edits
+    MigrationSourceValidationPreview --> MigrationScaffoldPreview : fixed inventory and baseline helpers only
+    MigrationSourceValidationPreview --> InstructionSections : in-memory composition
+    MigrationSourceValidationPreview --> MigrationValidatedSource : baseline and exact working bytes
+```
+
+`MigrationSourceValidationPreview.Read` accepts the user's current section edits,
+including empty/whitespace content and edits hidden by Git index flags. New empty
+files are changes, not absent files. Required shared/current-platform/local-provider
+sources must exist; staged, unrelated, ignored or unsafe changes stop the read.
+Sources remain byte-exact, including CRLF. Structural validation does not assert
+instruction coverage or quality, and no earlier Overwrite action is replayed.
+
+History and committed blobs are read once at entry; named final guards check mutable
+metadata, enrollment, marker absence, HEAD/branch/raw index and observed bytes.
+Protected runtime/legacy/config snapshots cover this read only, not the preceding
+user-editing wait; preparation contains no earlier byte snapshot. Observations
+remain advisory: later commit code must revalidate them. No files, targets, Git
+history/index, runtime, remote, completion marker or public command are changed.
 
 ## Cross-machine boundary
 

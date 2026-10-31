@@ -427,7 +427,7 @@ guards. Failure reports retained
 files/directories and a possibly changed attempted path; no automatic rollback,
 staging, commit or deployment. A retry requires a fresh preview. See the
 [writer flow](architecture.md#internal-scaffold-creation-and-reset-writer).
-Post-DONE validation/completion and public command wiring
+Post-DONE completion and public command wiring
 remain unimplemented; this internal stage does not complete migration.
 
 Internal `MigrationDoneGate.Wait(input, output, cancellationToken)` now implements
@@ -439,6 +439,17 @@ prompt, a blocked synchronous read observes cancellation only when it returns;
 validation, not migration success. No files/Git/runtime change or source validation
 occurs here; the public command and completion coordinator remain unimplemented.
 See the [gate diagrams](architecture.md#internal-done-confirmation-gate).
+
+Internal `MigrationSourceValidationPreview.Read(preparation)` validates the current
+required shared/platform/provider sources without replaying pre-start Overwrite
+or requiring the old dirty-path list. Accept empty/whitespace sections and preserve
+exact bytes. Reject missing/deleted, staged, ignored, unsafe or unrelated inputs;
+check strict UTF-8, section markers and combined size using in-memory rendering.
+Return committed baselines, working snapshots and changed paths, including new
+zero-byte files and hidden working edits. Recheck context/index/protected bytes
+within the read; these snapshots do not cover the earlier user-editing wait.
+No writes or completion wiring; later commit code must freshly validate again.
+See the [source-validation diagrams](architecture.md#internal-post-done-source-validation).
 
 ### Existing manual migration — implemented and rehearsed
 

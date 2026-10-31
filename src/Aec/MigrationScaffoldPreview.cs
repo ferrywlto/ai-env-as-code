@@ -113,7 +113,8 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
         }
     }
 
-    private static string[] RequiredPaths(MigrationHarness[] harnesses)
+    // Shared fixed-path inventory; callers need not use scaffold reset actions.
+    internal static string[] RequiredPaths(MigrationHarness[] harnesses)
     {
         var paths = new List<string>
         {
@@ -145,7 +146,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
             indexEntry, workingContent, hasStagedChanges, action);
     }
 
-    private static (byte[]? Content, string? Mode, string ExpectedIndexEntry) ReadCommittedSection(
+    internal static (byte[]? Content, string? Mode, string ExpectedIndexEntry) ReadCommittedSection(
         MigrationPreflight preflight, string relativePath)
     {
         var result = GitProcess.RunRequired(preflight.Repository, "Could not inspect scaffold source history",
@@ -262,7 +263,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
         }
     }
 
-    private static string ReadIndexEntry(string repository, string relativePath) =>
+    internal static string ReadIndexEntry(string repository, string relativePath) =>
         GitProcess.RunRequired(repository, "Could not inspect scaffold index entry",
             "ls-files", "--stage", "-z", "--", relativePath).Output;
 

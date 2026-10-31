@@ -1181,6 +1181,33 @@ combined target regeneration/commit, command orchestration and release gates rem
   semantic engine commit on 2026-10-30.
   No files/Git/runtime writes by the gate, source validation, saved continuation,
   public route or completion claim.
+- [x] Reviewed internal post-DONE source validation preview (ticket #2, 13e.2):
+  accept current owned edits and intentionally empty/whitespace sections without
+  replaying Overwrite or comparing the old dirty list. Require regular bounded
+  UTF-8 sources, refuse staging/unrelated/unsafe changes, check marker/combined
+  size by rendering in memory, and return exact baseline/working bytes and changed
+  paths. Protect the read with pinned context, raw index and source/runtime/legacy/
+  config snapshots; no earlier waiting-period snapshot is claimed. Source/tests
+  and diagrams implemented; independent review found no production blocker.
+  First warning-as-error Release attempt compiled production, then stopped at
+  CS9176 in the new test helper: a collection expression chained into Order has
+  no target type. No tests executed in that attempt. Ferry approved the explicit
+  string-array correction and scoped retry on 2026-10-31. Warning-as-error Release
+  rebuild and 38/38 in-memory policy cases passed in 27ms. Then 32/32 new
+  source-preview cases passed in 3m52s and 34/34 existing scaffold-preview cases
+  passed in 5m56s, in separate processes against the same read-only build with
+  isolated fixtures/results. All three TRX runs Completed with zero failures,
+  errors, skips, timeouts, aborts or unexecuted cases; per-Git-test hang guard 90s.
+  Whole-fixture snapshots assert no file/directory/index/history/runtime mutation;
+  ten direct read-only guard cases cover deterministic drift without race hooks.
+  Evidence under `artifacts/migration-source-validation-20261031/`:
+  `policy-retry/`, `source-preview/`, `existing-preview/`. No production behavior
+  change in the approved correction; no automatic retry or test restart. Scoped
+  local managed-code proof only, not full regression/native/real-harness coverage;
+  local symlink success does not establish Windows link privileges. Ferry reviewed
+  and approved the slice and its exact-path semantic engine commit on 2026-10-31.
+  The preview performs no writes, source commits, deployment or remote operation;
+  no public command or personal state changed.
 - [ ] Implement the committed completion path, restart and
   failure behavior; update help/skill guidance in a separately reviewed slice.
 - [ ] Rehearse the complete command on disposable copies of user-approved real
@@ -1224,9 +1251,14 @@ exact-path semantic engine commit (`14adaf3`). Ferry approved the next internal
 prompt-only exact-DONE gate (13e.1): source/tests/diagrams are implemented and
 independently reviewed; warning-as-error build and 38/38 focused in-memory cases
 passed. Ferry approved the documentation-only evidence/wording retry, reviewed
-the completed slice, and authorized its exact-path semantic engine commit.
-Next: propose the smallest read-only post-DONE source-validation slice for approval.
-No next implementation is authorized yet. Public activation, edited-source validation
+the completed slice, and authorized its exact-path semantic engine commit (`3b2a23a`).
+Ferry approved the read-only post-DONE source-validation slice (13e.2), including
+intentionally empty sections. Source/tests/diagrams are implemented; first test
+build stopped at CS9176 before any tests ran. Ferry approved the test-helper
+correction and scoped retry; warning-as-error build and 104/104 focused cases
+passed across three scopes. Ferry reviewed the slice and authorized its exact-path
+semantic engine commit. Next work requires a separately approved source-commit
+slice; no next implementation has started. Public activation, source commit
 and completion orchestration remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices alone grant no reusable write authority; dirty-behind stops.
