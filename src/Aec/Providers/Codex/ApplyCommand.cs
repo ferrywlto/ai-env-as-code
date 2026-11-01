@@ -345,9 +345,12 @@ internal static class ApplyCommand
         var source = AecApplication.ReadRequiredTextFile(sourcePath, label);
         var committedBlob = ResolveCommittedBlob(repository, commit, relativePath, label);
 
+        // Check commit-to-index changes separately. Worktree content and mode
+        // checks below must not refresh the index or reject stat-only changes.
         EnsureDiffIsClean(
             Run(
                 repository,
+                "--no-optional-locks",
                 "diff",
                 "--cached",
                 "--quiet",
@@ -359,18 +362,7 @@ internal static class ApplyCommand
                 relativePath),
             $"{label} has staged changes.",
             $"Git could not inspect staged {label.ToLowerInvariant()} changes");
-        EnsureDiffIsClean(
-            Run(
-                repository,
-                "diff",
-                "--quiet",
-                "--exit-code",
-                "--no-ext-diff",
-                "--no-textconv",
-                "--",
-                relativePath),
-            $"{label} has unstaged changes.",
-            $"Git could not inspect unstaged {label.ToLowerInvariant()} changes");
+        EnsureWorkingModeMatchesIndex(repository, relativePath, label);
 
         // Git's normal diff can hide clean/smudge or line-ending transforms; raw hashing cannot.
         var workingBlob = RunRequired(
@@ -383,7 +375,7 @@ internal static class ApplyCommand
         if (!string.Equals(committedBlob, workingBlob, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"{label} bytes do not exactly match the committed Git blob; " +
+                $"{label} has unstaged changes: bytes do not exactly match the committed Git blob; " +
                 "filters or file changes are present.");
         }
 
@@ -395,6 +387,28 @@ internal static class ApplyCommand
         }
 
         return source;
+    }
+
+    private static void EnsureWorkingModeMatchesIndex(string repository, string relativePath, string label)
+    {
+        // The plumbing command does not refresh the on-disk index. Let Git
+        // interpret core.filemode and platform permissions instead of guessing
+        // Unix executable semantics on Windows. Content is checked by raw hash.
+        var changes = RunRequired(repository, $"Git could not inspect {label.ToLowerInvariant()} mode",
+            "--no-optional-locks", "diff-files", "--raw", "-z", "--no-renames",
+            "--no-ext-diff", "--no-textconv", "--", relativePath).Output;
+        if (changes.Length == 0) return;
+
+        // One raw record: metadata NUL exact-path NUL. A stat-only M record
+        // with equal modes is not a content change; the raw hash decides that.
+        var records = changes.Split('\0');
+        if (records.Length != 3 || records[1] != relativePath || records[2].Length != 0)
+            throw new InvalidOperationException($"Git returned malformed {label.ToLowerInvariant()} mode metadata.");
+        var fields = records[0].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (fields.Length != 5 || fields[0] is not (":100644" or ":100755"))
+            throw new InvalidOperationException($"Git returned malformed {label.ToLowerInvariant()} mode metadata.");
+        if (fields[4] != "M" || fields[0][1..] != fields[1])
+            throw new InvalidOperationException($"{label} has unstaged changes (file mode or type).");
     }
 
     private static string ResolveCommittedBlob(
