@@ -896,6 +896,47 @@ separately from Unix working permissions. Filter transformations or mode
 mismatches refuse publication. Failures retain inspectable state without
 rollback, push or runtime apply. No public command or completion marker is added.
 
+### Internal single-harness migration apply preview
+
+```mermaid
+flowchart TD
+    Context[Committed migration context] --> Sources[Validate required sources and confirmed local harness]
+    Sources --> Freeze[Snapshot raw index and protected instruction/config bytes]
+    Freeze --> Existing[Reuse PortableApplyPreview for target, binding and desired runtime]
+    Existing --> Head[Require same prepared HEAD and entry runtime snapshots]
+    Head --> Objects[Compare target and Codex config with bounded actual Git objects]
+    Objects --> Guard[Recheck context, sources, target, index and protected bytes]
+    Guard --> Preview[Return advisory instruction and config proposals]
+```
+
+```mermaid
+classDiagram
+    MigrationApplyPreview --> MigrationSourceValidationPreview : committed sources and final mutable guard
+    MigrationApplyPreview --> PortableApplyPreview : selected runtime proposal
+    PortableApplyPreview --> PortableCodexConfigPreview : Codex managed-config proposal
+    PortableApplyPreview --> ApplyCommand : staged diff, raw content hash and effective file mode
+    MigrationApplyPreview --> MigrationLegacyCapturePreview : bounded no-replacement object reads
+```
+
+Accept a supported legacy runtime binding for a portable-upgrade proposal, or a
+portable runtime for a no-op/drift proposal; never rebind another checkout or
+platform. The instruction runtime must exist. Missing runtime config/personality
+may yield the ordinary managed insertion proposal, without creating anything.
+Codex config preserves unmanaged values; Copilot has no Codex config proposal.
+
+The proposal must use one pinned HEAD and the entry runtime/config snapshots.
+Compare deployment inputs with the actual committed tree, not Git replacement
+views. Observations cover this read only; a future writer must freshly validate.
+The shared committed-file reader checks staged changes against the commit, then
+uses read-only `diff-files --raw -z` for effective Git modes and
+`hash-object --no-filters` for exact content. Git interprets `core.filemode` for
+the local filesystem; an equal-mode stat-only record is not a content change.
+There is no worktree porcelain diff: it refreshed the index despite
+`--no-optional-locks`, while disabling its refresh falsely rejected clean files.
+Raw-index immutability checks remain strict. Global Git settings and explicit
+staging/commit commands are unchanged.
+No writes, staging, commits, runtime deployment, completion marker or public CLI.
+
 ## Cross-machine boundary
 
 ```mermaid

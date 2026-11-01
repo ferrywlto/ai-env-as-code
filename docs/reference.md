@@ -495,6 +495,21 @@ staged or committed state for inspection; no rollback, push, runtime deployment,
 completion marker or public command is added. The write-only wrapper is unchanged.
 See the [coordinator diagrams](architecture.md#internal-single-harness-target-write-and-commit).
 
+Internal `MigrationApplyPreview.Read(preparation, provider)` wraps the existing
+portable apply proposal in committed migration context for one confirmed local
+harness. Include desired instructions and Codex managed-config changes; missing
+runtime config/personality may be proposed for insertion, never written here.
+Require clean committed sources/target, matching local binding/platform, one HEAD
+and entry runtime/config bytes. Check actual bounded Git objects without
+replacement views and recheck mutable state before returning. No deployment,
+staging/commit, marker, public command or remote operation is added.
+Shared committed-file provenance checks use a staged diff, read-only `diff-files`
+mode inspection (honouring `core.filemode`), and an exact raw-content hash.
+Stat-only changes do not count as dirty content. Worktree porcelain diffs are
+avoided because they can refresh the index; global Git settings are unchanged
+and raw-index immutability checks remain strict.
+See the [apply-preview diagrams](architecture.md#internal-single-harness-migration-apply-preview).
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid
