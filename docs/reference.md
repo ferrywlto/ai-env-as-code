@@ -484,6 +484,17 @@ directories and the attempted path, without rollback. No staging, commit, apply,
 completion marker or public command is added.
 See the [target-writer diagrams](architecture.md#internal-single-harness-migration-target-writer).
 
+Internal `MigrationTargetCommitter.WriteAndCommit(reviewed)` prepares a private
+writer before writing, stages only its changed target, and creates one local
+commit through the existing signing-aware helper. Validate staged object bytes,
+mode and exact path; verify one parent, committed tree, clean index and protected
+working state. A validated no-op creates no commit. New Git targets require
+`100644`; preserve existing regular Git modes and Unix working permissions.
+Independently dirty targets are refused, not adopted. Failure retains working,
+staged or committed state for inspection; no rollback, push, runtime deployment,
+completion marker or public command is added. The write-only wrapper is unchanged.
+See the [coordinator diagrams](architecture.md#internal-single-harness-target-write-and-commit).
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid

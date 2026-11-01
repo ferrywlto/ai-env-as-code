@@ -754,6 +754,7 @@ classDiagram
     MigrationSourceCommitter --> MigrationPortableTargetWriter : target path validation only
     MigrationSourceCommitter --> PortableBackupCommitter : require local branch
     MigrationSourceCommitter --> BackupCommand : CommitStagedIndex
+    MigrationSourceCommitter --> MigrationCommitProof : immutable staged and committed objects
 ```
 
 `MigrationSourceCommitter.Commit` never rewrites authored files. Newly created
@@ -847,6 +848,53 @@ preflight/history around each directory. Protected snapshots cover this write,
 not earlier user review. Local permission tests cover Unix bits, not Windows ACLs.
 Failures retain inspectable state; no staging, target
 commit, runtime apply, marker, public CLI, rollback or remote operation is added.
+
+### Internal single-harness target write and commit
+
+```mermaid
+flowchart TD
+    Review[Reviewed target preview] --> Plan[Prepare private writer snapshots before any write]
+    Plan --> Preconditions[Require local branch and empty staged diff]
+    Preconditions --> Write[Existing guarded target writer]
+    Write --> Changed{Target changed?}
+    Changed -->|No| Noop[Return null; no commit]
+    Changed -->|Yes| Stage[Stage only the selected target path]
+    Stage --> Proof[Prove exact stage-0 mode, bounded object bytes and path]
+    Proof --> Guard[Verify written state against private snapshots and staged index]
+    Guard --> Commit[Signing-aware pinned-tree commit; expected branch and parent]
+    Commit --> Verify[Verify one parent and exact committed target tree]
+    Verify --> Clean[Prove index clean; verify protected working bytes and permissions]
+    Clean --> Result[Return commit ID]
+    Write -->|Failure| Retain[Retain working, staged or committed state; inspect before retry]
+    Stage -->|Failure| Retain
+    Proof -->|Failure| Retain
+    Guard -->|Failure| Retain
+    Commit -->|Failure| Retain
+    Verify -->|Failure| Retain
+    Clean -->|Failure| Retain
+```
+
+```mermaid
+classDiagram
+    MigrationTargetCommitter --> MigrationTargetWriter : Prepare, Write and named commit guards
+    MigrationTargetCommitter --> MigrationCommitProof : staged objects and committed tree
+    MigrationSourceCommitter --> MigrationCommitProof : same exact-path object proof
+    MigrationTargetCommitter --> BackupCommand : unchanged signing and publication helper
+```
+
+`MigrationTargetWriter` retains a private prepared instance across these stages;
+its existing static `Write(reviewed)` wrapper remains write-only. Desired bytes
+leave that instance only as a defensive copy. Named staged/post-commit guards
+accept the proven new index/HEAD while ordinary writer checks remain unchanged.
+Do not recreate the ordinary preview after writing, or accept an independently
+dirty target as an equivalent handoff. This is not a reusable trust receipt.
+
+`MigrationCommitProof` extracts the source committer's existing bounded object,
+mode, exact-path and parent checks. It owns no staging, signing or branch moves.
+New Git targets require `100644`; existing regular Git modes are preserved,
+separately from Unix working permissions. Filter transformations or mode
+mismatches refuse publication. Failures retain inspectable state without
+rollback, push or runtime apply. No public command or completion marker is added.
 
 ## Cross-machine boundary
 

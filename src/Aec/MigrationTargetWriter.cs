@@ -2,19 +2,49 @@ namespace Aec;
 
 // Write one reviewed repository target. Committing it and applying to runtime
 // remain separate migration stages; caller-visible preview buffers authorize neither.
-internal static class MigrationTargetWriter
+internal sealed class MigrationTargetWriter
 {
-    public static string? Write(MigrationTargetPreview reviewed)
+    private readonly MigrationTargetPreview fresh;
+    private readonly byte[] index;
+    private readonly Dictionary<string, byte[]?> protectedFiles;
+    private readonly UnixFileMode? mode;
+
+    private MigrationTargetWriter(MigrationTargetPreview fresh, byte[] index,
+        Dictionary<string, byte[]?> protectedFiles, UnixFileMode? mode)
+    {
+        this.fresh = fresh;
+        this.index = index;
+        this.protectedFiles = protectedFiles;
+        this.mode = mode;
+    }
+
+    public static string? Write(MigrationTargetPreview reviewed) => Prepare(reviewed).Write();
+
+    internal static MigrationTargetWriter Prepare(MigrationTargetPreview reviewed)
     {
         ArgumentNullException.ThrowIfNull(reviewed);
         var fresh = MigrationTargetPreview.Read(reviewed.Preparation, reviewed.Harness.Provider);
         VerifyReview(reviewed, fresh);
         var repository = fresh.Preparation.Preflight.Repository;
         var path = Path.Combine(repository, fresh.TargetRelativePath);
-        var parent = Path.GetDirectoryName(path)!;
         var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
         var protectedFiles = ReadProtectedFiles(fresh);
         var mode = ReadExpectedMode(path, fresh.WorkingContent);
+        return new MigrationTargetWriter(fresh, index, protectedFiles, mode);
+    }
+
+    internal string Repository => fresh.Preparation.Preflight.Repository;
+    internal string ParentCommit => fresh.Preparation.Preflight.Commit;
+    internal string Branch => fresh.Branch;
+    internal string RelativePath => fresh.TargetRelativePath;
+    internal string GitMode => fresh.CommittedMode ?? "100644";
+    internal byte[] CopyDesiredContent() => fresh.DesiredContent.ToArray();
+
+    internal string? Write()
+    {
+        var repository = Repository;
+        var path = Path.Combine(repository, RelativePath);
+        var parent = Path.GetDirectoryName(path)!;
         var createdDirectories = new List<string>();
         string? attempted = null;
 
@@ -63,19 +93,46 @@ internal static class MigrationTargetWriter
     internal static void VerifyCurrentInputs(MigrationTargetPreview baseline, byte[] originalIndex,
         Dictionary<string, byte[]?> protectedFiles, bool written, UnixFileMode? expectedMode)
     {
+        var targetContent = written ? baseline.DesiredContent : baseline.WorkingContent;
+        var dirty = new MigrationDirtySections(written ? [baseline.TargetRelativePath] : []);
+        VerifyState(baseline, originalIndex, protectedFiles, targetContent, dirty, expectedMode);
+    }
+
+    // Staging and publication intentionally change the original index/HEAD.
+    // Only these named boundaries accept the coordinator's verified new state.
+    internal void VerifyWrittenForCommit(byte[] stagedIndex) =>
+        VerifyState(fresh, stagedIndex, protectedFiles, fresh.DesiredContent,
+            new MigrationDirtySections([RelativePath]), mode);
+
+    internal void VerifyCommitted(string commit, byte[] cleanIndex)
+    {
+        var committed = fresh with
+        {
+            Preparation = fresh.Preparation with
+            {
+                Preflight = fresh.Preparation.Preflight with { Commit = commit }
+            }
+        };
+        VerifyState(committed, cleanIndex, protectedFiles, fresh.DesiredContent,
+            new MigrationDirtySections([]), mode);
+    }
+
+    private static void VerifyState(MigrationTargetPreview baseline, byte[] originalIndex,
+        Dictionary<string, byte[]?> protectedFiles, byte[]? targetContent,
+        MigrationDirtySections dirty, UnixFileMode? expectedMode)
+    {
         var repository = baseline.Preparation.Preflight.Repository;
         var path = Path.Combine(repository, baseline.TargetRelativePath);
         var expectedFiles = new Dictionary<string, byte[]?>(protectedFiles, StringComparer.Ordinal)
         {
-            [path] = written ? baseline.DesiredContent : baseline.WorkingContent
+            [path] = targetContent
         };
-        var dirty = new MigrationDirtySections(written ? [baseline.TargetRelativePath] : []);
         MigrationSourceValidationPreview.VerifyFinalState(baseline.Preparation, baseline.Branch,
             originalIndex, dirty, baseline.RequiredSources, expectedFiles, baseline.TargetRelativePath);
-        if (!written && baseline.WorkingContent is null)
+        if (targetContent is null)
             MigrationScaffoldPreview.VerifyMissingPathNotIgnored(repository, baseline.TargetRelativePath);
         if (!OperatingSystem.IsWindows() && expectedMode is not null &&
-            (written || baseline.WorkingContent is not null))
+            targetContent is not null)
         {
             if (File.GetUnixFileMode(path) != expectedMode.Value)
                 throw new InvalidOperationException("Migration target permissions changed during writing.");

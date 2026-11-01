@@ -1289,6 +1289,27 @@ combined target regeneration/commit, command orchestration and release gates rem
   not Windows ACL proof. Ferry reviewed and approved the slice and its exact-path
   semantic engine commit on 2026-10-31. No push or full regression/Native AOT/
   real-harness verification claimed.
+- [x] Reviewed single-harness write-and-commit coordinator (ticket #2, 13e.6):
+  prepare private snapshots before the existing writer; stage only its changed
+  target and create one signing-aware pinned-tree commit. Prove exact staged
+  bytes/mode/path, one parent, committed tree, clean index and protected working
+  state. No commit for validated Unchanged; failures retain inspectable state
+  without rollback. Preserve new Git100644/existing regular modes separately
+  from Unix permissions. No independently dirty-target adoption, apply, marker,
+  public CLI or push. Prepared writer retains static write-only wrapper; extract
+  existing object proofs into MigrationCommitProof for both source and target
+  committers. Source/diagrams and 23 new cases implemented; independent source
+  and pre-execution test review found no blocker. Initial warning-as-error
+  Release build and 38/38 fast checks passed. Resumed verification on 2026-11-01:
+  all saved TRX reports are Completed with zero failures/skips: new target
+  committer 23/23, source committer 23/23 and target writer 27/27; 111/111 focused
+  cases including the fast scope. Production hashes match the tested tree.
+  Worker reporting hit a usage limit and the waiting cell was lost; final process
+  exit metadata for the three Git scopes was not recovered. No tests or workers
+  were restarted; evidence is the verified completed TRX reports under
+  `artifacts/migration-target-commit-20261031/`. Ferry reviewed and approved the
+  slice and its exact-path semantic engine commit on 2026-11-01. No push or full
+  regression/Native AOT/real-harness verification claimed.
 - [ ] Implement the remaining completion path, restart and
   failure behavior; update help/skill guidance in a separately reviewed slice.
 - [ ] Rehearse the complete command on disposable copies of user-approved real
@@ -1369,9 +1390,18 @@ independently reviewed; warning-as-error rebuild and72/72 affected rerun passed.
 Production source/binary hashes unchanged; 131 distinct focused cases passed
 across writer27/source32/rerun72 scopes. Ferry reviewed and approved the slice
 and its exact-path semantic engine commit on 2026-10-31. No automatic retry or
-push. Next: propose one-harness target committing and wait for approval.
-Runtime deployment, public activation and completion orchestration remain
-later slices.
+push. Writer slice committed `7f7254a`. Ferry approved coordinated target
+write-and-commit 13e.6. Production/diagrams and 23 new cases implemented; independent
+source/test review found no blocker. Warning-as-error build and38/38 fast checks
+passed. On 2026-11-01 the completed saved TRX reports confirmed target-committer23,
+source-committer23 and target-writer27 passed: 111/111 focused cases including
+fast38, with unchanged production hashes. Reporting was interrupted by worker
+usage limits; final Git-scope process exit metadata was not recovered. No reruns.
+Ferry reviewed and approved the slice and its exact-path semantic engine commit
+on 2026-11-01. No push. Next: inspect existing committed-target apply components
+and propose the smallest internal migration deployment boundary; wait for
+approval before implementation. Public activation and completion orchestration
+remain later slices.
 Ticket #2 remains Active. No personal state change, push or workflow dispatch is
 authorized. Choices alone grant no reusable write authority; dirty-behind stops.
 No public migrate route yet. Tests use disposable local bare
