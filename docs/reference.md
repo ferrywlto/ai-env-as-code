@@ -510,6 +510,15 @@ avoided because they can refresh the index; global Git settings are unchanged
 and raw-index immutability checks remain strict.
 See the [apply-preview diagrams](architecture.md#internal-single-harness-migration-apply-preview).
 
+Internal `MigrationCopilotApplyWriter.Apply(preview)` consumes one reviewed
+Copilot migration proposal. Refresh migration validation, compare reviewed
+inputs, then reuse the existing instruction writer. Before/after guards retain
+the branch, HEAD, raw index, required sources and protected file expectations;
+only the selected Copilot runtime may be replaced. An unchanged runtime is a
+no-op. A post-write failure may leave runtime updated and never rolls back.
+This adds no data commit, Codex deployment, completion marker or public command.
+See the [writer diagrams](architecture.md#internal-copilot-migration-apply-writer).
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid

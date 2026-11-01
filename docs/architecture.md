@@ -937,6 +937,36 @@ Raw-index immutability checks remain strict. Global Git settings and explicit
 staging/commit commands are unchanged.
 No writes, staging, commits, runtime deployment, completion marker or public CLI.
 
+### Internal Copilot migration apply writer
+
+```mermaid
+flowchart TD
+    Review[Reviewed Copilot migration preview] --> Fresh[Fresh migration validation]
+    Fresh --> Match[Compare reviewed paths, sources and instruction bytes]
+    Match --> Before[Guard branch, HEAD, raw index and protected files]
+    Before --> Writer[Reuse PortableInstructionWriter]
+    Writer --> Expected[Admit only selected Copilot runtime bytes]
+    Expected --> After[Recheck mutable migration state]
+    After --> Result[Return applied or unchanged]
+    Writer -. failure .-> Inspect[Runtime may be updated: inspect; no rollback]
+    After -. failure .-> Inspect
+```
+
+```mermaid
+classDiagram
+    MigrationCopilotApplyWriter --> MigrationApplyPreview : refresh and compare review
+    MigrationCopilotApplyWriter --> MigrationSourceValidationPreview : entry and post-write guards
+    MigrationCopilotApplyWriter --> PortableInstructionWriter : one runtime instruction replacement
+```
+
+The writer derives paths and desired bytes from fresh validation, not caller
+buffers. Reuse existing compare-before-replace and no-op behaviour. The final
+guard admits only the selected runtime's desired bytes; repository/index,
+required sources and other protected files retain their entry expectations.
+History is checked at entry, not rescanned after each step. Post-write failures
+retain inspectable state and report that runtime may be updated; no rollback is
+attempted. No Codex config write, data commit, completion marker or public CLI.
+
 ## Cross-machine boundary
 
 ```mermaid
