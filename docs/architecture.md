@@ -89,6 +89,28 @@ It is not implemented or represented as a current component above; ordinary CLI
 commands retain their no-network boundaries. An incomplete invocation restarts
 from preflight, with an explicit Preserve/Overwrite choice for dirty section files.
 
+### Migration concurrency contract
+
+```mermaid
+flowchart LR
+    Operator[Operator closes affected harnesses and other writers] --> Runner[Separate-terminal migration]
+    Runner --> Guards[Existing independently safe components: best-effort checks]
+```
+
+The top-level migration entry point must warn once before its first mutation;
+it does not detect or terminate processes. Keep the selected data checkout and
+managed runtime configurations free of other writers until migration finishes,
+including the `DONE` editing pause. Use a plain editor, not the affected harness.
+This is an operating precondition, not proof of exclusive access or atomicity.
+Warning emission belongs to the planned public flow, not to each component.
+See the [operating precondition](reference.md#migration-operating-precondition).
+
+Keep current component safeguards unchanged. After the functional migration
+flow is complete, schedule a separately approved refactor to assign clear check
+ownership and consolidate overlapping full-context validation. Preserve existing
+contracts/tests and the checks at review, actual mutation, staged-content and
+committed-result boundaries; do not build a generic transaction framework.
+
 ## Internal migration preflight — no CLI dispatch yet
 
 ```mermaid
@@ -955,6 +977,7 @@ flowchart TD
 ```mermaid
 classDiagram
     MigrationCopilotApplyWriter --> MigrationApplyPreview : refresh and compare review
+    MigrationCopilotApplyWriter --> MigrationApplyReview : shared named input comparisons
     MigrationCopilotApplyWriter --> MigrationSourceValidationPreview : entry and post-write guards
     MigrationCopilotApplyWriter --> PortableInstructionWriter : one runtime instruction replacement
 ```
@@ -966,6 +989,38 @@ required sources and other protected files retain their entry expectations.
 History is checked at entry, not rescanned after each step. Post-write failures
 retain inspectable state and report that runtime may be updated; no rollback is
 attempted. No Codex config write, data commit, completion marker or public CLI.
+
+### Internal Codex migration apply writer
+
+```mermaid
+flowchart TD
+    Review[Reviewed Codex migration preview] --> Fresh[Fresh preview and shared review checks]
+    Fresh --> Entry[Guard migration state]
+    Entry --> Config[Guard and replace config if needed]
+    Config --> Instructions[Admit expected config; guard and replace instructions if needed]
+    Instructions --> Final[Admit only desired Codex bytes; verify migration state]
+    Final --> Result[Return applied or unchanged]
+    Config -. replacement failure .-> Inspect[Inspect runtime files; no rollback]
+    Instructions -. partial failure .-> Inspect
+    Final -. post-write failure .-> Inspect
+```
+
+```mermaid
+classDiagram
+    MigrationCodexApplyWriter --> MigrationApplyPreview : fresh committed inputs
+    MigrationCodexApplyWriter --> MigrationApplyReview : instruction and config comparisons
+    MigrationCopilotApplyWriter --> MigrationApplyReview : same common comparisons
+    MigrationCodexApplyWriter --> PortableCodexWriter : config-first apply with production guards
+    MigrationCodexApplyWriter --> MigrationSourceValidationPreview : bounded write-boundary and final checks
+```
+
+Production guards run before each actual replacement, separately from test
+hooks. Keep ordinary Codex apply's pre-write refusal and partial-write warnings;
+permission/argument failures after config also report possible partial updates.
+Missing config uses the existing private-permission creation path. No-op writes
+nothing but still gets the final migration guard. Only desired Codex config and
+instructions may change; repository/index and Copilot remain protected. No full
+history rescan per write, rollback, data commit, completion marker or public CLI.
 
 ## Cross-machine boundary
 

@@ -163,6 +163,29 @@ machine's checkout; it never rewrites that canonical block.
 
 ## Migrating an existing 1.x repository to 2.0
 
+### Migration operating precondition
+
+```mermaid
+flowchart LR
+    Close[Close affected harness sessions and pause other writers] --> Terminal[Run migration from a separate terminal]
+    Terminal --> Quiet[Keep them closed through section editing and completion]
+```
+
+> Close all affected harness sessions and pause other tools that modify the selected AEC
+> repository or its managed runtime configurations. Keep them closed until
+> migration finishes. Concurrent changes may cause migration to stop with
+> partially updated state.
+
+This precondition applies to the manual sequence below and the planned command.
+Do not run live migration from the harness being migrated; use a plain editor
+during the section-editing / `DONE` pause. Existing component guards remain
+best-effort change detection, not a lock or an atomic multi-file transaction.
+AEC will not detect or terminate running processes automatically.
+
+The planned top-level command must print this warning once before its first
+mutation, including fetch/pull or capture. Do not repeat it in internal helpers.
+Warning emission is an implementation requirement, not an available CLI feature.
+
 ### Planned interactive command — not implemented
 
 ```mermaid
@@ -188,6 +211,7 @@ inspection; never silently reset them or report success after a failed step.
 
 | Boundary | Required behavior |
 |---|---|
+| Concurrent writers | Print the operating-precondition warning once at the top level before the first mutation. Keep affected harnesses/other writers closed until completion. No automatic process detection or termination; existing component guards stay unchanged. |
 | Version | Check both binary capability and the **data repository format**, not the AEC block version. Use canonical `major.minor` targets such as `2.0`; reject invalid/unsupported, equal/current, or older targets. Git-tracked root `.aec-version` records the completed data format. Without it, recognize legacy `1.0` only through validated original AEC initialization history; draft sections/targets do not prove completion. |
 | Dirty initialization | Before pull/backup, list dirty migration-owned section paths and require an explicit Preserve/Overwrite choice. Preserve retains edits; Overwrite warns of lost edits and regenerates only those sections. No default choice; EOF/cancellation stops. Unrelated dirt stops migration. |
 | Pull and capture | Resolve the tracked remote/default branch without assuming `origin`/`main`; stop if safe fast-forward-only pull is unavailable. Revalidate after pull. Never silently back up stale runtime over newly pulled canonical changes. Use format-compatible legacy capture: current 2.0 `backup` requires targets that do not exist yet. No automatic stash, reset, merge commits, rebase, or push. |
@@ -519,6 +543,16 @@ no-op. A post-write failure may leave runtime updated and never rolls back.
 This adds no data commit, Codex deployment, completion marker or public command.
 See the [writer diagrams](architecture.md#internal-copilot-migration-apply-writer).
 
+Internal `MigrationCodexApplyWriter.Apply(preview)` reuses config-first ordinary
+Codex apply. Shared named checks compare reviewed/fresh inputs, including managed
+config. Separate production guards check migration state before each actual
+replacement and afterward; test hooks do not provide authorization. Preserve
+unmanaged config and existing partial-failure/no-rollback reporting. Missing
+config follows ordinary private-permission creation; no-op still gets final
+validation. No data-repository writes, Copilot deployment, completion marker or
+public command is added.
+See the [Codex writer diagrams](architecture.md#internal-codex-migration-apply-writer).
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid
@@ -537,6 +571,9 @@ This is the supported **2.0 development-branch data migration** using the curren
 command syntax. Installing the executable or upgrading a skill does not migrate
 the data. There is no automatic instruction classification; the interactive
 command above is planned, not available in the current executable.
+Meet the [migration operating precondition](#migration-operating-precondition)
+before starting this sequence; current individual commands do not print the
+planned top-level migration warning.
 The example below covers Codex and Copilot used on the same machine; omit the
 Copilot source, enrollment, and deployment when that harness is not used.
 
