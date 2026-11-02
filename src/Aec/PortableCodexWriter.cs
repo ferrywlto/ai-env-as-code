@@ -5,7 +5,9 @@ internal static class PortableCodexWriter
 {
     public static string Apply(
         PortableApplyPreview reviewed,
-        Action? afterConfigWriteForTests = null)
+        Action? afterConfigWriteForTests = null,
+        Action? beforeConfigWrite = null,
+        Action? beforeInstructionWrite = null)
     {
         ArgumentNullException.ThrowIfNull(reviewed);
         if (reviewed.Snapshot.Provider != "codex" || reviewed.CodexConfig is null)
@@ -31,6 +33,9 @@ internal static class PortableCodexWriter
 
         if (config.WouldReplace)
         {
+            // Migration adds its repository/context guard at the real write
+            // boundary. A refusal here precedes any replacement attempt.
+            beforeConfigWrite?.Invoke();
             try
             {
                 AtomicFile.ReplaceIfUnchanged(
@@ -71,6 +76,7 @@ internal static class PortableCodexWriter
 
             if (current.WouldReplace)
             {
+                beforeInstructionWrite?.Invoke();
                 instructionAttempted = true;
                 PortableInstructionWriter.Apply(current.Snapshot);
             }
@@ -146,5 +152,6 @@ internal static class PortableCodexWriter
         current is not null && expected.AsSpan().SequenceEqual(current);
 
     private static bool IsApplyFailure(Exception error) =>
-        error is IOException or InvalidOperationException or InvalidDataException;
+        error is IOException or UnauthorizedAccessException or InvalidOperationException or
+            InvalidDataException or ArgumentException;
 }
