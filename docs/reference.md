@@ -553,6 +553,20 @@ validation. No data-repository writes, Copilot deployment, completion marker or
 public command is added.
 See the [Codex writer diagrams](architecture.md#internal-codex-migration-apply-writer).
 
+Internal `MigrationApplyCoordinator.Apply(reviews)` requires exactly one reviewed
+preview for every enrolled provider. Refresh all reviews before writing, then
+reuse the Codex and Copilot writers in that order, skipping absent providers.
+Equivalent independently read preparation contexts are accepted; missing,
+duplicate, unsupported or mismatched reviews stop before runtime writes.
+Shared guards admit only successful expected writes and check enrolled runtimes,
+selected targets, required sources, protected legacy inputs, index, HEAD and
+branch between steps. No-op providers still get checked. Initial validation
+failures stop before writing. A provider-writer or post-write guard failure
+stops later providers and reports returned results plus runtime paths to inspect,
+without rolling back prior writes.
+This adds no repository write, completion marker, status verification or public
+command. See the [coordinator diagrams](architecture.md#internal-enrolled-provider-migration-apply-coordinator).
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid

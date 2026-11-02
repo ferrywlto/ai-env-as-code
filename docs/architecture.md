@@ -1022,6 +1022,43 @@ nothing but still gets the final migration guard. Only desired Codex config and
 instructions may change; repository/index and Copilot remain protected. No full
 history rescan per write, rollback, data commit, completion marker or public CLI.
 
+### Internal enrolled-provider migration apply coordinator
+
+```mermaid
+flowchart TD
+    Reviews[Review every enrolled provider] --> Validate[Refresh all reviews before any write]
+    Validate --> Codex[Codex writer if enrolled]
+    Codex --> Check[Admit only expected Codex changes; check shared state]
+    Check --> Copilot[Copilot writer if enrolled]
+    Copilot --> Final[Admit only expected Copilot changes; check shared state]
+    Final --> Results[Return per-provider applied or unchanged]
+    Codex -. failure .-> Stop[Stop; report completed writers and inspect runtime; no rollback]
+    Check -. failure .-> Stop
+    Copilot -. failure .-> Stop
+    Final -. failure .-> Stop
+```
+
+```mermaid
+classDiagram
+    MigrationApplyCoordinator --> MigrationApplyPreview : refresh all reviewed providers
+    MigrationApplyCoordinator --> MigrationApplyReview : compare each review
+    MigrationApplyCoordinator --> MigrationCodexApplyWriter : first when enrolled
+    MigrationApplyCoordinator --> MigrationCopilotApplyWriter : second when enrolled
+    MigrationApplyCoordinator --> MigrationSourceValidationPreview : shared protected-state guard
+    MigrationApplyCoordinator --> MigrationProviderApplyResult : per-provider outcome
+```
+
+Require exactly one review per enrolled provider, all from equivalent preparation
+contexts. Refresh every review before writing; do not accept a changed second
+provider after the first succeeds. Shared guards pin selected targets and protected
+runtime/config bytes, admitting only each successful writer's expected changes.
+Existing writers keep their own guards. No-op providers still pass the shared
+check. Initial validation failures stop before writing. A provider-writer or
+post-write guard failure stops later providers and reports which writers returned
+and which runtime paths need inspection; returned results do not mean migration completed.
+No rollback, repository writes, completion marker, status verification or public
+CLI is added. The separately documented operating precondition still applies.
+
 ## Cross-machine boundary
 
 ```mermaid
