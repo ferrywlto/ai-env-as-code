@@ -574,6 +574,13 @@ All reports must be in sync; missing enrollment, invalid inputs, drift or change
 phase-wide state stops migration. Unrelated config values are not versioned or
 repaired. This is not a completion marker, automatic repair or public command.
 
+Internal `MigrationCompletionPreview.Read(preparation)` freshly verifies status
+and returns advisory context plus the proposed `.aec-version` content `2.0`
+followed by a newline, with ordinary non-executable Git mode `100644`. It checks
+for persistent changes across the preview and writes nothing. Caller-owned
+buffers do not authorize completion; marker writing/committing and the public
+migration command remain separate, unimplemented steps.
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid

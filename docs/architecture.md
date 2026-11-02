@@ -1080,6 +1080,23 @@ enrollment or stale context stops validation; status drift reports the provider
 and instruction/config result. No marker is needed to inspect a migrated target.
 A later completion writer must freshly validate again, not trust these reports.
 
+### Internal migration completion preview
+
+```mermaid
+flowchart LR
+    Context[Reviewed post-target-commit context] --> Capture[Capture sources, index and protected inputs]
+    Capture --> Status[MigrationStatusGate: every provider in sync]
+    Status --> Check[Verify preview-wide persistent state]
+    Check --> Preview[Review proposed .aec-version: 2.0 plus newline]
+```
+
+`MigrationCompletionPreview` reuses source validation and the status gate.
+It exposes the proposed ordinary non-executable Git mode `100644`, plus advisory
+observations of commit/branch, index, sources and protected files. No marker is
+created or committed. A later writer must refresh these observations and handle
+the marker-aware transition explicitly; current migration guards reject an
+appearing marker. This remains best-effort observation, not a lock or atomicity.
+
 ## Cross-machine boundary
 
 ```mermaid
