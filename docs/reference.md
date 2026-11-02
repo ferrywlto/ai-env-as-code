@@ -567,6 +567,13 @@ without rolling back prior writes.
 This adds no repository write, completion marker, status verification or public
 command. See the [coordinator diagrams](architecture.md#internal-enrolled-provider-migration-apply-coordinator).
 
+Internal `MigrationStatusGate.Verify(preparation)` checks the refreshed
+post-target-commit context and every reviewed enrolled provider without writing.
+It reuses ordinary portable status, including only managed Codex config values.
+All reports must be in sync; missing enrollment, invalid inputs, drift or changed
+phase-wide state stops migration. Unrelated config values are not versioned or
+repaired. This is not a completion marker, automatic repair or public command.
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid

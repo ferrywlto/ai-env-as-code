@@ -1059,6 +1059,27 @@ and which runtime paths need inspection; returned results do not mean migration 
 No rollback, repository writes, completion marker, status verification or public
 CLI is added. The separately documented operating precondition still applies.
 
+### Internal post-apply migration status gate
+
+```mermaid
+flowchart LR
+    Context[Reviewed post-target-commit context] --> Validate[Validate enrolled providers and committed sources]
+    Validate --> Inspect[PortableEnvironmentStatus for each enrolled provider]
+    Inspect --> Guard[Verify phase-wide protected state]
+    Guard --> Check{All in sync?}
+    Check -->|Yes| Reports[Return provider reports; not migration completion]
+    Check -->|No| Stop[Stop without repair or completion marker]
+```
+
+`MigrationStatusGate` reuses `MigrationSourceValidationPreview` for context and
+the final guard, and `PortableEnvironmentStatus` for instruction/managed-config
+comparison. Selected committed targets, protected runtime/config, sources,
+index, HEAD and branch are compared across this read-only phase. This is
+best-effort detection of persistent drift, not an atomic snapshot or lock. Missing
+enrollment or stale context stops validation; status drift reports the provider
+and instruction/config result. No marker is needed to inspect a migrated target.
+A later completion writer must freshly validate again, not trust these reports.
+
 ## Cross-machine boundary
 
 ```mermaid
