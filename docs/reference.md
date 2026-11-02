@@ -585,10 +585,17 @@ review, then creates only an absent `.aec-version` with exact reviewed bytes
 and owner-only non-executable Unix permissions. Post-write checks permit only
 that exact marker as dirt while retaining the reviewed index, HEAD, sources and
 runtime. A failure may leave the marker for inspection; no automatic rollback.
-An existing/competing marker is never overwritten. Staging/committing the marker
-and the public migration command remain separate, unimplemented steps. Until
-publication exists, an uncommitted marker stops ordinary migration preflight;
-inspect and resolve it explicitly rather than expecting automatic continuation.
+An existing/competing marker is never overwritten. An uncommitted marker stops
+ordinary migration preflight; inspect and resolve it explicitly rather than
+expecting automatic continuation.
+
+Internal `MigrationCompletionCommitter.WriteAndCommit(preview)` owns creation
+and publication in one fresh private context. It stages only the marker, respects
+configured signing, proves exact bytes/path/mode and a single-parent commit,
+then checks the new HEAD, clean index and unchanged protected inputs. It never
+adopts an independently existing marker. A failure may leave the marker, staged
+changes or a commit; inspect before retrying, with no automatic rollback.
+No public migration command, push or runtime deployment is added.
 
 ### Existing manual migration — implemented and rehearsed
 

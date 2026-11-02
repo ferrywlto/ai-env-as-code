@@ -8,38 +8,86 @@ internal static class MigrationCompletionWriter
 {
     public static string Write(MigrationCompletionPreview reviewed,
         Action? beforeWriteForTests = null, Action? afterWriteForTests = null)
-    {
-        ArgumentNullException.ThrowIfNull(reviewed);
-        var fresh = MigrationCompletionPreview.Read(reviewed.Preparation);
-        VerifyReview(reviewed, fresh);
-        var repository = fresh.Preparation.Preflight.Repository;
-        var path = Path.Combine(repository, MigrationCompletionPreview.MarkerRelativePath);
-        var content = Encoding.UTF8.GetBytes(fresh.MarkerContent);
-        var protectedFiles = fresh.ProtectedFiles.ToDictionary(item => item.Key, item => item.Value,
-            StringComparer.Ordinal);
+        => Prepare(reviewed).Write(beforeWriteForTests, afterWriteForTests);
 
-        beforeWriteForTests?.Invoke();
-        MigrationSourceValidationPreview.VerifyFinalState(fresh.Preparation, fresh.Branch,
-            fresh.Index, new MigrationDirtySections([]), fresh.Sources, protectedFiles);
-        try
+    internal static Prepared Prepare(MigrationCompletionPreview reviewed) => Prepared.Create(reviewed);
+
+    // Keep freshly validated observations private through creation and commit.
+    // Callers receive copies of proposed content, never these guard buffers.
+    internal sealed class Prepared
+    {
+        private readonly MigrationCompletionPreview snapshot;
+        private readonly byte[] content;
+        private readonly Dictionary<string, byte[]?> protectedFiles;
+
+        private Prepared(MigrationCompletionPreview fresh)
         {
-            // CreateNew refuses a competing arrival; never truncate or replace it.
-            AtomicFile.WriteNew(path, content, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            afterWriteForTests?.Invoke();
-            MigrationSourceValidationPreview.VerifyFinalState(fresh.Preparation, fresh.Branch,
-                fresh.Index, new MigrationDirtySections([MigrationCompletionPreview.MarkerRelativePath]),
-                fresh.Sources, protectedFiles, expectedCompletionMarker: content);
+            snapshot = fresh;
+            content = Encoding.UTF8.GetBytes(fresh.MarkerContent);
+            protectedFiles = fresh.ProtectedFiles.ToDictionary(item => item.Key, item => item.Value,
+                StringComparer.Ordinal);
+        }
+
+        public string Repository => snapshot.Preparation.Preflight.Repository;
+        public string ParentCommit => snapshot.Preparation.Preflight.Commit;
+        public string Branch => snapshot.Branch;
+        public byte[] CopyDesiredContent() => content.ToArray();
+
+        internal static Prepared Create(MigrationCompletionPreview reviewed)
+        {
+            ArgumentNullException.ThrowIfNull(reviewed);
+            var fresh = MigrationCompletionPreview.Read(reviewed.Preparation);
+            VerifyReview(reviewed, fresh);
+            return new Prepared(fresh);
+        }
+
+        public string Write(Action? beforeWriteForTests = null, Action? afterWriteForTests = null)
+        {
+            var path = Path.Combine(Repository, MigrationCompletionPreview.MarkerRelativePath);
+            beforeWriteForTests?.Invoke();
+            MigrationSourceValidationPreview.VerifyFinalState(snapshot.Preparation, Branch,
+                snapshot.Index, new MigrationDirtySections([]), snapshot.Sources, protectedFiles);
+            try
+            {
+                // CreateNew refuses a competing arrival; never truncate or replace it.
+                AtomicFile.WriteNew(path, content, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                afterWriteForTests?.Invoke();
+                VerifyWrittenForCommit(snapshot.Index);
+                return path;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+                                              InvalidOperationException or InvalidDataException or ArgumentException)
+            {
+                throw new InvalidOperationException(
+                    $"Completion marker write stopped; {path} may remain. Inspect the marker and checkout before retrying. " +
+                    "No automatic rollback was attempted; no staging or commit was performed.", exception);
+            }
+        }
+
+        public void VerifyWrittenForCommit(byte[] index) =>
+            VerifyMarkerState(snapshot.Preparation, index,
+                new MigrationDirtySections([MigrationCompletionPreview.MarkerRelativePath]));
+
+        public void VerifyCommitted(string commit, byte[] index)
+        {
+            // Publication legitimately advances HEAD and makes the marker clean.
+            // Ordinary preflight would reject the now-completed format; retain
+            // the private original observations and admit only this transition.
+            var committed = snapshot.Preparation with
+            {
+                Preflight = snapshot.Preparation.Preflight with { Commit = commit }
+            };
+            VerifyMarkerState(committed, index, new MigrationDirtySections([]));
+        }
+
+        private void VerifyMarkerState(MigrationPreparation preparation, byte[] index, MigrationDirtySections dirty)
+        {
+            MigrationSourceValidationPreview.VerifyFinalState(preparation, Branch,
+                index, dirty, snapshot.Sources, protectedFiles, expectedCompletionMarker: content);
+            var path = Path.Combine(Repository, MigrationCompletionPreview.MarkerRelativePath);
             if (!OperatingSystem.IsWindows() &&
                 File.GetUnixFileMode(path) != (UnixFileMode.UserRead | UnixFileMode.UserWrite))
                 throw new IOException("Completion marker permissions changed after creation.");
-            return path;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
-                                          InvalidOperationException or InvalidDataException or ArgumentException)
-        {
-            throw new InvalidOperationException(
-                $"Completion marker write stopped; {path} may remain. Inspect the marker and checkout before retrying. " +
-                "No automatic rollback was attempted; no staging or commit was performed.", exception);
         }
     }
 

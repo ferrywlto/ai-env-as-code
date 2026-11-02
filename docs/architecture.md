@@ -1128,6 +1128,39 @@ classDiagram
     MigrationSourceValidationPreview --> MigrationDirtySections : ReadForCompletion only when opted in
 ```
 
+### Internal completion marker committer
+
+```mermaid
+flowchart LR
+    Review[Reviewed completion preview] --> Prepare[Fresh private prepared state]
+    Prepare --> Write[Create and verify marker]
+    Write --> Stage[Stage only marker; prove bytes, path and mode]
+    Stage --> Commit[Publish verified tree with configured signing]
+    Commit --> Proof[Prove one-parent marker-only commit]
+    Proof --> Final[Verify clean index, new HEAD and protected state]
+    Final --> Result[Return completion commit]
+    Stage -. failure .-> Inspect[Retain marker, index or commit; no rollback]
+    Commit -. failure .-> Inspect
+    Final -. failure .-> Inspect
+```
+
+```mermaid
+classDiagram
+    MigrationCompletionCommitter --> MigrationCompletionWriter : Prepare private state
+    MigrationCompletionCommitter --> MigrationCommitProof : exact staged and committed objects
+    MigrationCompletionCommitter --> BackupCommand : CommitStagedIndex with signing
+    MigrationCompletionWriter --> MigrationSourceValidationPreview : marker-aware phase checks
+```
+
+The writer's private prepared object retains fresh observations through the
+whole operation; public preview buffers never become write authority. The
+standalone `Write` entry point retains its marker-only behavior. After commit,
+only the expected HEAD advancement and tracked/clean marker transition are
+admitted. Ordinary migration preflight is not rerun against the completed format.
+Signing or later validation failure leaves inspectable state and may leave a
+commit; there is no reset, rollback, push or runtime deployment. The internal
+component is not the public migration command or a stable-release acceptance.
+
 ## Cross-machine boundary
 
 ```mermaid
