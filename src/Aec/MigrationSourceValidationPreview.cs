@@ -99,7 +99,8 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
     // validates observations, never grants write authority to caller buffers.
     internal static void VerifyFinalState(MigrationPreparation expected, string branch,
         byte[] index, MigrationDirtySections dirty, IReadOnlyList<MigrationValidatedSource> files,
-        Dictionary<string, byte[]?> protectedFiles, string? targetRelativePath = null)
+        Dictionary<string, byte[]?> protectedFiles, string? targetRelativePath = null,
+        byte[]? expectedCompletionMarker = null)
     {
         var repository = expected.Preflight.Repository;
         // History and committed blobs were checked once at entry. Recheck only
@@ -111,7 +112,8 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
         AecApplication.EnsureNoLinksInExistingPath(gitDirectory, "Source Git path");
         AecApplication.EnsureRealDirectory(gitDirectory, "Source Git directory");
         InitCommand.EnsureContainedGitMetadata(repository, gitDirectory);
-        if (ReadFile(Path.Combine(repository, MigrationPreflight.FormatRelativePath)) is not null)
+        var marker = ReadFile(Path.Combine(repository, MigrationPreflight.FormatRelativePath));
+        if (!SameBytes(expectedCompletionMarker, marker))
             throw new InvalidOperationException("Migration completion marker appeared during source validation.");
         VerifyEnrollment(expected);
         foreach (var file in files)
@@ -124,7 +126,9 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             if (!SameBytes(content, ReadFile(path)))
                 throw new InvalidOperationException($"Protected migration input changed during source validation: {path}.");
         }
-        var currentDirty = targetRelativePath is null
+        var currentDirty = expectedCompletionMarker is not null
+            ? MigrationDirtySections.ReadForCompletion(expected.Preflight, expected.Harnesses)
+            : targetRelativePath is null
             ? MigrationDirtySections.Read(expected.Preflight, expected.Harnesses)
             : MigrationDirtySections.ReadForTarget(expected.Preflight, expected.Harnesses, targetRelativePath);
         if (!currentDirty.Paths.SequenceEqual(dirty.Paths, StringComparer.Ordinal))

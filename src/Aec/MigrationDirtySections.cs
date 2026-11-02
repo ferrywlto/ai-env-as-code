@@ -23,8 +23,12 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
         return ReadCore(preflight, harnesses, targetRelativePath);
     }
 
+    // Completion admits only its fixed marker, not arbitrary extra dirty paths.
+    internal static MigrationDirtySections ReadForCompletion(MigrationPreflight preflight,
+        IReadOnlyList<MigrationHarness> harnesses) => ReadCore(preflight, harnesses, null, completion: true);
+
     private static MigrationDirtySections ReadCore(MigrationPreflight preflight,
-        IReadOnlyList<MigrationHarness> harnesses, string? targetRelativePath)
+        IReadOnlyList<MigrationHarness> harnesses, string? targetRelativePath, bool completion = false)
     {
         if (harnesses.Count == 0)
         {
@@ -45,6 +49,7 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
             allowed.Add($"environment/providers/{harness.Provider}/overlay.md");
         }
         if (targetRelativePath is not null) allowed.Add(targetRelativePath);
+        if (completion) allowed.Add(MigrationPreflight.FormatRelativePath);
 
         foreach (var path in allowed)
         {

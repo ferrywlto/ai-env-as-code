@@ -1093,9 +1093,40 @@ flowchart LR
 `MigrationCompletionPreview` reuses source validation and the status gate.
 It exposes the proposed ordinary non-executable Git mode `100644`, plus advisory
 observations of commit/branch, index, sources and protected files. No marker is
-created or committed. A later writer must refresh these observations and handle
-the marker-aware transition explicitly; current migration guards reject an
-appearing marker. This remains best-effort observation, not a lock or atomicity.
+created or committed by the preview. The marker-only writer below refreshes
+these observations and handles its narrow transition. Ordinary guards still
+reject an appearing marker. This remains best-effort observation, not a lock or atomicity.
+
+### Internal completion marker writer
+
+```mermaid
+flowchart LR
+    Review[Reviewed completion preview] --> Fresh[Refresh and compare all review inputs]
+    Fresh --> Absent[Verify marker absent and context unchanged]
+    Absent --> Create[CreateNew: exact marker, owner-only permissions]
+    Create --> Guard[Verify exact marker, sole dirty path and protected state]
+    Guard --> Result[Return uncommitted marker path]
+    Create -. failure .-> Inspect[Retain inspectable state; no rollback or commit]
+    Guard -. failure .-> Inspect
+```
+
+`MigrationCompletionWriter` reuses `AtomicFile.WriteNew`. Its post-write call
+opts into exact marker bytes in `MigrationSourceValidationPreview` and the
+fixed-path `MigrationDirtySections.ReadForCompletion` exception. All ordinary
+calls still require marker absence. Raw index, HEAD/branch, enrolled harnesses,
+source and protected bytes must remain unchanged; ignored markers are refused.
+Unix creation uses `0600`, without executable bits. Existing or competing files
+are not overwritten. Failures after an attempted write report that the marker
+may remain; inspect before retrying. No staging, commit, runtime write or public
+command is added, and an uncommitted marker does not complete migration.
+
+```mermaid
+classDiagram
+    MigrationCompletionWriter --> MigrationCompletionPreview : refresh reviewed inputs
+    MigrationCompletionWriter --> AtomicFile : WriteNew
+    MigrationCompletionWriter --> MigrationSourceValidationPreview : exact-marker post-write check
+    MigrationSourceValidationPreview --> MigrationDirtySections : ReadForCompletion only when opted in
+```
 
 ## Cross-machine boundary
 

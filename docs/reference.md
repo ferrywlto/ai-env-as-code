@@ -578,8 +578,17 @@ Internal `MigrationCompletionPreview.Read(preparation)` freshly verifies status
 and returns advisory context plus the proposed `.aec-version` content `2.0`
 followed by a newline, with ordinary non-executable Git mode `100644`. It checks
 for persistent changes across the preview and writes nothing. Caller-owned
-buffers do not authorize completion; marker writing/committing and the public
-migration command remain separate, unimplemented steps.
+buffers do not authorize completion.
+
+Internal `MigrationCompletionWriter.Write(preview)` refreshes and compares the
+review, then creates only an absent `.aec-version` with exact reviewed bytes
+and owner-only non-executable Unix permissions. Post-write checks permit only
+that exact marker as dirt while retaining the reviewed index, HEAD, sources and
+runtime. A failure may leave the marker for inspection; no automatic rollback.
+An existing/competing marker is never overwritten. Staging/committing the marker
+and the public migration command remain separate, unimplemented steps. Until
+publication exists, an uncommitted marker stops ordinary migration preflight;
+inspect and resolve it explicitly rather than expecting automatic continuation.
 
 ### Existing manual migration — implemented and rehearsed
 
