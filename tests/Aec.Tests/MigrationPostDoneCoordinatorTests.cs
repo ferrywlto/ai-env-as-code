@@ -68,6 +68,8 @@ public sealed class MigrationPostDoneCoordinatorTests
         var runtimeConfig = File.ReadAllBytes(layout.ConfigRuntime);
         var remote = layout.Files.Git("ls-remote", "shared", "refs/heads/main");
         Assert.False(Directory.Exists(Path.Combine(layout.Repository, "environment", "targets")));
+        var scaffold = MigrationScaffoldCoordinator.CaptureAndScaffold(layout.Context(original));
+        Assert.Equal(4, scaffold.WrittenPaths.Count);
         var sections = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [Shared] = "Shared approval.\n",
@@ -78,10 +80,12 @@ public sealed class MigrationPostDoneCoordinatorTests
         // These untracked files model the user's filled scaffold at DONE;
         // neither a section commit nor a portable target exists yet.
         foreach (var (path, content) in sections) layout.Files.Write(path, content);
-        var preparation = layout.Context(original);
-        Assert.Equal(4, preparation.DirtySections.Paths.Count);
-
-        var result = MigrationPostDoneCoordinator.Complete(preparation);
+        var preparation = scaffold.Preparation;
+        using var input = new StringReader("done\nDONE\n");
+        using var output = new StringWriter();
+        var result = Assert.IsType<MigrationPostDoneResult>(
+            MigrationPostDoneCoordinator.WaitAndComplete(scaffold, input, output));
+        Assert.Contains("Not confirmed", output.ToString());
 
         Assert.Equal(3, result.DataCommits.Count);
         Assert.Equal(sections.Keys.Order(StringComparer.Ordinal), ChangedPaths(layout, original, result.DataCommits[0]));
@@ -104,6 +108,23 @@ public sealed class MigrationPostDoneCoordinatorTests
         Assert.Equal(Encoding.UTF8.GetBytes("2.0\n"), File.ReadAllBytes(Path.Combine(layout.Repository, Marker)));
         Assert.Equal(remote, layout.Files.Git("ls-remote", "shared", "refs/heads/main"));
         Assert.Empty(layout.Files.Git("status", "--porcelain"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EofOrCancellationRetainsScaffoldWithoutCompleting(bool cancel)
+    {
+        using var layout = new Layout();
+        var scaffold = MigrationScaffoldCoordinator.CaptureAndScaffold(layout.Context());
+        using var cancellation = new CancellationTokenSource();
+        if (cancel) cancellation.Cancel();
+        using var input = new StringReader(cancel ? "DONE\n" : "done\n");
+        using var output = new StringWriter();
+
+        layout.Files.AssertNoChanges(() => Assert.Null(
+            MigrationPostDoneCoordinator.WaitAndComplete(scaffold, input, output, cancellation.Token)));
+        Assert.NotEmpty(scaffold.WrittenPaths);
     }
 
     [Fact]

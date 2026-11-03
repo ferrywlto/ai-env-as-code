@@ -4,10 +4,21 @@ namespace Aec;
 internal sealed record MigrationPostDoneResult(string Commit,
     IReadOnlyList<string> DataCommits, IReadOnlyList<MigrationProviderApplyResult> Providers);
 
-// The caller owns the DONE prompt. Compose only the already-reviewed completion
-// components here; preparation, capture and public CLI dispatch stay separate.
 internal static class MigrationPostDoneCoordinator
 {
+    public static MigrationPostDoneResult? WaitAndComplete(MigrationScaffoldResult scaffold,
+        TextReader input, TextWriter output, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scaffold);
+        if (MigrationDoneGate.Wait(input, output, cancellationToken) != MigrationDoneResult.Done ||
+            cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        return Complete(scaffold.Preparation);
+    }
+
     public static MigrationPostDoneResult Complete(MigrationPreparation preparation,
         Action<string>? afterPhaseForTests = null, Action<string>? afterProviderForTests = null)
     {
