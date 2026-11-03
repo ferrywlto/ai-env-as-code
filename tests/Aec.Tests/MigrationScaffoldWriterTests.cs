@@ -7,6 +7,28 @@ public sealed class MigrationScaffoldWriterTests
 {
     private const string Shared = "environment/shared/instructions.md";
 
+    [Theory]
+    [InlineData(false, "Keep this draft.\n")]
+    [InlineData(true, "")]
+    public void CaptureAndScaffoldUsesTheNewHeadAndThePreparedChoice(bool overwrite, string expectedDraft)
+    {
+        using var layout = new Layout();
+        var choice = overwrite ? MigrationSectionChoice.Overwrite : MigrationSectionChoice.Preserve;
+        File.AppendAllText(layout.Runtime("codex"), "Capture this revision.\n");
+        layout.Files.Write(Shared, "Keep this draft.\n");
+        var prepared = layout.Context() with { SectionChoice = choice };
+
+        var result = MigrationScaffoldCoordinator.CaptureAndScaffold(prepared);
+
+        Assert.Equal(layout.Files.Head(), result.Preparation.Preflight.Commit);
+        Assert.Equal(prepared.Preflight.Commit, layout.Files.Git("rev-parse", "HEAD^").Trim());
+        Assert.Equal(prepared.OriginalCommit, result.Preparation.OriginalCommit);
+        Assert.Equal(choice, result.Preparation.SectionChoice);
+        Assert.Equal(expectedDraft, File.ReadAllText(Path.Combine(layout.Repository, Shared)));
+        Assert.Contains($"environment/platforms/{layout.Platform}/policy.md", result.WrittenPaths);
+        Assert.Empty(layout.Files.Git("diff", "--cached", "--name-only"));
+    }
+
     [Fact]
     public void MissingSourcesBecomeEmptyFilesAndFreshRetryIsANoop()
     {
