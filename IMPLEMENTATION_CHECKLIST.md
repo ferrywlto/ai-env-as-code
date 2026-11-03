@@ -4,7 +4,7 @@
 
 [Ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2) is Active / Next. The current deliverable is a stable
 2.0 release; old alpha wording does not reduce the acceptance gates.
-Current reviewed engine checkpoint: `603922e`. Working changes are not release proof.
+Current reviewed engine checkpoint: guarded capture (13e.16).
 Ticket #2 remains Active, DoD 12/27 (44%); approved slices and verification are recorded there.
 
 | Current item | State / immediate next action |
@@ -17,7 +17,9 @@ Ticket #2 remains Active, DoD 12/27 (44%); approved slices and verification are 
 | 13e.12: completion preview | Reviewed and committed: `dd85526`. Release warning-as-error build: zero warnings/errors (3.21s); 21/21 focused tests passed (8 preview, 13 status-gate regressions). No marker write, public CLI, push or personal deployment. |
 | 13e.13: completion marker creation | Reviewed and committed: `bb4227c`. Release warning-as-error build: zero warnings/errors (25.58s); 104/104 focused tests passed (14 writer, 90 guard regressions). No marker staging/commit, public CLI, push or personal deployment. |
 | 13e.14: completion marker commit | Reviewed and committed: `603922e`. Release warning-as-error build: zero warnings/errors (final 2.89s); 26/26 focused checks passed (12 committer, 14 writer). No public CLI, personal deployment or push. |
-| Current slice: 13e.15 | Verified locally; Ferry review and commit pending. Internal post-DONE coordinator retains original provenance and advances through verified commit handoffs. Release build: zero warnings/errors; 13/13 focused tests passed. Preparation, prompts, public CLI and personal migration remain out of scope. |
+| 13e.15: post-DONE completion coordination | Reviewed and committed: `4f4c2df`. Release build: zero warnings/errors; 13/13 focused tests passed. |
+| 13e.16: guarded capture | Reviewed. Capture routes by enrolled runtime format and refuses mixed formats before writing. It preserves the original history anchor and section choice. Release build: zero warnings/errors; 46/46 focused checks passed. |
+| Next slice: 13e.17 | Proposed. Hand the captured checkout to scaffold preview and writer while preserving the pinned HEAD and the reviewed section choice. |
 | Completed boundary | Source/target commits, apply preview, both provider writers, enrolled-provider apply coordination and post-apply status verification are reviewed. |
 | Stop line | No final slice pass, public migration, release readiness, personal migration, push or deployment is implied. |
 
@@ -130,7 +132,8 @@ Detailed prior results/approvals are linked, not repeated here.
 | 13e.12 | Migration completion preview | Reviewed | `dd85526`; [21 passing checks](artifacts/migration-completion-preview-20261102/verification.md); fresh status, marker proposal, exact context observations and persistent-drift refusal. |
 | 13e.13 | Completion marker creation | Reviewed | `bb4227c`; [104 passing checks](artifacts/migration-completion-writer-20261102/verification.md); private CreateNew marker, stale/competing input refusal and retained failure state. |
 | 13e.14 | Completion marker commit | Reviewed | `603922e`; [26 passing checks](artifacts/migration-completion-committer-20261102/verification.md); exact publication, signing failure and retained phase drift. |
-| 13e.15 | Post-DONE completion coordination | Verified; awaiting review | [13 passing checks](artifacts/migration-post-done-20261102/verification.md); verified commit handoffs, apply/status before marker, and retained-state failure reporting. No preparation/prompts or public CLI. |
+| 13e.15 | Post-DONE completion coordination | Reviewed | `4f4c2df`; [13 passing checks](artifacts/migration-post-done-20261102/verification.md). |
+| 13e.16 | Guarded capture after preparation | Reviewed | 46/46 focused checks (7 coordinator, 39 committer regressions). Legacy and combined portable capture, unchanged inputs, mixed formats and stale HEAD. |
 | 13f | Full command rehearsal and updated native coverage | Open | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
 | 14 | Provider-first CLI contract | Deferred to v3 | [#3](https://github.com/ferrywlto/ai-env-as-code/issues/3) |
 | 15 | Provider-first installer/skills/docs alignment | Deferred to v3 | [#3](https://github.com/ferrywlto/ai-env-as-code/issues/3) |
