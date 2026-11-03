@@ -1074,9 +1074,14 @@ missing value and explicit `none` agree with a committed `none`. The working
 canonical files may contain only the baseline or exact expected managed result.
 Baseline lookalikes, unrelated changes, links, and special entries are rejected.
 
-A completed repository must retain the recognizable two-commit initialization
-ancestry, use symbolic branch `main`, contain a real `.git` directory whose metadata
-remains inside the selected root, and have a clean index and work tree. Both current
+A completed repository must retain recognizable initialization history. The
+two-commit layout uses a recognized backup root and validates the first child's
+parent and contents. The older `Initialize AEC data repository` root is recognized
+by its managed Codex block and three ChatGPT scaffold paths. Commit subjects after
+the root are unrestricted.
+
+Attachment requires symbolic branch `main` and a real `.git` directory whose metadata
+remains inside the selected root, along with a clean index and work tree. Both current
 canonical files must exactly match committed `HEAD`; instructions must contain a
 supported v3 through v6 AEC block and config must contain one supported managed value.
 Legacy histories remain attachable after canonical config was added in a later

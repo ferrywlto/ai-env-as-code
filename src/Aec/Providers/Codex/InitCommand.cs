@@ -2,6 +2,7 @@ namespace Aec;
 
 internal static class InitCommand
 {
+    private const string LegacyInitializedRootSubject = "Initialize AEC data repository";
     private const string InitializationCommitMessage = "Initialize AEC instructions";
 
     public static int Run(
@@ -509,7 +510,13 @@ internal static class InitCommand
         // Migration needs the original history proof without init's main-branch
         // or clean-worktree requirements: interrupted section edits are separate.
         var history = ReadFirstParentHistory(repository, required: true);
-        if (history.Length < 2 || !HasExpectedInitializationSubjects(repository, history))
+        var rootSubject = history.Length == 0 ? null : ReadCommitSubject(repository, history[0]);
+        if (rootSubject == LegacyInitializedRootSubject)
+        {
+            ValidateLegacyInitializedRoot(repository, history[0]);
+            return;
+        }
+        if (history.Length < 2 || !IsBackupRootSubject(rootSubject))
         {
             throw new InvalidOperationException(
                 "Repository does not contain the expected AEC initialization history.");
@@ -520,10 +527,39 @@ internal static class InitCommand
 
     private static bool HasCompletedInitializationHistory(string repository)
     {
-        // A one-commit baseline may already contain a current block; the mandatory
-        // second commit is what distinguishes a completed initialization.
         var history = ReadFirstParentHistory(repository, required: false);
-        return history.Length >= 2 && HasExpectedInitializationSubjects(repository, history);
+        if (history.Length == 0) return false;
+
+        var rootSubject = ReadCommitSubject(repository, history[0]);
+        return rootSubject == LegacyInitializedRootSubject ||
+            (history.Length >= 2 && IsBackupRootSubject(rootSubject));
+    }
+
+    private static bool IsBackupRootSubject(string? subject) =>
+        subject is BackupCommand.CommitMessage or BackupCommand.OrdinaryCommitMessage;
+
+    private static void ValidateLegacyInitializedRoot(string repository, string commit)
+    {
+        var root = GitProcess.RunRequiredBytes(repository, "Git could not inspect the legacy AEC root",
+            "--no-replace-objects", "cat-file", "commit", commit);
+        EnsureRootCommit(root);
+
+        var entries = ReadTreeEntries(repository, commit);
+        if (entries.Count != 1 + ChatGptInitCommand.ScaffoldFileNames.Length ||
+            !entries.TryGetValue(AecApplication.SourceRelativePath, out var source) ||
+            !ChatGptInitCommand.ScaffoldFileNames.All(name =>
+                entries.ContainsKey($"environment/providers/chatgpt/{name}")))
+        {
+            throw new InvalidOperationException("The legacy AEC root has an unexpected tree shape.");
+        }
+
+        var content = ReadBoundedBlob(repository, source.ObjectId, "Legacy root canonical instructions");
+        var binding = AecInstructionBlock.ReadRepositoryBinding(content);
+        if (binding is null || binding.Platform is not null ||
+            !AecInstructionBlock.IncludesChatGptGuidance(binding.Version))
+        {
+            throw new InvalidDataException("The legacy AEC root has no supported initialized Codex and ChatGPT block.");
+        }
     }
 
     private static string[] ReadFirstParentHistory(string repository, bool required)
@@ -551,25 +587,6 @@ internal static class InitCommand
         return result.Output.Split(
             ['\r', '\n'],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    }
-
-    private static bool HasExpectedInitializationSubjects(
-        string repository,
-        string[] history)
-    {
-        var baselineSubject = ReadCommitSubject(repository, history[0]);
-        return (string.Equals(
-                    baselineSubject,
-                    BackupCommand.CommitMessage,
-                    StringComparison.Ordinal) ||
-                string.Equals(
-                    baselineSubject,
-                    BackupCommand.OrdinaryCommitMessage,
-                    StringComparison.Ordinal)) &&
-               string.Equals(
-                   ReadCommitSubject(repository, history[1]),
-                   InitializationCommitMessage,
-                   StringComparison.Ordinal);
     }
 
     private static string ReadCommitSubject(string repository, string commit)
