@@ -1161,6 +1161,42 @@ Signing or later validation failure leaves inspectable state and may leave a
 commit; there is no reset, rollback, push or runtime deployment. The internal
 component is not the public migration command or a stable-release acceptance.
 
+### Internal post-DONE completion coordinator
+
+```mermaid
+flowchart TD
+    Done[Caller has confirmed DONE] --> Sources[Validate and commit authored sources]
+    Sources --> Targets[Freshly preview and commit each enrolled target]
+    Targets --> Reviews[Prepare all apply reviews at final target HEAD]
+    Reviews --> Apply[Apply reviewed providers]
+    Apply --> Status[Fresh completion preview verifies status]
+    Status --> Marker[Commit completion marker last]
+    Marker --> Result[Return data commits, provider results and final commit]
+    Sources -. failure .-> Stop[Stop; report pinned HEAD and retained state]
+    Targets -. failure .-> Stop
+    Apply -. failure .-> Stop
+    Status -. failure .-> Stop
+    Marker -. failure .-> Stop
+```
+
+```mermaid
+classDiagram
+    MigrationPostDoneCoordinator --> MigrationSourceCommitter : authored sources
+    MigrationPostDoneCoordinator --> MigrationTargetCommitter : one enrolled provider at a time
+    MigrationPostDoneCoordinator --> MigrationApplyCoordinator : all reviews before runtime writes
+    MigrationPostDoneCoordinator --> MigrationCompletionPreview : fresh status
+    MigrationPostDoneCoordinator --> MigrationCompletionCommitter : marker last
+```
+
+Preserve the original history anchor while advancing the pinned HEAD only to
+verified component-returned commits. A no-op retains its prior HEAD; never
+adopt an outside commit. Failures report the current phase, returned components,
+pinned HEAD and underlying error; retained files/index/runtime/commits need
+inspection, without rollback or automatic retry. Returned data commits contain
+only source/target commits; the final marker commit is separate. The caller owns
+the DONE gate. Preparation/capture/scaffold, prompts/warning, public dispatch and
+personal migration are not added by this internal coordinator.
+
 ## Cross-machine boundary
 
 ```mermaid

@@ -597,6 +597,15 @@ adopts an independently existing marker. A failure may leave the marker, staged
 changes or a commit; inspect before retrying, with no automatic rollback.
 No public migration command, push or runtime deployment is added.
 
+Internal `MigrationPostDoneCoordinator.Complete(preparation)` composes source
+commit, fresh per-provider target commits, all-provider reviewed apply, fresh
+status and the completion-marker commit last. Its caller must already have
+confirmed `DONE`. Each commit handoff preserves original provenance and accepts
+only the verified returned HEAD; no-ops retain the prior HEAD. Failures stop
+later work and report retained state without rollback/retry. The result separates
+source/target commits from the final marker commit and includes provider results.
+No preparation, prompt, public command, push or personal migration is performed.
+
 ### Existing manual migration — implemented and rehearsed
 
 ```mermaid
