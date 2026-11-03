@@ -10,7 +10,11 @@ public static class AecApplication
     internal const string CopilotSourceRelativePath =
         "environment/providers/copilot/copilot-instructions.md";
 
-    public static int Run(string[] args, TextWriter output, TextWriter error)
+    public static int Run(string[] args, TextWriter output, TextWriter error) =>
+        Run(args, Console.In, output, error);
+
+    internal static int Run(string[] args, TextReader input, TextWriter output, TextWriter error,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -32,6 +36,7 @@ public static class AecApplication
             return args[0] switch
             {
                 "version" => RunVersion(args, output),
+                "migrate" => RunMigration(args, input, output, error, cancellationToken),
                 "render" => RenderCommand.Run(
                     RequireAbsolutePath(ParseRenderRepository(args), "--repo"), output),
                 "skill" => RunSkill(args, output),
@@ -54,6 +59,32 @@ public static class AecApplication
             error.WriteLine($"error: {exception.Message}");
             return 1;
         }
+    }
+
+    private static int RunMigration(string[] args, TextReader input, TextWriter output, TextWriter error,
+        CancellationToken cancellationToken)
+    {
+        if (args.Length != 4 || args[2] != "--repo")
+            throw new ArgumentException("Usage: aec migrate VERSION --repo ABSOLUTE_PATH");
+
+        var repository = RequireAbsolutePath(args[3], "--repo");
+        output.WriteLine("Close affected harness sessions and pause other writers to this repository and its managed runtime files until migration finishes. Use a separate terminal and a plain editor. Concurrent changes can leave migration partially complete.");
+        output.Flush();
+
+        var preparation = MigrationPreparation.Run(repository, args[1], input, output, cancellationToken);
+        if (preparation is not null && !cancellationToken.IsCancellationRequested)
+        {
+            var scaffold = MigrationScaffoldCoordinator.CaptureAndScaffold(preparation);
+            var result = MigrationPostDoneCoordinator.WaitAndComplete(scaffold, input, output, cancellationToken);
+            if (result is not null)
+            {
+                output.WriteLine($"Migration completed at {result.Commit}.");
+                return 0;
+            }
+        }
+
+        error.WriteLine("Migration stopped before completion. Inspect the checkout before starting again.");
+        return 1;
     }
 
     private static int RunStatus(ProviderRepositoryOptions options, TextWriter output)
@@ -846,6 +877,7 @@ public static class AecApplication
               aec help
               aec version
               aec render --repo ABSOLUTE_PATH
+              aec migrate VERSION --repo ABSOLUTE_PATH
               aec skill upgrade [--codex-home ABSOLUTE_PATH]
               aec uninstall [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]

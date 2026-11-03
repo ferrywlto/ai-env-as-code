@@ -4,7 +4,7 @@
 
 [Ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2) is Active / Next. The current deliverable is a stable
 2.0 release; old alpha wording does not reduce the acceptance gates.
-Current reviewed engine checkpoint: editing to completion handoff (13e.18).
+Current reviewed engine checkpoint: public migration command (13e.19).
 Ticket #2 remains Active, DoD 12/27 (44%); approved slices and verification are recorded there.
 
 | Current item | State / immediate next action |
@@ -137,6 +137,7 @@ Detailed prior results/approvals are linked, not repeated here.
 | 13e.16 | Guarded capture after preparation | Reviewed | 46/46 focused checks (7 coordinator, 39 committer regressions). Legacy and combined portable capture, unchanged inputs, mixed formats and stale HEAD. |
 | 13e.17 | Capture to scaffold handoff | Reviewed | 2 handoff tests and 12 scaffold regressions passed. Next step is wiring the editing and `DONE` boundary. |
 | 13e.18 | Editing to completion handoff | Reviewed | 16 focused tests passed, including first legacy migration through the prompt, EOF and cancellation. |
+| 13e.19 | Public migration command | Reviewed | Release build passed with zero warnings or errors. All 15 focused tests passed, including public dispatch through DONE and EOF. Built CLI help and relative path rejection checked. |
 | 13f | Full command rehearsal and updated native coverage | Open | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
 | 14 | Provider-first CLI contract | Deferred to v3 | [#3](https://github.com/ferrywlto/ai-env-as-code/issues/3) |
 | 15 | Provider-first installer/skills/docs alignment | Deferred to v3 | [#3](https://github.com/ferrywlto/ai-env-as-code/issues/3) |

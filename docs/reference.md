@@ -104,7 +104,7 @@ flowchart TD
 ```
 
 The currently implemented CLI never fetches, pulls, or pushes. The
-[planned interactive migration](#planned-interactive-command--not-implemented)
+[interactive migration](#interactive-migration-command)
 is a narrowly scoped future exception for fast-forward-only pull, never push.
 The bundled skills run this
 preflight only before an AEC canonical write or runtime apply—not on every
@@ -176,17 +176,16 @@ flowchart LR
 > migration finishes. Concurrent changes may cause migration to stop with
 > partially updated state.
 
-This precondition applies to the manual sequence below and the planned command.
+This precondition applies to the manual sequence below and the migration command.
 Do not run live migration from the harness being migrated; use a plain editor
 during the section-editing / `DONE` pause. Existing component guards remain
 best-effort change detection, not a lock or an atomic multi-file transaction.
 AEC will not detect or terminate running processes automatically.
 
-The planned top-level command must print this warning once before its first
-mutation, including fetch/pull or capture. Do not repeat it in internal helpers.
-Warning emission is an implementation requirement, not an available CLI feature.
+The migration command prints this warning once before its first mutation,
+including fetch or capture.
 
-### Planned interactive command — not implemented
+### Interactive migration command
 
 ```mermaid
 flowchart TD
@@ -203,11 +202,13 @@ flowchart TD
     Deploy --> Complete["Record target data-format version<br/>only after successful verification"]
 ```
 
-Proposed syntax: `aec migrate 2.0 --repo ABSOLUTE_PATH`. One invocation runs
+Syntax: `aec migrate 2.0 --repo ABSOLUTE_PATH`. One invocation runs
 through the prompt; there is no `--continue` flag, saved continuation, or resume
 checkpoint. Unless migration completes, the next invocation starts again at
 preflight, not at the prompt. Preserve any prior commits or partial writes for
 inspection; never silently reset them or report success after a failed step.
+EOF or cancellation returns a nonzero exit code. If Ctrl+C arrives while the
+command is waiting for console input, press Enter to let the pending read return.
 
 | Boundary | Required behavior |
 |---|---|
@@ -222,7 +223,7 @@ Choosing Preserve does not waive Git safety checks. Stop rather than discard
 edits when pull or capture cannot proceed safely. Revalidate user edits before
 committing, and never overwrite dirty targets through render. Ordinary
 `status`, `backup`, `render`, and `apply` keep their existing directions and
-no-network behavior; the planned migration command alone owns this documented
+no-network behavior; the migration command alone owns this documented
 pull exception. Prove it on disposable data/runtime copies before live use.
 
 The internal read-only `MigrationPreflight` now validates format versions,
@@ -233,8 +234,7 @@ marker cannot fall back to legacy detection. Binary major/minor capability and
 an explicitly implemented migration path must both support the target; patch
 and prerelease labels are not data formats. The only recognized completed marker
 is `2.0`; legacy releases never issued a `1.0` marker. Only successful migration
-completion will write `.aec-version` containing `2.0`. The public command, marker
-writer, pull, and complete interactive workflow are not implemented yet.
+completion will write `.aec-version` containing `2.0`.
 
 The internal `MigrationHarnessSelection` resolves only the existing implicit
 Codex/Copilot homes (`CODEX_HOME` / `COPILOT_HOME`, otherwise profile defaults).
@@ -622,11 +622,10 @@ flowchart TD
 
 This is the supported **2.0 development-branch data migration** using the current
 command syntax. Installing the executable or upgrading a skill does not migrate
-the data. There is no automatic instruction classification; the interactive
-command above is planned, not available in the current executable.
+the data. Instruction classification is manual in both migration flows.
 Meet the [migration operating precondition](#migration-operating-precondition)
 before starting this sequence; current individual commands do not print the
-planned top-level migration warning.
+top-level migration warning.
 The example below covers Codex and Copilot used on the same machine; omit the
 Copilot source, enrollment, and deployment when that harness is not used.
 
