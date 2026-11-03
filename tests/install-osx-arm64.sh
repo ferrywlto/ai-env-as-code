@@ -374,4 +374,52 @@ assert_empty "$fake_uninstaller"
 printf 'uninstall --codex-home %s\n' "$fake_codex_home" >"$test_root/fake-args-expected"
 assert_output "$test_root/fake-args-expected" "$test_root/fake-args"
 
-printf '%s\n' 'macOS installer, AEC lifecycle, and render smoke passed'
+# Rehearse public migration with a separate legacy repository and homes.
+migration_repo="$test_root/migration-data"
+migration_remote="$test_root/migration-remote.git"
+migration_codex="$test_root/migration-codex"
+migration_copilot="$test_root/migration-copilot"
+mkdir -p "$migration_codex" "$migration_copilot"
+printf '%s\n' 'Codex migration fixture.' >"$migration_codex/AGENTS.md"
+printf '%s\n' 'personality = "friendly"' >"$migration_codex/config.toml"
+printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instructions.md"
+(
+    export CODEX_HOME="$migration_codex" COPILOT_HOME="$migration_copilot"
+    "$custom_target" init --repo "$migration_repo" >/dev/null
+    "$custom_target" init --repo "$migration_repo" --provider=copilot >/dev/null
+    git -C "$migration_repo" add -- environment/providers/copilot/copilot-instructions.md
+    git -C "$migration_repo" commit -qm 'Record migration Copilot baseline'
+    git init --bare --quiet --initial-branch=main "$migration_remote"
+    git -C "$migration_repo" remote add shared "$migration_remote"
+    git -C "$migration_repo" push --quiet --set-upstream shared main
+    migration_base=$(git -C "$migration_repo" rev-parse HEAD)
+
+    # Prepare one draft. The remaining required sections are scaffolded by migrate.
+    mkdir -p "$migration_repo/environment/shared"
+    printf '%s\n' 'Preserved migration draft.' >"$test_root/migration-draft"
+    cp "$test_root/migration-draft" "$migration_repo/environment/shared/instructions.md"
+    printf '%s\n' Preserve DONE >"$test_root/migration-input"
+    "$custom_target" migrate 2.0 --repo "$migration_repo" \
+        <"$test_root/migration-input" >"$test_root/migration-output"
+    grep -F 'type exactly DONE' "$test_root/migration-output" >/dev/null
+    grep -F 'Migration completed at ' "$test_root/migration-output" >/dev/null
+
+    assert_file_equals "$test_root/migration-draft" "$migration_repo/environment/shared/instructions.md"
+    printf '2.0\n' >"$test_root/migration-marker-expected"
+    git -C "$migration_repo" show HEAD:.aec-version >"$test_root/migration-marker"
+    assert_file_equals "$test_root/migration-marker-expected" "$test_root/migration-marker"
+    [ "$(git -C "$migration_repo" diff-tree --no-commit-id --name-only -r HEAD)" = .aec-version ] || \
+        fail "migration completion commit included unexpected paths"
+    [ -z "$(git -C "$migration_repo" status --porcelain)" ] || fail "migration left repository changes"
+    [ "$(git --git-dir="$migration_remote" rev-parse HEAD)" = "$migration_base" ] || \
+        fail "migration changed the remote tip"
+
+    "$custom_target" status --repo "$migration_repo" >"$test_root/migration-codex-status"
+    "$custom_target" status --repo "$migration_repo" --provider=copilot >"$test_root/migration-copilot-status"
+    printf '%s\n' 'codex/AGENTS.md   in_sync' 'codex/config.toml in_sync' >"$test_root/migration-codex-expected"
+    printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/migration-copilot-expected"
+    assert_output "$test_root/migration-codex-expected" "$test_root/migration-codex-status"
+    assert_output "$test_root/migration-copilot-expected" "$test_root/migration-copilot-status"
+)
+
+printf '%s\n' 'macOS installer, AEC lifecycle, render, and migration smoke passed'
