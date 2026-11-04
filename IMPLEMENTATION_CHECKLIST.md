@@ -4,8 +4,8 @@
 
 [Ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2) is Active / Next. The current deliverable is a stable
 2.0 release; old alpha wording does not reduce the acceptance gates.
-Current reviewed engine checkpoint: public migration command (13e.19).
-Ticket #2 remains Active, DoD 12/27 (44%); approved slices and verification are recorded there.
+Current reviewed engine checkpoint: macOS ARM64 Native AOT migration smoke (`8599e59`).
+Ticket #2 remains Active, DoD 14/27 (52%).
 
 | Current item | State / immediate next action |
 | --- | --- |
@@ -22,7 +22,7 @@ Ticket #2 remains Active, DoD 12/27 (44%); approved slices and verification are 
 | 13e.17: capture to scaffold handoff | Reviewed. The coordinator passes the captured checkout to the existing scaffold preview and writer. Release build passed with zero warnings or errors. All 14 focused tests passed. |
 | 13e.18: editing to completion handoff | Reviewed. Exact `DONE` starts fresh validation and completion. EOF or cancellation leaves the scaffold available for editing. Release build passed with zero warnings or errors. All 16 focused tests passed. |
 | Completed boundary | Source/target commits, apply preview, both provider writers, enrolled-provider apply coordination and post-apply status verification are reviewed. |
-| Stop line | No final slice pass, public migration, release readiness, personal migration, push or deployment is implied. |
+| Current slice | Linux ARM64 native migration smoke is reviewed. Shell syntax passed. Native runner verification is pending. |
 
 Evidence: [initial diagnostics](artifacts/migration-apply-preview-20261101/mutation-diagnostic/),
 [command traces](artifacts/migration-apply-preview-20261101/trace2-permitted/),
@@ -42,8 +42,8 @@ See [reference](docs/reference.md), [architecture](docs/architecture.md) and
 
 ## DoD completion metric
 
-**44% — 12/27 acceptance checks complete**, baseline v1 (1 November 2026).
-Initial baseline; no comparable previous percentage. The authoritative checks
+**52% — 14/27 acceptance checks complete**, baseline v1 (1 November 2026).
+C5 and C7 added on 4 November 2026, up from 12/27 (44%). The authoritative checks
 (A1–I2) are in [ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2#definition-of-done).
 This is accepted-outcome progress, not effort, ETA or release readiness.
 Reviewed slices provide evidence; they are not the denominator.
@@ -59,8 +59,8 @@ Final review and approved release delivery remain required for 100%.
 
 ## Remaining 2.0 acceptance gates
 
-- [ ] Complete and review remaining migration orchestration: enrollment/render/apply/status, completion-version recording and safe fresh-start failure/retry handling.
-- [ ] Wire the approved public `aec migrate VERSION --repo PATH` command and rehearse one complete invocation on disposable copies of user-approved actual data/runtime; update native coverage before live use.
+- [ ] Verify safe fresh-start failure and retry behavior for the integrated command (C6).
+- [ ] Rehearse with approved actual runtime copies (D2) and complete Linux ARM64 and Windows x64 native migration coverage (E4).
 - [ ] Keep help, bundled skills, installers/uninstallers, README/reference and version/release metadata accurate for the implemented 2.0 behaviour.
 - [ ] Review the Linux ARM64 runner result; retain required macOS ARM64/Windows x64/Linux ARM64 test and Native AOT gates. Historical runner success does not cover unfinished migration changes.
 - [ ] Verify actual Codex **and** GitHub Copilot on macOS. Record OS/architecture, harness versions, AEC commit, approved environment, tested paths, expected/observed results and limitations separately.
@@ -138,7 +138,7 @@ Detailed prior results/approvals are linked, not repeated here.
 | 13e.17 | Capture to scaffold handoff | Reviewed | 2 handoff tests and 12 scaffold regressions passed. Next step is wiring the editing and `DONE` boundary. |
 | 13e.18 | Editing to completion handoff | Reviewed | 16 focused tests passed, including first legacy migration through the prompt, EOF and cancellation. |
 | 13e.19 | Public migration command | Reviewed | Release build passed with zero warnings or errors. All 15 focused tests passed, including public dispatch through DONE and EOF. Built CLI help and relative path rejection checked. |
-| 13f | Full command rehearsal and updated native coverage | Synthetic and repository-derived Codex rehearsals verified on macOS ARM64 | Release build of `7b60e84` ran through `DONE` in disposable fixtures. Verified upstream fast-forward and local runtime capture in one run, then completion and both provider statuses in a fresh run. After the history compatibility fix, a disposable clone of `aec-data-backup-test` at `722dbda` completed through `DONE` using a repository-derived Codex runtime. Codex instructions and config reported `in_sync`, and the authored instructions and ChatGPT backups were preserved. Actual runtime copies are pending. The macOS ARM64 Native AOT smoke passed locally with both synthetic providers through Preserve and DONE. The local build used cached packages after advisory feeds were unreachable. Linux and Windows migration smoke coverage is pending. |
+| 13f | Full command rehearsal and updated native coverage | Synthetic and repository-derived Codex rehearsals verified on macOS ARM64 | Release build of `7b60e84` ran through `DONE` in disposable fixtures. Verified upstream fast-forward and local runtime capture in one run, then completion and both provider statuses in a fresh run. After the history compatibility fix, a disposable clone of `aec-data-backup-test` at `722dbda` completed through `DONE` using a repository-derived Codex runtime. Codex instructions and config reported `in_sync`, and the authored instructions and ChatGPT backups were preserved. Actual runtime copies are pending. The macOS ARM64 Native AOT smoke passed locally with both synthetic providers through Preserve and DONE. The local build used cached packages after advisory feeds were unreachable. Linux ARM64 migration smoke is implemented and passed shell syntax checking. Linux native runner verification and Windows migration coverage are pending. |
 | 14 | Provider-first CLI contract | Deferred to v3 | [#3](https://github.com/ferrywlto/ai-env-as-code/issues/3) |
 | 15 | Provider-first installer/skills/docs alignment | Deferred to v3 | [#3](https://github.com/ferrywlto/ai-env-as-code/issues/3) |
 | 16 | Two-checkout Git round trip | Reviewed | [3d4f8e0](https://github.com/ferrywlto/ai-env-as-code/commit/3d4f8e0) |
