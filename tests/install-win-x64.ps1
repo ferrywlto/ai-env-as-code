@@ -67,11 +67,11 @@ Assert (Test-Path -LiteralPath $sourceArtifact -PathType Leaf) 'Native AOT artif
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('aec-win-installer-' + [guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $testRoot
 $originalLocalAppData = $env:LOCALAPPDATA
-$gitIdentityNames = @('GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL',
-    'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM')
-$originalGitIdentity = @{}
-foreach ($name in $gitIdentityNames) {
-    $originalGitIdentity[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+$testEnvironmentNames = @('GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL',
+    'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'CODEX_HOME', 'COPILOT_HOME')
+$originalTestEnvironment = @{}
+foreach ($name in $testEnvironmentNames) {
+    $originalTestEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 try {
     $sourceRoot = Join-Path $testRoot 'source'
@@ -364,11 +364,56 @@ try {
     Assert (-not (Test-Path -LiteralPath $conflictTarget)) 'conflicting install wrote a binary'
     Assert ([System.IO.File]::ReadAllText($personalHelper) -ceq 'personal script') 'personal script changed'
 
-    Write-Output 'Windows installer, AEC lifecycle, and render smoke passed'
+    # Use the earlier installed binary and a separate legacy migration fixture.
+    & {
+        $customTarget = $defaultTarget
+        $dataRepo = Join-Path $testRoot 'migration-data'
+        $remote = Join-Path $testRoot 'migration-remote.git'
+        $codexHome = Join-Path $testRoot 'migration-codex'
+        $copilotHome = Join-Path $testRoot 'migration-copilot'
+        $env:CODEX_HOME = $codexHome
+        $env:COPILOT_HOME = $copilotHome
+        $null = New-Item -ItemType Directory -Path $codexHome, $copilotHome
+        [System.IO.File]::WriteAllText((Join-Path $codexHome 'AGENTS.md'), "Codex migration fixture.`n", $utf8NoBom)
+        [System.IO.File]::WriteAllText((Join-Path $codexHome 'config.toml'), "personality = `"friendly`"`n", $utf8NoBom)
+        [System.IO.File]::WriteAllText((Join-Path $copilotHome 'copilot-instructions.md'), "Copilot migration fixture.`n", $utf8NoBom)
+        Invoke-Provider codex init | Out-Null
+        Invoke-Provider copilot init | Out-Null
+        Invoke-TestGit add -- 'environment/providers/copilot/copilot-instructions.md' | Out-Null
+        Invoke-TestGit commit -qm 'Record migration Copilot baseline' | Out-Null
+        Invoke-TestGit init --bare --quiet --initial-branch=main $remote | Out-Null
+        Invoke-TestGit remote add shared $remote | Out-Null
+        Invoke-TestGit push --quiet --set-upstream shared main | Out-Null
+        $migrationBase = Invoke-TestGit rev-parse HEAD
+
+        $sharedSource = Join-Path $dataRepo 'environment/shared/instructions.md'
+        $null = New-Item -ItemType Directory -Path (Split-Path -Parent $sharedSource)
+        [System.IO.File]::WriteAllText($sharedSource, "Preserved migration draft.`n", $utf8NoBom)
+        $draftHash = Get-TestHash $sharedSource
+        $migrationOutput = @('Preserve', 'DONE') | & $customTarget migrate 2.0 --repo $dataRepo
+        Assert ($LASTEXITCODE -eq 0) 'migration failed'
+        Assert (($migrationOutput -join "`n").Contains('type exactly DONE')) 'migration did not prompt for DONE'
+        Assert (($migrationOutput -join "`n").Contains('Migration completed at ')) 'migration did not report completion'
+
+        Assert ((Get-TestHash $sharedSource) -ceq $draftHash) 'migration changed the preserved draft'
+        Assert-Output @(Invoke-TestGit show HEAD:.aec-version) @('2.0') 'migration marker version differed'
+        $marker = Join-Path $dataRepo '.aec-version'
+        $expectedMarker = Join-Path $testRoot 'migration-marker-expected'
+        [System.IO.File]::WriteAllText($expectedMarker, "2.0`n", $utf8NoBom)
+        Assert ((Get-TestHash $marker) -ceq (Get-TestHash $expectedMarker)) 'migration marker bytes differed'
+        Assert-Output @(Invoke-TestGit diff-tree --no-commit-id --name-only -r HEAD) @('.aec-version') 'migration completion commit included unexpected paths'
+        Assert (@(Invoke-TestGit status --porcelain).Count -eq 0) 'migration left repository changes'
+        $remoteTip = & git "--git-dir=$remote" rev-parse HEAD
+        Assert ($LASTEXITCODE -eq 0 -and $remoteTip -ceq $migrationBase) 'migration changed the remote tip'
+        Assert-Output @(Invoke-Provider codex status) @('codex/AGENTS.md   in_sync', 'codex/config.toml in_sync') 'Codex migration status differed'
+        Assert-Output @(Invoke-Provider copilot status) @('copilot/copilot-instructions.md in_sync') 'Copilot migration status differed'
+    }
+
+    Write-Output 'Windows installer, AEC lifecycle, render, and migration smoke passed'
 } finally {
     $env:LOCALAPPDATA = $originalLocalAppData
-    foreach ($name in $gitIdentityNames) {
-        [Environment]::SetEnvironmentVariable($name, $originalGitIdentity[$name], 'Process')
+    foreach ($name in $testEnvironmentNames) {
+        [Environment]::SetEnvironmentVariable($name, $originalTestEnvironment[$name], 'Process')
     }
     Remove-Item -LiteralPath $testRoot -Recurse -Force
 }
