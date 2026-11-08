@@ -5,7 +5,7 @@
 [Ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2) is Active / Next. The current deliverable is a stable
 2.0 release; old alpha wording does not reduce the acceptance gates.
 Current reviewed engine checkpoint: macOS ARM64 Native AOT migration smoke (`8599e59`).
-Ticket #2 remains Active, DoD 14/27 (52%).
+Ticket #2 remains Active, DoD 16/27 (59%).
 
 | Current item | State / immediate next action |
 | --- | --- |
@@ -22,7 +22,8 @@ Ticket #2 remains Active, DoD 14/27 (52%).
 | 13e.17: capture to scaffold handoff | Reviewed. The coordinator passes the captured checkout to the existing scaffold preview and writer. Release build passed with zero warnings or errors. All 14 focused tests passed. |
 | 13e.18: editing to completion handoff | Reviewed. Exact `DONE` starts fresh validation and completion. EOF or cancellation leaves the scaffold available for editing. Release build passed with zero warnings or errors. All 16 focused tests passed. |
 | Completed boundary | Source/target commits, apply preview, both provider writers, enrolled-provider apply coordination and post-apply status verification are reviewed. |
-| Current slice | Windows x64 native migration smoke is reviewed. PowerShell and native runner verification are pending. Linux ARM64 native runner verification is also pending. |
+| Native migration smoke | macOS ARM64 passed locally at `8599e59`. Linux ARM64 (`f3fde4e`) and Windows x64 (`80a2466`) are reviewed and await native runs. |
+| Current slice | C6 fresh-start verification passed locally and was reviewed. Three public-command fixtures covered EOF, invalid edited sources, and an uncommitted completion marker. |
 
 Evidence: [initial diagnostics](artifacts/migration-apply-preview-20261101/mutation-diagnostic/),
 [command traces](artifacts/migration-apply-preview-20261101/trace2-permitted/),
@@ -42,8 +43,8 @@ See [reference](docs/reference.md), [architecture](docs/architecture.md) and
 
 ## DoD completion metric
 
-**52% — 14/27 acceptance checks complete**, baseline v1 (1 November 2026).
-C5 and C7 added on 4 November 2026, up from 12/27 (44%). The authoritative checks
+**59% — 16/27 acceptance checks complete**, baseline v1 (1 November 2026).
+C6 added after review of fresh-start recovery fixtures, up from 15/27 (56%). The authoritative checks
 (A1–I2) are in [ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2#definition-of-done).
 This is accepted-outcome progress, not effort, ETA or release readiness.
 Reviewed slices provide evidence; they are not the denominator.
@@ -59,10 +60,10 @@ Final review and approved release delivery remain required for 100%.
 
 ## Remaining 2.0 acceptance gates
 
-- [ ] Verify safe fresh-start failure and retry behavior for the integrated command (C6).
+- [x] Review fresh-start failure and retry fixtures (C6).
 - [ ] Rehearse with approved actual runtime copies (D2) and complete Linux ARM64 and Windows x64 native migration coverage (E4).
 - [ ] Keep help, bundled skills, installers/uninstallers, README/reference and version/release metadata accurate for the implemented 2.0 behaviour.
-- [ ] Review the Linux ARM64 runner result; retain required macOS ARM64/Windows x64/Linux ARM64 test and Native AOT gates. Historical runner success does not cover unfinished migration changes.
+- [x] Review the historical Linux ARM64 focused and Native AOT run (E3).
 - [ ] Verify actual Codex **and** GitHub Copilot on macOS. Record OS/architecture, harness versions, AEC commit, approved environment, tested paths, expected/observed results and limitations separately.
 - [ ] Finish the approved mechanical identifier-constants cleanup, preserving exact public values and an independent literal-value contract test.
 - [ ] Run full Debug/Release regression and the required verification matrix, obtain Ferry's final release review, then tag the approved stable 2.0 release.
@@ -144,7 +145,7 @@ Detailed prior results/approvals are linked, not repeated here.
 | 16 | Two-checkout Git round trip | Reviewed | [3d4f8e0](https://github.com/ferrywlto/ai-env-as-code/commit/3d4f8e0) |
 | 17 | macOS ARM64 native lifecycle | Reviewed | [checkpoint](https://github.com/ferrywlto/ai-env-as-code/commit/db3ea38) |
 | 18 | Windows x64 native lifecycle | Reviewed | [runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40201089188) |
-| 19 | Linux ARM64 native lifecycle | Run passed; review pending | [runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40218058322) |
+| 19 | Linux ARM64 native lifecycle | Passed and reviewed (E3) | [runner at `85fbd192`](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40218058322) |
 | 19a | Mechanical identifier-constant cleanup | Open | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
 | 20 | Stable release acceptance | Open | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
 
