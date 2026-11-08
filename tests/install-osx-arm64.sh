@@ -66,6 +66,15 @@ generated_uninstaller="$source_root/scripts/uninstall-aec.sh"
 default_target="$test_root/home/.local/bin/aec"
 default_dir=$(dirname "$default_target")
 
+mkdir "$test_root/real-install-parent"
+ln -s "$test_root/real-install-parent" "$test_root/linked-install-parent"
+if "$installer" --install-dir "$test_root/linked-install-parent/bin" >"$test_root/linked-install-output" 2>"$test_root/linked-install-error"; then
+    fail "installer accepted a linked install-directory ancestor"
+fi
+grep -F 'install directory path cannot contain a symbolic link' "$test_root/linked-install-error" >/dev/null
+assert_empty "$test_root/real-install-parent/bin"
+assert_empty "$generated_uninstaller"
+
 "$installer" --install-dir "$default_dir" >"$test_root/initial-output"
 printf 'installed %s\ninstalled %s\n' "$default_target" "$generated_uninstaller" >"$test_root/initial-expected"
 assert_output "$test_root/initial-expected" "$test_root/initial-output"
@@ -354,7 +363,7 @@ assert_file_equals "$test_root/data-before-real-uninstall" "$test_root/data-afte
 
 # A small fake binary makes the generated script's all-or-nothing cleanup testable
 # without changing the actual personal Codex environment.
-fake_source="$test_root/fake-source"
+fake_source="$test_root/fake's source"
 fake_artifact="$test_root/fake-aec"
 mkdir -p "$fake_source/scripts" "$fake_source/artifacts/aec-osx-arm64"
 cp "$source_installer" "$fake_source/scripts/install-osx-arm64.sh"
@@ -375,6 +384,49 @@ mkdir -p "$fake_codex_home"
 printf 'runtime config remains owned by aec\n' >"$fake_codex_home/config.toml"
 data_sentinel="$test_root/data-repository-sentinel"
 printf 'canonical data remains untouched\n' >"$data_sentinel"
+
+copied_uninstaller="$test_root/copied-uninstaller.sh"
+cp "$fake_uninstaller" "$copied_uninstaller"
+if AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$copied_uninstaller" >"$test_root/copy-output" 2>"$test_root/copy-error"; then
+    fail "generated uninstaller ran from a copied path"
+fi
+grep -F 'run the uninstaller from its generated path' "$test_root/copy-error" >/dev/null
+assert_empty "$test_root/fake-args"
+[ -x "$fake_target" ] || fail "copied helper removed the binary"
+[ -x "$fake_uninstaller" ] || fail "copied helper removed the generated helper"
+
+ln -s "$fake_source/scripts" "$test_root/linked-helper-parent"
+linked_uninstaller="$test_root/linked-helper-parent/uninstall-aec.sh"
+if AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$linked_uninstaller" >"$test_root/helper-link-output" 2>"$test_root/helper-link-error"; then
+    fail "generated uninstaller ran through a linked helper ancestor"
+fi
+grep -F 'uninstaller or executable path cannot contain a symbolic link' "$test_root/helper-link-error" >/dev/null
+assert_empty "$test_root/fake-args"
+[ -x "$fake_target" ] || fail "linked helper ancestor removed the binary"
+[ -x "$fake_uninstaller" ] || fail "linked helper ancestor removed the generated helper"
+
+mv "$fake_target_dir" "$test_root/moved-fake-bin"
+ln -s "$test_root/moved-fake-bin" "$fake_target_dir"
+if AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$fake_uninstaller" >"$test_root/link-output" 2>"$test_root/link-error"; then
+    fail "generated uninstaller used a linked install-directory ancestor"
+fi
+grep -F 'uninstaller or executable path cannot contain a symbolic link' "$test_root/link-error" >/dev/null
+assert_empty "$test_root/fake-args"
+[ -x "$fake_target" ] || fail "linked install directory lost the binary"
+[ -x "$fake_uninstaller" ] || fail "linked install directory lost the helper"
+rm "$fake_target_dir"
+mv "$test_root/moved-fake-bin" "$fake_target_dir"
+
+printf '%s\n' '# changed executable bytes' >>"$fake_target"
+if AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$fake_uninstaller" >"$test_root/digest-output" 2>"$test_root/digest-error"; then
+    fail "generated uninstaller accepted a replaced executable"
+fi
+grep -F 'installed aec executable differs from the installed artifact' "$test_root/digest-error" >/dev/null
+assert_empty "$test_root/fake-args"
+[ -x "$fake_target" ] || fail "digest refusal removed the executable"
+[ -x "$fake_uninstaller" ] || fail "digest refusal removed the helper"
+"$fake_source/scripts/install-osx-arm64.sh" --install-dir "$fake_target_dir" >"$test_root/fake-repair-output"
+assert_file_equals "$fake_artifact" "$fake_target"
 
 if "$fake_uninstaller" --codex-home relative >"$test_root/invalid-output" 2>"$test_root/invalid-error"; then
     fail "generated uninstaller accepted a relative --codex-home"

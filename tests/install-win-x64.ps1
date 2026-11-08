@@ -324,6 +324,31 @@ try {
     }
     $copilotSkillHash = Get-TestHash $copilotSkill
 
+    # A junction can redirect the original path to the exact installed bytes.
+    # The digest alone would allow cleanup of this valid runtime and executable.
+    $installParent = Split-Path -Parent $customDir
+    $movedInstallParent = Join-Path $testRoot 'moved custom install'
+    Move-Item -LiteralPath $installParent -Destination $movedInstallParent
+    try {
+        $null = New-Item -ItemType Junction -Path $installParent -Target $movedInstallParent
+        $linkError = $null
+        try {
+            & $uninstaller -CodexHome $codexHome | Out-Null
+        } catch {
+            $linkError = $_
+        }
+        Assert ($null -ne $linkError -and $linkError.Exception.Message.Contains('Uninstall path contains a linked')) 'linked install ancestor was not refused'
+        Assert ((Get-TestHash $customTarget) -ceq $expectedHash) 'linked ancestor cleanup changed the installed binary'
+        Assert ((Get-TestHash $runtimeAgents) -ceq $codexRuntimeHash) 'linked ancestor cleanup changed Codex instructions'
+        Assert (Test-Path -LiteralPath $skill -PathType Leaf) 'linked ancestor cleanup removed the skill'
+        Assert (Test-Path -LiteralPath $uninstaller -PathType Leaf) 'linked ancestor cleanup removed the helper'
+    } finally {
+        if (Test-Path -LiteralPath $installParent) {
+            [System.IO.Directory]::Delete($installParent)
+        }
+        Move-Item -LiteralPath $movedInstallParent -Destination $installParent
+    }
+
     & $uninstaller -CodexHome $codexHome | Out-Null
     Assert (-not (Test-Path -LiteralPath $customTarget)) 'uninstall left custom binary'
     Assert (-not (Test-Path -LiteralPath $uninstaller)) 'uninstall left helper'

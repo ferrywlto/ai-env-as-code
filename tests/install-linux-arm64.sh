@@ -78,6 +78,18 @@ if "$copied_uninstaller" --codex-home "$test_root/missing-home" >/dev/null 2>&1;
 fi
 [ -x "$custom_target" ] || fail "copied helper removed the executable"
 
+# A moved install directory must not let a symlink redirect cleanup to a copy.
+moved_dir="$test_root/moved-custom-bin"
+mv "$custom_dir" "$moved_dir"
+ln -s "$moved_dir" "$custom_dir"
+if "$uninstaller" --codex-home "$test_root/missing-home" >"$test_root/link-output" 2>"$test_root/link-error"; then
+  fail "uninstaller accepted a linked install-directory ancestor"
+fi
+grep -F 'path contains a symbolic link' "$test_root/link-error" >/dev/null || fail "linked ancestor was not reported"
+[ -x "$moved_dir/aec" ] || fail "linked ancestor cleanup removed the executable"
+rm "$custom_dir"
+mv "$moved_dir" "$custom_dir"
+
 if "$uninstaller" --codex-home relative >/dev/null 2>&1; then
   fail "relative Codex home was accepted"
 fi
