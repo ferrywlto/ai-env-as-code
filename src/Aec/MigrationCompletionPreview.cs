@@ -31,7 +31,7 @@ internal sealed record MigrationCompletionPreview(
                 Path.GetFileName(harness.RuntimePath);
             protectedFiles.Add(Path.Combine(repository, relative),
                 MigrationLegacyCapturePreview.ReadHistoricalFile(repository, current.Preflight.Commit, relative));
-            if (harness.Provider == "codex")
+            if (harness.Provider == AecIdentifiers.Codex)
             {
                 var config = AecApplication.ConfigSourceRelativePath;
                 protectedFiles[Path.Combine(repository, config)] =

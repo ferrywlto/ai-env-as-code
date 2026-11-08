@@ -42,7 +42,7 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
         };
         foreach (var harness in harnesses)
         {
-            if (harness.Provider is not ("codex" or "copilot"))
+            if (harness.Provider is not (AecIdentifiers.Codex or AecIdentifiers.Copilot))
             {
                 throw new ArgumentException($"Unsupported migration provider: {harness.Provider}");
             }

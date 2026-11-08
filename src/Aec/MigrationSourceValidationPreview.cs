@@ -160,7 +160,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
         foreach (var harness in expected.Harnesses)
         {
             files.Add(harness.RuntimePath, ReadFile(harness.RuntimePath));
-            if (harness.Provider == "codex")
+            if (harness.Provider == AecIdentifiers.Codex)
             {
                 var path = Path.Combine(harness.Home, "config.toml");
                 files.Add(path, ReadFile(path));

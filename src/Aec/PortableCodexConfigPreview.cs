@@ -12,7 +12,7 @@ internal sealed record PortableCodexConfigPreview(
 {
     public static PortableCodexConfigPreview Create(PortableRuntimeSnapshot snapshot)
     {
-        if (snapshot.Provider != "codex")
+        if (snapshot.Provider != AecIdentifiers.Codex)
         {
             throw new ArgumentException("Codex config requires a Codex runtime snapshot.");
         }

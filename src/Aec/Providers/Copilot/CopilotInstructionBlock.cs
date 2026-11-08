@@ -256,7 +256,7 @@ internal static class CopilotInstructionBlock
         if (version is PortableVersion or StampedPortableVersion)
         {
             var target = Path.Combine(repository, "environment", "targets", platform!,
-                "copilot", "copilot-instructions.md");
+                AecIdentifiers.Copilot, "copilot-instructions.md");
             return StrictUtf8.GetBytes(string.Join(newLine,
             [
                 version == PortableVersion ? PortableBeginMarkerText : StampedBeginMarkerText,
@@ -373,7 +373,7 @@ internal static class CopilotInstructionBlock
 
     private static string ValidatePlatform(string platform) => platform switch
     {
-        "macos-arm64" or "windows-x64" or "linux-arm64" => platform,
+        AecIdentifiers.MacOsArm64 or AecIdentifiers.WindowsX64 or AecIdentifiers.LinuxArm64 => platform,
         _ => throw new ArgumentException($"Unsupported AEC platform: {platform}")
     };
 

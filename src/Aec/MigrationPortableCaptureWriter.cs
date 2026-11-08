@@ -23,10 +23,10 @@ internal static class MigrationPortableCaptureWriter
         var runtimes = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         foreach (var harness in fresh.Preparation.Harnesses)
         {
-            var previewRuntime = harness.Provider == "codex"
+            var previewRuntime = harness.Provider == AecIdentifiers.Codex
                 ? fresh.Codex?.Snapshot.Runtime : fresh.Copilot?.Snapshot.Runtime;
             runtimes.Add(harness.RuntimePath, previewRuntime ?? ReadRuntime(harness.RuntimePath));
-            if (harness.Provider == "codex")
+            if (harness.Provider == AecIdentifiers.Codex)
             {
                 var path = Path.Combine(harness.Home, "config.toml");
                 runtimes.Add(path, fresh.Codex?.RuntimeConfig ?? ReadRuntime(path));

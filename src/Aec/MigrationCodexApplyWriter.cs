@@ -8,18 +8,18 @@ internal static class MigrationCodexApplyWriter
         Action? afterConfigWriteForTests = null, Action? afterWriteForTests = null)
     {
         ArgumentNullException.ThrowIfNull(reviewed);
-        if (reviewed.Harness.Provider != "codex" || reviewed.Apply.Snapshot.Provider != "codex" ||
+        if (reviewed.Harness.Provider != AecIdentifiers.Codex || reviewed.Apply.Snapshot.Provider != AecIdentifiers.Codex ||
             reviewed.Apply.CodexConfig is null)
             throw new ArgumentException("A reviewed Codex migration apply preview is required.", nameof(reviewed));
 
-        var fresh = MigrationApplyPreview.Read(reviewed.Preparation, "codex");
+        var fresh = MigrationApplyPreview.Read(reviewed.Preparation, AecIdentifiers.Codex);
         MigrationApplyReview.Verify(reviewed, fresh);
         var config = fresh.Apply.CodexConfig!;
         var repository = fresh.Preparation.Preflight.Repository;
         var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
         var protectedFiles = MigrationSourceValidationPreview.ReadProtectedFiles(fresh.Preparation);
         var targetPath = Path.Combine(repository, "environment", "targets",
-            fresh.Apply.Snapshot.Platform, "codex", "AGENTS.md");
+            fresh.Apply.Snapshot.Platform, AecIdentifiers.Codex, "AGENTS.md");
         protectedFiles.Add(targetPath, fresh.Apply.Snapshot.Target);
 
         void VerifyState() => MigrationSourceValidationPreview.VerifyFinalState(

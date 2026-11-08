@@ -25,8 +25,8 @@ internal sealed record PortableRuntimeSnapshot(
 
         var fileName = provider switch
         {
-            "codex" => "AGENTS.md",
-            "copilot" => "copilot-instructions.md",
+            AecIdentifiers.Codex => "AGENTS.md",
+            AecIdentifiers.Copilot => "copilot-instructions.md",
             _ => throw new ArgumentException($"Unsupported provider: {provider}")
         };
 
@@ -58,10 +58,10 @@ internal sealed record PortableRuntimeSnapshot(
                 repository, platform, provider, runtimePath, commit, target, null, null);
         }
 
-        var codexBinding = provider == "codex"
+        var codexBinding = provider == AecIdentifiers.Codex
             ? AecInstructionBlock.ReadRepositoryBinding(runtime)
             : null;
-        var copilotBinding = provider == "copilot"
+        var copilotBinding = provider == AecIdentifiers.Copilot
             ? CopilotInstructionBlock.ReadManagedBinding(runtime)
             : null;
         var recordedRepository = codexBinding?.Repository ?? copilotBinding?.Repository;

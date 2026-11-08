@@ -31,8 +31,8 @@ internal sealed record PortableBackupAttributionPreview(
 
         var lastAppliedDigest = snapshot.Provider switch
         {
-            "codex" => AecInstructionBlock.ReadRepositoryBinding(snapshot.Runtime)?.TargetDigest,
-            "copilot" => CopilotInstructionBlock.ReadManagedBinding(snapshot.Runtime)?.TargetDigest,
+            AecIdentifiers.Codex => AecInstructionBlock.ReadRepositoryBinding(snapshot.Runtime)?.TargetDigest,
+            AecIdentifiers.Copilot => CopilotInstructionBlock.ReadManagedBinding(snapshot.Runtime)?.TargetDigest,
             _ => throw new ArgumentException($"Unsupported provider: {snapshot.Provider}")
         };
         if (lastAppliedDigest is null)

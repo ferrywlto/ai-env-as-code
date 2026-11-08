@@ -204,7 +204,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
         foreach (var harness in harnesses)
         {
             snapshots.Add(harness.RuntimePath, ReadFile(harness.RuntimePath));
-            if (harness.Provider == "codex")
+            if (harness.Provider == AecIdentifiers.Codex)
             {
                 var configPath = Path.Combine(harness.Home, "config.toml");
                 snapshots.Add(configPath, ReadFile(configPath));

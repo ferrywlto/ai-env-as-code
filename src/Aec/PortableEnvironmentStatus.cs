@@ -20,7 +20,7 @@ internal static class PortableEnvironmentStatus
                 ? "in_sync"
                 : "different";
 
-        if (provider == "copilot")
+        if (provider == AecIdentifiers.Copilot)
         {
             return new PortableStatusReport(instructions, null);
         }

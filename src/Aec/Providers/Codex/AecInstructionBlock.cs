@@ -342,7 +342,7 @@ internal static class AecInstructionBlock
             repository,
             "environment",
             "providers",
-            "codex",
+            AecIdentifiers.Codex,
             "AGENTS.md");
 
         return
@@ -395,7 +395,7 @@ internal static class AecInstructionBlock
         string? targetDigest = null)
     {
         var target = Path.Combine(repository, "environment", "targets", platform,
-            "codex", "AGENTS.md");
+            AecIdentifiers.Codex, "AGENTS.md");
         return
         [
             targetDigest is null
@@ -455,7 +455,7 @@ internal static class AecInstructionBlock
             repository,
             "environment",
             "providers",
-            "chatgpt");
+            AecIdentifiers.ChatGpt);
         if (!Path.EndsInDirectorySeparator(providerDirectory))
         {
             providerDirectory += Path.DirectorySeparatorChar;
@@ -490,7 +490,7 @@ internal static class AecInstructionBlock
 
     private static string ValidatePlatform(string platform) => platform switch
     {
-        "macos-arm64" or "windows-x64" or "linux-arm64" => platform,
+        AecIdentifiers.MacOsArm64 or AecIdentifiers.WindowsX64 or AecIdentifiers.LinuxArm64 => platform,
         _ => throw new ArgumentException($"Unsupported AEC platform: {platform}")
     };
 

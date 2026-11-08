@@ -25,7 +25,7 @@ internal static class MigrationStatusGate
             // or an independently edited working target.
             protectedFiles.Add(Path.Combine(repository, relative),
                 MigrationLegacyCapturePreview.ReadHistoricalFile(repository, current.Preflight.Commit, relative));
-            if (harness.Provider == "codex")
+            if (harness.Provider == AecIdentifiers.Codex)
             {
                 var configPath = AecApplication.ConfigSourceRelativePath;
                 protectedFiles[Path.Combine(repository, configPath)] =

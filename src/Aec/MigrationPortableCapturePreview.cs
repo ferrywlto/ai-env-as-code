@@ -22,12 +22,12 @@ internal sealed record MigrationPortableCapturePreview(MigrationPreparation Prep
         foreach (var harness in preparation.Harnesses)
         {
             var bytes = runtimes[harness.Provider];
-            var platform = harness.Provider == "codex"
+            var platform = harness.Provider == AecIdentifiers.Codex
                 ? AecInstructionBlock.ReadRepositoryBinding(bytes)?.Platform
                 : CopilotInstructionBlock.ReadManagedBinding(bytes)?.Platform;
             if (platform is null) continue;
 
-            if (harness.Provider == "codex")
+            if (harness.Provider == AecIdentifiers.Codex)
             {
                 codex = PortableCodexBackupPreview.Create(repository, harness.Home);
                 ValidateSnapshot(codex.Snapshot);

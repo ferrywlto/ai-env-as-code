@@ -33,8 +33,8 @@ internal static class RenderCommand
             var provider = Path.GetFileName(providerDirectory);
             var fileName = provider switch
             {
-                "codex" => "AGENTS.md",
-                "copilot" => "copilot-instructions.md",
+                AecIdentifiers.Codex => "AGENTS.md",
+                AecIdentifiers.Copilot => "copilot-instructions.md",
                 _ => throw new InvalidDataException($"Unsupported enrolled provider: {provider}")
             };
 
@@ -105,9 +105,9 @@ internal static class RenderCommand
             RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
             RuntimeInformation.ProcessArchitecture) switch
         {
-            (true, false, Architecture.Arm64) => "macos-arm64",
-            (false, true, Architecture.X64) => "windows-x64",
-            (false, false, Architecture.Arm64) when OperatingSystem.IsLinux() => "linux-arm64",
+            (true, false, Architecture.Arm64) => AecIdentifiers.MacOsArm64,
+            (false, true, Architecture.X64) => AecIdentifiers.WindowsX64,
+            (false, false, Architecture.Arm64) when OperatingSystem.IsLinux() => AecIdentifiers.LinuxArm64,
             _ => throw new PlatformNotSupportedException(
                 "Shared-instruction rendering is not available on this platform.")
         };

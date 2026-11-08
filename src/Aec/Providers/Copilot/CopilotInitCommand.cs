@@ -29,7 +29,7 @@ internal static class CopilotInitCommand
         if (head.ExitCode == 0)
         {
             var commit = head.Output.Trim();
-            if (CommittedTargetValidator.IsEnrolled(repository, commit, platform, "copilot"))
+            if (CommittedTargetValidator.IsEnrolled(repository, commit, platform, AecIdentifiers.Copilot))
             {
                 return AttachEnrolledRepository(
                     repository, copilotHome, forcePathChange, commit, platform, output);
@@ -146,7 +146,7 @@ internal static class CopilotInitCommand
         var canonicalBinding = CopilotInstructionBlock.ReadManagedBinding(canonical)
             ?? throw new InvalidDataException(
                 "Canonical Copilot instructions do not contain a supported managed AEC block.");
-        var target = CommittedTargetValidator.Read(repository, platform, "copilot");
+        var target = CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Copilot);
         var runtimePath = Path.Combine(copilotHome, "copilot-instructions.md");
         var runtime = AecApplication.ReadOptionalTextFile(
             runtimePath, "Copilot runtime instructions");
@@ -218,7 +218,7 @@ internal static class CopilotInitCommand
             !ApplyCommand.ReadCommittedFile(
                 repository, commit, AecApplication.CopilotSourceRelativePath,
                 "Canonical Copilot instructions").AsSpan().SequenceEqual(canonical) ||
-            !CommittedTargetValidator.Read(repository, platform, "copilot")
+            !CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Copilot)
                 .AsSpan().SequenceEqual(target))
         {
             throw new InvalidOperationException(

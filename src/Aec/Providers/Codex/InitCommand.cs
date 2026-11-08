@@ -41,7 +41,7 @@ internal static class InitCommand
 
             var platform = RenderCommand.CurrentPlatform();
             if (CommittedTargetValidator.IsEnrolled(
-                    directoryPath, completed.Commit, platform, "codex"))
+                    directoryPath, completed.Commit, platform, AecIdentifiers.Codex))
             {
                 return AttachEnrolledRepository(
                     directoryPath,
@@ -325,7 +325,7 @@ internal static class InitCommand
         TextWriter output,
         TextWriter warning)
     {
-        var target = CommittedTargetValidator.Read(repository, platform, "codex");
+        var target = CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Codex);
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
         var runtimeBinding = runtime is null
             ? null
@@ -430,7 +430,7 @@ internal static class InitCommand
     {
         if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
                 StringComparison.Ordinal) ||
-            !CommittedTargetValidator.Read(repository, platform, "codex")
+            !CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Codex)
                 .AsSpan().SequenceEqual(expectedTarget) ||
             !ApplyCommand.ReadCommittedConfig(repository, completed.Commit)
                 .AsSpan().SequenceEqual(completed.Config))
@@ -1233,14 +1233,14 @@ internal static class InitCommand
             .Select(Path.GetFileName)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        if (!providerEntries.SequenceEqual(["codex"], StringComparer.Ordinal) &&
-            !providerEntries.SequenceEqual(["chatgpt", "codex"], StringComparer.Ordinal))
+        if (!providerEntries.SequenceEqual([AecIdentifiers.Codex], StringComparer.Ordinal) &&
+            !providerEntries.SequenceEqual([AecIdentifiers.ChatGpt, AecIdentifiers.Codex], StringComparer.Ordinal))
         {
             throw new InvalidOperationException(
                 $"Initialization baseline has unexpected entries under: {providersDirectory}");
         }
 
-        var codexDirectory = Path.Combine(repository, "environment", "providers", "codex");
+        var codexDirectory = Path.Combine(repository, "environment", "providers", AecIdentifiers.Codex);
         var codexEntries = Directory
             .EnumerateFileSystemEntries(codexDirectory)
             .Select(Path.GetFileName)
@@ -1257,7 +1257,7 @@ internal static class InitCommand
 
         if (providerEntries.Length == 2)
         {
-            var chatGptDirectory = Path.Combine(providersDirectory, "chatgpt");
+            var chatGptDirectory = Path.Combine(providersDirectory, AecIdentifiers.ChatGpt);
             EnsureOnlyEntries(chatGptDirectory, ChatGptInitCommand.ScaffoldFileNames);
             foreach (var fileName in ChatGptInitCommand.ScaffoldFileNames)
             {

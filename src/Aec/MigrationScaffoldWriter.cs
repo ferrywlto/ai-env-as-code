@@ -313,7 +313,7 @@ internal static class MigrationScaffoldWriter
         foreach (var harness in fresh.Preparation.Harnesses)
         {
             files.Add(harness.RuntimePath, ReadFile(harness.RuntimePath));
-            if (harness.Provider == "codex")
+            if (harness.Provider == AecIdentifiers.Codex)
             {
                 var path = Path.Combine(harness.Home, "config.toml");
                 files.Add(path, ReadFile(path));

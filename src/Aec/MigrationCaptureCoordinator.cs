@@ -33,7 +33,7 @@ internal static class MigrationCaptureCoordinator
             // This preview normally skips legacy runtimes. Require every enrolled
             // provider here so a format change cannot silently narrow capture.
             if (preview.Branch != branch || preparation.Harnesses.Any(harness =>
-                harness.Provider == "codex" ? preview.Codex is null : preview.Copilot is null))
+                harness.Provider == AecIdentifiers.Codex ? preview.Codex is null : preview.Copilot is null))
             {
                 throw new InvalidOperationException("Migration branch or runtime format changed during capture routing; restart preparation.");
             }
@@ -64,7 +64,7 @@ internal static class MigrationCaptureCoordinator
     {
         AecApplication.EnsureNoLinksInExistingPath(harness.Home, "Runtime home path");
         var runtime = AecApplication.ReadRequiredTextFile(harness.RuntimePath, "Runtime instructions");
-        return harness.Provider == "codex"
+        return harness.Provider == AecIdentifiers.Codex
             ? AecInstructionBlock.ReadRepositoryBinding(runtime)?.Platform is not null
             : CopilotInstructionBlock.ReadManagedBinding(runtime)?.Platform is not null;
     }

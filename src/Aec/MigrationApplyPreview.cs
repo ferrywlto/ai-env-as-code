@@ -9,7 +9,7 @@ internal sealed record MigrationApplyPreview(MigrationPreparation Preparation,
     public static MigrationApplyPreview Read(MigrationPreparation preparation, string provider)
     {
         ArgumentNullException.ThrowIfNull(preparation);
-        if (provider is not ("codex" or "copilot"))
+        if (provider is not (AecIdentifiers.Codex or AecIdentifiers.Copilot))
             throw new ArgumentException($"Unsupported migration apply provider: {provider}.", nameof(provider));
 
         var sources = MigrationSourceValidationPreview.Read(preparation);

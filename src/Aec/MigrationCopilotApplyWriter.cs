@@ -7,17 +7,17 @@ internal static class MigrationCopilotApplyWriter
     public static string Apply(MigrationApplyPreview reviewed, Action? afterWriteForTests = null)
     {
         ArgumentNullException.ThrowIfNull(reviewed);
-        if (reviewed.Harness.Provider != "copilot" || reviewed.Apply.Snapshot.Provider != "copilot" ||
+        if (reviewed.Harness.Provider != AecIdentifiers.Copilot || reviewed.Apply.Snapshot.Provider != AecIdentifiers.Copilot ||
             reviewed.Apply.CodexConfig is not null)
             throw new InvalidOperationException("A reviewed Copilot migration apply preview is required.");
 
-        var fresh = MigrationApplyPreview.Read(reviewed.Preparation, "copilot");
+        var fresh = MigrationApplyPreview.Read(reviewed.Preparation, AecIdentifiers.Copilot);
         MigrationApplyReview.Verify(reviewed, fresh);
         var repository = fresh.Preparation.Preflight.Repository;
         var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
         var protectedFiles = MigrationSourceValidationPreview.ReadProtectedFiles(fresh.Preparation);
         var targetPath = Path.Combine(repository, "environment", "targets",
-            fresh.Apply.Snapshot.Platform, "copilot", "copilot-instructions.md");
+            fresh.Apply.Snapshot.Platform, AecIdentifiers.Copilot, "copilot-instructions.md");
         protectedFiles.Add(targetPath, fresh.Apply.Snapshot.Target);
 
         // History was checked at entry. Reuse the bounded mutable-state guard

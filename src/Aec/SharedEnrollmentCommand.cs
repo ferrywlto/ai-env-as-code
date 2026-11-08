@@ -17,8 +17,8 @@ internal static class SharedEnrollmentCommand
         var platform = RenderCommand.CurrentPlatform();
         var fileName = provider switch
         {
-            "codex" => "AGENTS.md",
-            "copilot" => "copilot-instructions.md",
+            AecIdentifiers.Codex => "AGENTS.md",
+            AecIdentifiers.Copilot => "copilot-instructions.md",
             _ => throw new ArgumentException($"Unsupported enrollment provider: {provider}")
         };
         var targetRelativePath = $"environment/targets/{platform}/{provider}/{fileName}";
@@ -62,7 +62,7 @@ internal static class SharedEnrollmentCommand
             throw new InvalidOperationException("Repository HEAD changed during enrollment preflight.");
         }
 
-        if (provider == "copilot")
+        if (provider == AecIdentifiers.Copilot)
         {
             var canonical = ApplyCommand.ReadCommittedFile(
                 repository,
@@ -125,7 +125,7 @@ internal static class SharedEnrollmentCommand
     private static void ValidateProviderRuntime(string repository, string provider, string runtimePath)
     {
         var runtime = AecApplication.ReadRequiredTextFile(runtimePath, "Provider runtime instructions");
-        var recordedRepository = provider == "codex"
+        var recordedRepository = provider == AecIdentifiers.Codex
             ? AecInstructionBlock.ReadRepositoryBinding(runtime)?.Repository
             : CopilotInstructionBlock.ReadRepositoryBinding(runtime);
         if (recordedRepository is null ||

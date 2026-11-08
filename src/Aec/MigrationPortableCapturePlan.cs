@@ -25,9 +25,9 @@ internal sealed class MigrationPortableCapturePlan
         _ = ObserveCommitted(AecApplication.ConfigSourceRelativePath);
         foreach (var harness in fresh.Preparation.Harnesses)
         {
-            var snapshot = harness.Provider == "codex" ? fresh.Codex?.Snapshot : fresh.Copilot?.Snapshot;
+            var snapshot = harness.Provider == AecIdentifiers.Codex ? fresh.Codex?.Snapshot : fresh.Copilot?.Snapshot;
             runtimes.Add(harness.RuntimePath, snapshot?.Runtime ?? ReadFile(harness.RuntimePath));
-            if (harness.Provider == "codex")
+            if (harness.Provider == AecIdentifiers.Codex)
             {
                 var path = Path.Combine(harness.Home, "config.toml");
                 runtimes.Add(path, fresh.Codex?.RuntimeConfig ?? ReadFile(path));

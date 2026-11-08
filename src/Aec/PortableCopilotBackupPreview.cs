@@ -9,7 +9,7 @@ internal sealed record PortableCopilotBackupPreview(
 {
     public static PortableCopilotBackupPreview Create(string repository, string copilotHome)
     {
-        var snapshot = PortableRuntimeSnapshot.Read(repository, "copilot", copilotHome);
+        var snapshot = PortableRuntimeSnapshot.Read(repository, AecIdentifiers.Copilot, copilotHome);
         var instructions = PortableBackupAttributionPreview.Create(snapshot);
         if (!string.Equals(snapshot.Commit, ApplyCommand.ResolveHeadCommit(snapshot.Repository),
                 StringComparison.Ordinal))

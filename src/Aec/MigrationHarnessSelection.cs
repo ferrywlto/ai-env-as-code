@@ -9,9 +9,9 @@ internal static class MigrationHarnessSelection
     public static IReadOnlyList<MigrationHarness> Read(MigrationPreflight preflight)
     {
         var selected = new List<MigrationHarness>();
-        foreach (var provider in new[] { "codex", "copilot" })
+        foreach (var provider in new[] { AecIdentifiers.Codex, AecIdentifiers.Copilot })
         {
-            var home = provider == "codex"
+            var home = provider == AecIdentifiers.Codex
                 ? AecApplication.ResolveCodexHome(null)
                 : AecApplication.ResolveCopilotHome(null);
             AecApplication.EnsureNoLinksInExistingPath(home, $"{provider} home path");
@@ -21,7 +21,7 @@ internal static class MigrationHarnessSelection
             }
 
             AecApplication.EnsureRealDirectory(home, $"{provider} home");
-            var fileName = provider == "codex" ? "AGENTS.md" : "copilot-instructions.md";
+            var fileName = provider == AecIdentifiers.Codex ? "AGENTS.md" : "copilot-instructions.md";
             ApplyCommand.EnsureRuntimeOutsideRepository(
                 preflight.Repository, home, fileName, $"{provider} runtime target");
             var runtimePath = Path.Combine(home, fileName);
@@ -32,8 +32,8 @@ internal static class MigrationHarnessSelection
                 continue;
             }
 
-            var codex = provider == "codex" ? AecInstructionBlock.ReadRepositoryBinding(runtime) : null;
-            var copilot = provider == "copilot" ? CopilotInstructionBlock.ReadManagedBinding(runtime) : null;
+            var codex = provider == AecIdentifiers.Codex ? AecInstructionBlock.ReadRepositoryBinding(runtime) : null;
+            var copilot = provider == AecIdentifiers.Copilot ? CopilotInstructionBlock.ReadManagedBinding(runtime) : null;
             var repository = codex?.Repository ?? copilot?.Repository;
             if (repository is null)
             {

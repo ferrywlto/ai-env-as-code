@@ -28,7 +28,7 @@ internal static class CommittedTargetValidator
         string platform,
         string provider)
     {
-        if (platform is not ("macos-arm64" or "windows-x64" or "linux-arm64"))
+        if (platform is not (AecIdentifiers.MacOsArm64 or AecIdentifiers.WindowsX64 or AecIdentifiers.LinuxArm64))
         {
             throw new ArgumentException($"Unsupported target platform: {platform}");
         }
@@ -82,8 +82,8 @@ internal static class CommittedTargetValidator
 
     private static string TargetFileName(string provider) => provider switch
     {
-        "codex" => "AGENTS.md",
-        "copilot" => "copilot-instructions.md",
+        AecIdentifiers.Codex => "AGENTS.md",
+        AecIdentifiers.Copilot => "copilot-instructions.md",
         _ => throw new ArgumentException($"Unsupported target provider: {provider}")
     };
 

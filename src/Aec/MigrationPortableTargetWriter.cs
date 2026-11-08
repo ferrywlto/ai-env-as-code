@@ -72,17 +72,17 @@ internal sealed class MigrationPortableTargetWriter
         }
 
         var platform = parts[2];
-        if (platform is not ("macos-arm64" or "windows-x64" or "linux-arm64"))
+        if (platform is not (AecIdentifiers.MacOsArm64 or AecIdentifiers.WindowsX64 or AecIdentifiers.LinuxArm64))
         {
             throw new InvalidDataException($"Unsupported committed target platform: {relativePath}");
         }
         var provider = parts[3];
-        if (provider is not ("codex" or "copilot"))
+        if (provider is not (AecIdentifiers.Codex or AecIdentifiers.Copilot))
         {
             throw new InvalidDataException($"Unsupported committed target provider: {relativePath}");
         }
 
-        var expectedFileName = provider == "codex" ? "AGENTS.md" : "copilot-instructions.md";
+        var expectedFileName = provider == AecIdentifiers.Codex ? "AGENTS.md" : "copilot-instructions.md";
         if (parts[4] != expectedFileName)
         {
             throw new InvalidDataException($"Unsupported committed target file name: {relativePath}");

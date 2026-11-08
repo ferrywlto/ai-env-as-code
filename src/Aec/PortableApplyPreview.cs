@@ -22,7 +22,7 @@ internal sealed record PortableApplyPreview(
         }
 
         var desired = RenderDesiredRuntime(snapshot);
-        var config = provider == "codex"
+        var config = provider == AecIdentifiers.Codex
             ? PortableCodexConfigPreview.Create(snapshot)
             : null;
         return new PortableApplyPreview(
@@ -36,12 +36,12 @@ internal sealed record PortableApplyPreview(
     internal static byte[] RenderDesiredRuntime(PortableRuntimeSnapshot snapshot) =>
         snapshot.Provider switch
         {
-            "codex" => AecInstructionBlock.MergeForPortableTarget(
+            AecIdentifiers.Codex => AecInstructionBlock.MergeForPortableTarget(
                 snapshot.Target,
                 snapshot.Repository,
                 snapshot.Platform,
                 AecInstructionBlock.IncludesChatGptGuidance(snapshot.BlockVersion)),
-            "copilot" => CopilotInstructionBlock.MergeForPortableTarget(
+            AecIdentifiers.Copilot => CopilotInstructionBlock.MergeForPortableTarget(
                 snapshot.Target,
                 snapshot.Repository,
                 snapshot.Platform),

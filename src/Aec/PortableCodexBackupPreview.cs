@@ -15,7 +15,7 @@ internal sealed record PortableCodexBackupPreview(
 
     public static PortableCodexBackupPreview Create(string repository, string codexHome)
     {
-        var snapshot = PortableRuntimeSnapshot.Read(repository, "codex", codexHome);
+        var snapshot = PortableRuntimeSnapshot.Read(repository, AecIdentifiers.Codex, codexHome);
         var instructions = PortableBackupAttributionPreview.Create(snapshot);
 
         var canonicalPath = Path.Combine(

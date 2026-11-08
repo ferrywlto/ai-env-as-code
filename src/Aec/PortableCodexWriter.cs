@@ -10,7 +10,7 @@ internal static class PortableCodexWriter
         Action? beforeInstructionWrite = null)
     {
         ArgumentNullException.ThrowIfNull(reviewed);
-        if (reviewed.Snapshot.Provider != "codex" || reviewed.CodexConfig is null)
+        if (reviewed.Snapshot.Provider != AecIdentifiers.Codex || reviewed.CodexConfig is null)
         {
             throw new ArgumentException("A reviewed Codex apply preview is required.");
         }
@@ -18,7 +18,7 @@ internal static class PortableCodexWriter
         var providerHome = Path.GetDirectoryName(reviewed.RuntimePath)
             ?? throw new InvalidOperationException("Codex runtime target has no parent directory.");
         var current = PortableApplyPreview.Create(
-            reviewed.Snapshot.Repository, "codex", providerHome);
+            reviewed.Snapshot.Repository, AecIdentifiers.Codex, providerHome);
         if (!MatchesReview(reviewed, current))
         {
             throw new InvalidOperationException(
@@ -65,7 +65,7 @@ internal static class PortableCodexWriter
                 afterConfigWriteForTests?.Invoke();
             }
             var afterConfig = PortableApplyPreview.Create(
-                current.Snapshot.Repository, "codex", providerHome);
+                current.Snapshot.Repository, AecIdentifiers.Codex, providerHome);
             if (!SameInstructionSnapshot(current.Snapshot, afterConfig.Snapshot) ||
                 !Same(config.Canonical, afterConfig.CodexConfig!.Canonical) ||
                 !Same(config.DesiredRuntime, afterConfig.CodexConfig.Runtime))
@@ -82,7 +82,7 @@ internal static class PortableCodexWriter
             }
 
             var final = PortableApplyPreview.Create(
-                current.Snapshot.Repository, "codex", providerHome);
+                current.Snapshot.Repository, AecIdentifiers.Codex, providerHome);
             if (!string.Equals(current.Snapshot.Commit, final.Snapshot.Commit,
                     StringComparison.Ordinal) ||
                 !Same(current.Snapshot.Target, final.Snapshot.Target) ||

@@ -42,7 +42,7 @@ internal static class PortableBackupCommitter
             throw new InvalidOperationException("Backup commit requires a reviewed runtime change.");
         }
 
-        if (codex is not null && reviewed.Provider != "codex")
+        if (codex is not null && reviewed.Provider != AecIdentifiers.Codex)
         {
             throw new InvalidOperationException("Codex backup commit requires a Codex snapshot.");
         }

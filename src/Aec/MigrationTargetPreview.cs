@@ -23,8 +23,8 @@ internal sealed record MigrationTargetPreview(MigrationPreparation Preparation,
         ArgumentNullException.ThrowIfNull(preparation);
         var fileName = provider switch
         {
-            "codex" => "AGENTS.md",
-            "copilot" => "copilot-instructions.md",
+            AecIdentifiers.Codex => "AGENTS.md",
+            AecIdentifiers.Copilot => "copilot-instructions.md",
             _ => throw new ArgumentException($"Unsupported migration target provider: {provider}.", nameof(provider))
         };
 
@@ -53,7 +53,7 @@ internal sealed record MigrationTargetPreview(MigrationPreparation Preparation,
             throw new InvalidOperationException($"Migration target differs from its committed baseline: {relative}.");
         protectedFiles.Add(path, working);
 
-        if (provider == "copilot")
+        if (provider == AecIdentifiers.Copilot)
         {
             var canonical = MigrationLegacyCapturePreview.ReadHistoricalFile(repository,
                 validated.Preparation.Preflight.Commit, AecApplication.CopilotSourceRelativePath);

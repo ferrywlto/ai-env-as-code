@@ -42,7 +42,7 @@ internal static class MigrationApplyCoordinator
             var provider = preview.Harness.Provider;
             try
             {
-                var result = provider == "codex"
+                var result = provider == AecIdentifiers.Codex
                     ? MigrationCodexApplyWriter.Apply(preview)
                     : MigrationCopilotApplyWriter.Apply(preview);
 
@@ -85,7 +85,7 @@ internal static class MigrationApplyCoordinator
         foreach (var preview in reviews)
         {
             var provider = preview.Harness.Provider;
-            if (provider is not ("codex" or "copilot"))
+            if (provider is not (AecIdentifiers.Codex or AecIdentifiers.Copilot))
                 throw new ArgumentException($"Unsupported migration apply provider: {provider}.", nameof(reviewed));
             if (!providers.Add(provider))
                 throw new ArgumentException($"Duplicate migration apply provider: {provider}.", nameof(reviewed));
@@ -95,7 +95,7 @@ internal static class MigrationApplyCoordinator
         // Check every review before the first write, in Codex then Copilot order.
         // Each writer will refresh again at its independently safe entry point.
         var fresh = new List<MigrationApplyPreview>();
-        foreach (var provider in new[] { "codex", "copilot" })
+        foreach (var provider in new[] { AecIdentifiers.Codex, AecIdentifiers.Copilot })
         {
             var preview = reviews.SingleOrDefault(item => item.Harness.Provider == provider);
             if (preview is null) continue;

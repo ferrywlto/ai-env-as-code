@@ -33,7 +33,7 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         var files = new List<MigrationLegacyCaptureFile>();
         foreach (var harness in preparation.Harnesses)
         {
-            var relative = harness.Provider == "codex"
+            var relative = harness.Provider == AecIdentifiers.Codex
                 ? AecApplication.SourceRelativePath : AecApplication.CopilotSourceRelativePath;
             var before = ReadHistoricalFile(repository, preparation.OriginalCommit, relative);
             var canonical = ReadCurrentFile(expected, relative);
@@ -47,7 +47,7 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
             files.Add(new MigrationLegacyCaptureFile(harness.Provider, relative, harness.RuntimePath,
                 canonical, runtime, matches ? canonical : runtime));
 
-            if (harness.Provider == "codex") files.Add(ReadPersonality(preparation, harness));
+            if (harness.Provider == AecIdentifiers.Codex) files.Add(ReadPersonality(preparation, harness));
         }
 
         // A later invalid input must never expose a partial set of proposals.
@@ -101,8 +101,8 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
 
     private static void ValidateLegacyInstructions(string provider, byte[] content, string label, string? localRepository = null)
     {
-        var codex = provider == "codex" ? AecInstructionBlock.ReadRepositoryBinding(content) : null;
-        var copilot = provider == "copilot" ? CopilotInstructionBlock.ReadManagedBinding(content) : null;
+        var codex = provider == AecIdentifiers.Codex ? AecInstructionBlock.ReadRepositoryBinding(content) : null;
+        var copilot = provider == AecIdentifiers.Copilot ? CopilotInstructionBlock.ReadManagedBinding(content) : null;
         var repository = codex?.Repository ?? copilot?.Repository
             ?? throw new InvalidDataException($"{label} contain no supported AEC binding.");
         if ((codex?.Platform ?? copilot?.Platform) is not null)

@@ -8,7 +8,7 @@ namespace Aec;
 internal static class PortableBackupTargetWriter
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-    private static readonly string[] Platforms = ["macos-arm64", "windows-x64", "linux-arm64"];
+    private static readonly string[] Platforms = [AecIdentifiers.MacOsArm64, AecIdentifiers.WindowsX64, AecIdentifiers.LinuxArm64];
 
     public static IReadOnlyList<string> Render(
         PortableRuntimeSnapshot reviewed,
@@ -67,8 +67,8 @@ internal static class PortableBackupTargetWriter
             var parts = path.TrimEnd('\r').Split('/');
             if (parts.Length != 5 || parts[0] != "environment" || parts[1] != "targets" ||
                 !Platforms.Contains(parts[2], StringComparer.Ordinal) ||
-                parts[3] is not ("codex" or "copilot") ||
-                parts[4] != (parts[3] == "codex" ? "AGENTS.md" : "copilot-instructions.md"))
+                parts[3] is not (AecIdentifiers.Codex or AecIdentifiers.Copilot) ||
+                parts[4] != (parts[3] == AecIdentifiers.Codex ? "AGENTS.md" : "copilot-instructions.md"))
             {
                 continue;
             }
