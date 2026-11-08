@@ -5,7 +5,7 @@
 [Ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2) is Active / Next. The current deliverable is a stable
 2.0 release; old alpha wording does not reduce the acceptance gates.
 Current reviewed engine checkpoint: macOS ARM64 Native AOT migration smoke (`8599e59`).
-Ticket #2 remains Active, DoD 17/27 (63%).
+Ticket #2 remains Active, DoD 18/27 (67%).
 
 | Current item | State / immediate next action |
 | --- | --- |
@@ -23,7 +23,7 @@ Ticket #2 remains Active, DoD 17/27 (63%).
 | 13e.18: editing to completion handoff | Reviewed. Exact `DONE` starts fresh validation and completion. EOF or cancellation leaves the scaffold available for editing. Release build passed with zero warnings or errors. All 16 focused tests passed. |
 | Completed boundary | Source/target commits, apply preview, both provider writers, enrolled-provider apply coordination and post-apply status verification are reviewed. |
 | Native migration smoke | macOS ARM64 passed locally at `8599e59`. Linux ARM64 (`f3fde4e`) and Windows x64 (`80a2466`) are reviewed and await native runs. |
-| Current slice | G1 provider and platform constants reviewed. Release build passed with zero warnings/errors, 77 focused tests passed, and reversing substitutions matched 37 source files byte-for-byte. |
+| Current slice | H1 CLI help, bundled skills, README and reference alignment reviewed. Release build passed with zero warnings/errors; 13 skill predecessor upgrade checks passed. |
 
 Evidence: [initial diagnostics](artifacts/migration-apply-preview-20261101/mutation-diagnostic/),
 [command traces](artifacts/migration-apply-preview-20261101/trace2-permitted/),
@@ -43,8 +43,8 @@ See [reference](docs/reference.md), [architecture](docs/architecture.md) and
 
 ## DoD completion metric
 
-**63% — 17/27 acceptance checks complete**, baseline v1 (1 November 2026).
-G1 added after review of the identifier cleanup, up from 16/27 (59%). The authoritative checks
+**67% — 18/27 acceptance checks complete**, baseline v1 (1 November 2026).
+H1 added after review of CLI help, skill, README and reference alignment, up from 17/27 (63%). The authoritative checks
 (A1–I2) are in [ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2#definition-of-done).
 This is accepted-outcome progress, not effort, ETA or release readiness.
 Reviewed slices provide evidence; they are not the denominator.
@@ -62,7 +62,8 @@ Final review and approved release delivery remain required for 100%.
 
 - [x] Review fresh-start failure and retry fixtures (C6).
 - [ ] Rehearse with approved actual runtime copies (D2) and complete Linux ARM64 and Windows x64 native migration coverage (E4).
-- [ ] Keep help, bundled skills, installers/uninstallers, README/reference and version/release metadata accurate for the implemented 2.0 behaviour.
+- [x] Review CLI help, bundled skills, README and reference alignment (H1).
+- [ ] Review installer/uninstaller alignment and version/release metadata (H2–H3).
 - [x] Review the historical Linux ARM64 focused and Native AOT run (E3).
 - [ ] Verify actual Codex **and** GitHub Copilot on macOS. Record OS/architecture, harness versions, AEC commit, approved environment, tested paths, expected/observed results and limitations separately.
 - [x] Review the mechanical identifier-constants cleanup and independent literal-value contract test (G1).

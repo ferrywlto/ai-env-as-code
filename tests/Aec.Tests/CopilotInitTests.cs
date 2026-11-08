@@ -217,6 +217,7 @@ public sealed class CopilotInitTests
     [InlineData("Copilot-1.4.0-alpha.1.md")]
     [InlineData("Copilot-1.4.0-alpha.4.md")]
     [InlineData("Copilot-1.4.0-alpha.5.md")]
+    [InlineData("Copilot-2.0.0-alpha.4-pre-migration.md")]
     public void UpgradesAnExactOfficialCopilotSkillDuringInit(string fixtureName)
     {
         using var layout = new CopilotLayout();

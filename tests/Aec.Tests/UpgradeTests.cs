@@ -14,6 +14,7 @@ public sealed class UpgradeTests
     [InlineData("1.0.0", "60754cc941dbfaf17042c4eb4093c9706ea0054c526001f096da2fc4a795aec9")]
     [InlineData("1.1.0", "af5dd269b6807429d4c6079bcc79340c2c10f2bac8e91f52383fd8d7b766581f")]
     [InlineData("1.2.3", "2924f13eb5d90cd088642533461de6f37fa99c73ce94ba95b395ae5f1cd7b535")]
+    [InlineData("2.0.0-alpha.4-pre-migration", "f7154226b4ebe5b21d07b88be4dac6e4c5028eefb746b19ba2bdde556933a5d2")]
     public void UpgradesEachExactSupportedOfficialPredecessor(
         string version,
         string expectedHash)

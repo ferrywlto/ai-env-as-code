@@ -3,9 +3,10 @@
 Version your AI environment, automatically.
 
 AEC is a local .NET CLI that keeps selected AI-harness instructions in an
-explicitly chosen Git data repository. Git history is the source of truth;
-AEC commands never fetch or push. The bundled skills can coordinate Git remote
-checks and an explicitly approved push without depending on GitHub or GitLab.
+explicitly chosen Git data repository. Git history is the source of truth.
+Ordinary AEC commands do not fetch or push. The explicit `migrate` command
+may fetch and fast-forward its tracked default branch. It never pushes.
+The bundled skills can coordinate Git remote checks and an explicitly approved push without depending on GitHub or GitLab.
 
 ## How it works today
 
@@ -71,10 +72,12 @@ environment/providers/<selected-provider>/overlay.md
 Then run `aec init --repo ABSOLUTE_PATH --enroll-shared` for Codex, or add
 `--provider=copilot` for Copilot. Review and separately commit the new target.
 This opt-in follows ordinary initialization; it does not deploy the target.
-For an existing 1.x data repository, follow the
-[reviewed migration sequence](docs/reference.md#migrating-an-existing-1x-repository-to-20)
-through enrollment, per-provider target commits, apply, and status before using
-the 2.0 directional commands.
+For an existing 1.x repository, the explicitly authorized
+`aec migrate 2.0 --repo ABSOLUTE_PATH` flow prepares the sources, waits for
+exact `DONE`, then commits targets, applies enrolled providers and verifies status.
+Close affected harness sessions and pause other writers throughout migration.
+Review the [migration reference](docs/reference.md#interactive-migration-command)
+and rehearse with disposable copies before live use.
 
 ## Start on Apple-silicon macOS
 
@@ -117,7 +120,7 @@ them; use the same `--repo` checkout for both harnesses yourself.
 
 | Local harness | macOS ARM64 | Windows x64 | Linux ARM64 |
 |---|---|---|---|
-| Codex | ✓ Real-harness verified | ⚠ Not real-harness verified | ⚠ Not real-harness verified |
+| Codex | ✓ Historical real-harness checkpoint | ⚠ Not real-harness verified | ⚠ Not real-harness verified |
 | GitHub Copilot | ⚠ Alpha; not real-harness verified | ⚠ Alpha; not real-harness verified | ⚠ Alpha; not real-harness verified |
 | Claude and Gemini | ⚠ Not implemented | ⚠ Not implemented | ⚠ Not implemented |
 
@@ -127,7 +130,7 @@ The tests provide narrower evidence than this harness matrix:
 |---|---|---|
 | xUnit | Local macOS ARM64 and manually dispatched OS runners | Command logic against disposable files and real temporary Git repositories on the host OS; not cross-platform emulation |
 | Native AOT smoke | Manually dispatched macOS, Windows, and Linux GitHub Actions OS runners | Built executable and isolated install/lifecycle flows on those operating systems; no container is declared |
-| Real harness | A machine with the actual harness installed | So far, only local Codex on macOS has been verified |
+| Real harness | A machine with the actual harness installed | Historical local Codex on macOS checkpoint; current 2.0 release acceptance remains open |
 
 The three manually dispatched workflows include focused composition, section,
 `render`, and enrollment xUnit tests. The [macOS ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570129)
@@ -136,7 +139,7 @@ runs passed. After a test-fixture cleanup fix, the
 [Windows x64 rerun](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36789513384)
 passed 41/41 focused tests, Native AOT build, and isolated smoke checks.
 All three OS-runner Native AOT smokes invoke `aec render` in isolated
-fixtures. Only local Codex on macOS has real-harness verification.
+fixtures. The historical local Codex on macOS checkpoint does not cover unfinished 2.0 release acceptance.
 
 ## Read more
 

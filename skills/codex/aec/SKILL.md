@@ -9,8 +9,8 @@ Require an explicitly selected absolute data-repository path for `--repo`;
 never infer it from the engine checkout, current directory, executable, or
 skill. Invoke `aec` directly. If it is missing just after installation or a
 `PATH` change, restart Codex and retry once. If still missing, stop; do not
-build or run the engine checkout as a fallback. Git transport is separate
-from the AEC commands below.
+build or run the engine checkout as a fallback. Git transport for ordinary commands is separate from AEC.
+The migration command has the bounded retrieval behavior described below.
 
 ## Inspect
 
@@ -26,7 +26,8 @@ choose. Never invent an automatic `sync` operation.
 
 ## Git remote preflight
 
-Only before an AEC canonical write (`init`, `backup`, `render`, or a manual edit)
+For ordinary commands, before an AEC canonical write (`init`, `backup`,
+`render`, or a manual edit)
 or runtime `apply`, inspect Git state and use `aec status` for an existing
 enrolled provider to identify local drift and confirm direction. Skip status
 for a new repository without a baseline. Do not run preflight on unrelated
@@ -44,8 +45,8 @@ fetch; different does not establish which is newer. If different, seek
 approval to fetch and, only when clean and strictly behind, fast-forward from
 that upstream. Stop on ahead/diverged/ambiguous state. An unreachable remote
 means freshness is unknown: stop. With no remote, permit approved local work
-but warn it is not shared. Never automatically pull, merge, rebase, or
-force-push.
+but warn it is not shared. Ordinary commands never automatically pull, merge,
+rebase, or force-push.
 
 After a canonical commit, obtain separate push approval. Resolve and show the
 push destination; ask if it differs from the fetch remote or is ambiguous.
@@ -53,6 +54,27 @@ Push only the current branch to an explicit destination and verify publication
 before routine remote-backed `apply`; stop if push fails. `backup`, `render`,
 and `init` do not themselves authorize pushing. Ordinary Codex `init` applies
 its local commits before an external push can be approved; report this exception.
+
+## Migrate a 1.x data repository
+
+Only with explicit authorization for repository commits, bounded retrieval,
+and runtime apply, run from a separate terminal after closing affected harness
+sessions and pausing other writers:
+
+```text
+aec migrate 2.0 --repo ABSOLUTE_PATH
+```
+
+Migration discovers enrolled local Codex and Copilot homes through
+`CODEX_HOME` and `COPILOT_HOME`, then their default home paths. Both selected
+providers may be affected. It requires a tracked default-branch remote and
+may fetch and fast-forward; it never pushes. Inspect the selection and preserve
+personal data before authorization. Do not run migration inside a harness
+being migrated. Use a plain editor to review and fill the prepared sources;
+do not infer their classification. Enter exactly `DONE` only when the user has
+reviewed them. EOF or cancellation stops before completion. Inspect retained
+commits, files, staging and runtime before starting a fresh invocation. A fresh
+invocation starts at preflight and may require a new Preserve/Overwrite choice.
 
 ## Shared instructions (2.0 development)
 

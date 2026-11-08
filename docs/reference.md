@@ -10,8 +10,8 @@ bundled skills. `aec render` and enrollment are repository-only. On the
 development branch, ordinary `apply` and `status` use committed portable
 targets. Both providers' `backup` commands now capture portable authored
 sources; ordinary `init` retains its provider-specific flow. These
-development changes are not yet a released binary. See the
-[approved design](shared-instructions-design.md). Copilot remains alpha
+development changes include the public migration command and are not yet a
+released binary. See the [approved design](shared-instructions-design.md). Copilot remains alpha
 and is not verified against the real harness on any platform.
 
 ## Glossary
@@ -103,9 +103,9 @@ flowchart TD
     Work -->|If remote-backed commit created| Push[Separately approved push and verification]
 ```
 
-The currently implemented CLI never fetches, pulls, or pushes. The
-[interactive migration](#interactive-migration-command)
-is a narrowly scoped future exception for fast-forward-only pull, never push.
+Ordinary commands do not fetch, pull, or push. The
+[interactive migration](#interactive-migration-command) performs bounded fetch
+and fast-forward retrieval, and does not push.
 The bundled skills run this
 preflight only before an AEC canonical write or runtime apply—not on every
 reply. They identify a cloned repository's remote through the current branch's
@@ -120,8 +120,8 @@ destination and ask if it differs from the fetch remote.
 
 For routine source-first instruction edits, publish an approved commit before
 `aec apply` so another machine can retrieve the same canonical version. Ordinary
-Codex `init` is a known exception: its fixed internal lifecycle commits and
-applies locally before a separately approved external push. `aec status` remains
+Codex `init` and explicit `migrate` commit and apply locally before a
+separately approved external push. `aec status` remains
 a local canonical/runtime comparison, not a remote-status check.
 
 ## Shared-instruction enrollment (2.0 development)
@@ -191,7 +191,7 @@ including fetch or capture.
 flowchart TD
     Validate["Validate forward data-format migration<br/>and selected local harness bindings"] --> Dirty{"Dirty migration section files?"}
     Dirty -->|"Yes"| Choice["Warn: explicitly choose<br/>Preserve or Overwrite"]
-    Dirty -->|"No"| Pull["Fast-forward-only pull; revalidate<br/>then legacy-compatible backup"]
+    Dirty -->|"No"| Pull["Fast-forward-only pull; revalidate<br/>then format-compatible capture"]
     Choice --> Pull
     Pull --> Scaffold["Prepare only required shared,<br/>current-platform and provider files"]
     Scaffold --> Confirm{"User finishes editing<br/>and types exactly DONE"}
@@ -214,9 +214,9 @@ command is waiting for console input, press Enter to let the pending read return
 |---|---|
 | Concurrent writers | Print the operating-precondition warning once at the top level before the first mutation. Keep affected harnesses/other writers closed until completion. No automatic process detection or termination; existing component guards stay unchanged. |
 | Version | Check both binary capability and the **data repository format**, not the AEC block version. Use canonical `major.minor` targets such as `2.0`; reject invalid/unsupported, equal/current, or older targets. Git-tracked root `.aec-version` records the completed data format. Without it, recognize legacy `1.0` only through validated original AEC initialization history; draft sections/targets do not prove completion. |
-| Dirty initialization | Before pull/backup, list dirty migration-owned section paths and require an explicit Preserve/Overwrite choice. Preserve retains edits; Overwrite warns of lost edits and regenerates only those sections. No default choice; EOF/cancellation stops. Unrelated dirt stops migration. |
+| Dirty initialization | Before pull/backup, list dirty migration-owned section paths and require an explicit Preserve/Overwrite choice. Preserve retains edits; Overwrite warns of lost edits and resets eligible unstaged sections to empty files for refilling. No default choice; EOF/cancellation stops. Unrelated dirt stops migration. |
 | Pull and capture | Resolve the tracked remote/default branch without assuming `origin`/`main`; stop if safe fast-forward-only pull is unavailable. Revalidate after pull. Never silently back up stale runtime over newly pulled canonical changes. Use format-compatible legacy capture: current 2.0 `backup` requires targets that do not exist yet. No automatic stash, reset, merge commits, rebase, or push. |
-| Scope and review | Use confirmed locally enrolled pre-2.0 harnesses and the current platform, not repository folder presence alone. Preserve legacy files, config, manual backups, and history. The user initializes the sections; do not automatically classify instructions. |
+| Scope and review | Use confirmed locally enrolled harnesses and the current platform, not repository folder presence alone. Capture reviewed legacy runtime changes and managed personality while preserving unrelated configuration, manual backups, and history. The user initializes the sections; do not automatically classify instructions. |
 | Completion | Wait for exactly `DONE`; other text keeps this invocation waiting without source commits or deployment. EOF/cancellation stops. Validate/commit source paths; enroll and commit each selected target before the next, then render/commit changes and apply/status. Completion requires successful verification. No executable installation or skill upgrade. |
 
 Choosing Preserve does not waive Git safety checks. Stop rather than discard
@@ -232,9 +232,9 @@ and personality config. It requires an existing marker's working/index
 bytes to match its committed blob; a dirty, untracked, deleted, or malformed
 marker cannot fall back to legacy detection. Binary major/minor capability and
 an explicitly implemented migration path must both support the target; patch
-and prerelease labels are not data formats. The only recognized completed marker
-is `2.0`; legacy releases never issued a `1.0` marker. Only successful migration
-completion will write `.aec-version` containing `2.0`.
+and prerelease labels are not data formats. The only recognized completed
+marker is `2.0`; legacy releases never issued a `1.0` marker. Completion commits `.aec-version` after status verification.
+A late failure can leave an uncommitted marker that blocks a fresh invocation.
 
 The internal `MigrationHarnessSelection` resolves only the existing implicit
 Codex/Copilot homes (`CODEX_HOME` / `COPILOT_HOME`, otherwise profile defaults).
@@ -243,7 +243,8 @@ links, repository-contained runtimes, or a different checkout/platform binding.
 It returns selected provider/home/runtime paths without creating anything or
 consulting canonical/target folders as enrollment evidence. All absent means an
 empty selection. Recognized portable blocks remain selected after an incomplete
-migration; backup routing and capture safety remain later preparation work.
+migration; the capture coordinator selects legacy or portable routing and
+refuses mixed formats.
 This checks runtime enrollment, not whether the harness application is installed.
 
 Internal `MigrationDirtySections` checks exact shared/current-platform/selected
@@ -290,7 +291,8 @@ not removed from user settings. This is deliberately conservative, even for
 unused configured filters. Afterward the exact HEAD/branch, data format and local
 enrollment must still validate. A failure retains retrieved history for inspection
 without automatic rollback, backup or apply. This helper adds no public command,
-push, new commit or runtime write; acting on dirty-section choices is still pending.
+push, new commit or runtime write. The scaffold writer acts on reviewed
+dirty-section choices.
 
 Internal `MigrationPreparation.Run` now composes format/enrollment and dirty-section
 review with remote preflight, object-only fetch and the clean-checkout advancement
@@ -316,7 +318,7 @@ uses managed enum values, so retrieved comments/spacing survive and unrelated
 runtime TOML never becomes canonical. Missing/invalid personality stops without
 inserting defaults. Portable generated runtimes are refused by this legacy-only
 preview; portable previews and the single-provider handoff below avoid whole-file
-capture. Combined rendering/commit remain pending before public migration can be released.
+capture. The combined portable capture coordinator handles compatible portable providers.
 Canonical legacy paths may name
 another machine, but runtime must bind to the selected checkout. No write, commit,
 network operation, scaffolding or deployment is added; later writers must freshly
@@ -343,7 +345,7 @@ file modes and exact paths before the guarded branch update. Unstaged authored
 drafts remain outside the commit. A validated no-op creates no commit. On failure,
 working changes, staging or a new commit may remain: inspect HEAD/index/files;
 no automatic rollback or push occurs. This internal operation does not expose
-the planned migration command or perform scaffolding or deployment.
+public migration orchestration or perform scaffolding or deployment.
 
 Internal `MigrationPortableCapturePreview` handles already-portable runtimes in
 an incomplete migration using existing Codex/Copilot section-aware backup previews.
@@ -361,8 +363,8 @@ Internal `MigrationPortableCaptureWriter.WriteAndCommit` implements the bounded
 single-provider writing handoff. Refuse preexisting staging, recreate/compare the
 reviewed inputs, then use fresh proposals with the existing provider backup writer.
 No changed providers means no commit. Two changed providers stop before writes,
-even for identical shared proposals; combined rendering/commit remain deferred because
-the first commit would invalidate the second provider's reviewed baseline.
+even for identical shared proposals. The public flow uses the combined portable
+capture coordinator when both providers are portable.
 Existing backup writers regenerate and commit only the affected enrolled targets
 and source/config paths. Verify the returned commit's single reviewed parent and
 unchanged branch, absent completion marker, enrollment and runtime bytes afterward.
@@ -405,7 +407,7 @@ explicit commit boundary alone accepts its own staging and new HEAD. Failure
 retains partial files/index/possibly a local commit for inspection without rollback,
 push or apply. See the [coordinator diagrams](architecture.md#internal-combined-portable-capture-coordinator).
 The earlier single-provider adapter still refuses two changed providers; public
-migration wiring and completion activation remain later work.
+migration uses the combined capture coordinator.
 
 Internal `MigrationScaffoldPreview.Read(preparation)` inventories only shared,
 current-platform and confirmed local provider sources after refreshing capture's
@@ -451,8 +453,7 @@ guards. Failure reports retained
 files/directories and a possibly changed attempted path; no automatic rollback,
 staging, commit or deployment. A retry requires a fresh preview. See the
 [writer flow](architecture.md#internal-scaffold-creation-and-reset-writer).
-Post-DONE completion and public command wiring
-remain unimplemented; this internal stage does not complete migration.
+The public command hands the completed scaffold to the DONE gate.
 
 Internal `MigrationDoneGate.Wait(input, output, cancellationToken)` now implements
 only confirmation: exact `DONE` returns `Done`; other/blank input keeps waiting,
@@ -461,7 +462,7 @@ continuation. Pre-cancellation performs no input/output. Like the existing choic
 prompt, a blocked synchronous read observes cancellation only when it returns;
 `DONE` read during cancellation is discarded. Confirmation requests later source
 validation, not migration success. No files/Git/runtime change or source validation
-occurs here; the public command and completion coordinator remain unimplemented.
+occurs in this gate; the public command invokes the completion coordinator after DONE.
 See the [gate diagrams](architecture.md#internal-done-confirmation-gate).
 
 Internal `MigrationSourceValidationPreview.Read(preparation)` validates the current
@@ -703,8 +704,8 @@ non-default personality, unrelated runtime settings, and manual ChatGPT backup
 bytes. It checks preservation, per-provider commit boundaries, usable 2.0
 status/apply/backup, and safe reruns. This is local managed-code evidence, not
 execution of a historical binary, Native AOT smoke, or real-harness verification.
-It does not test the planned `migrate` command, its pull/backup orchestration,
-interactive choices, `DONE` gate, or restart policy.
+Separate `MigrationCommandTests` cover public command confirmation, EOF and
+fresh-start recovery on disposable fixtures.
 
 ## Sharing migrated instructions between machines
 

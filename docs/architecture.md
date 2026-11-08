@@ -82,7 +82,7 @@ The [existing-user migration](reference.md#existing-manual-migration--implemente
 uses a reviewed split followed by per-provider enrollment, target commits, and
 approved apply. Classification is a user/skill review step; the engine does not
 guess it or delete the historical provider files and manual backups.
-The [planned interactive migration](reference.md#planned-interactive-command--not-implemented)
+The [planned interactive migration](reference.md#interactive-migration-command)
 adds an explicitly scoped fast-forward pull and legacy-compatible capture before
 scaffolding, then waits for `DONE` before source commits and enrollment/render/apply.
 It is not implemented or represented as a current component above; ordinary CLI
