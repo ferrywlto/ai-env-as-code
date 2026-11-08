@@ -23,7 +23,7 @@ Ticket #2 remains Active, DoD 18/27 (67%).
 | 13e.18: editing to completion handoff | Reviewed. Exact `DONE` starts fresh validation and completion. EOF or cancellation leaves the scaffold available for editing. Release build passed with zero warnings or errors. All 16 focused tests passed. |
 | Completed boundary | Source/target commits, apply preview, both provider writers, enrolled-provider apply coordination and post-apply status verification are reviewed. |
 | Native migration smoke | macOS ARM64 passed locally at `8599e59`. Linux ARM64 (`f3fde4e`) and Windows x64 (`80a2466`) are reviewed and await native runs. |
-| Current slice | H1 CLI help, bundled skills, README and reference alignment reviewed. Release build passed with zero warnings/errors; 13 skill predecessor upgrade checks passed. |
+| Current slice | H2 installer/uninstaller review completed locally. macOS ARM64 real-uninstaller smoke passed, along with 46 managed uninstall/upgrade checks. Ferry review is pending. |
 
 Evidence: [initial diagnostics](artifacts/migration-apply-preview-20261101/mutation-diagnostic/),
 [command traces](artifacts/migration-apply-preview-20261101/trace2-permitted/),
@@ -63,7 +63,8 @@ Final review and approved release delivery remain required for 100%.
 - [x] Review fresh-start failure and retry fixtures (C6).
 - [ ] Rehearse with approved actual runtime copies (D2) and complete Linux ARM64 and Windows x64 native migration coverage (E4).
 - [x] Review CLI help, bundled skills, README and reference alignment (H1).
-- [ ] Review installer/uninstaller alignment and version/release metadata (H2–H3).
+- [ ] Review H2 installer/uninstaller findings and approve the macOS helper guard follow-up.
+- [ ] Review version/release metadata (H3).
 - [x] Review the historical Linux ARM64 focused and Native AOT run (E3).
 - [ ] Verify actual Codex **and** GitHub Copilot on macOS. Record OS/architecture, harness versions, AEC commit, approved environment, tested paths, expected/observed results and limitations separately.
 - [x] Review the mechanical identifier-constants cleanup and independent literal-value contract test (G1).

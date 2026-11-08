@@ -330,6 +330,28 @@ assert_output "$test_root/render-paths-expected" "$test_root/render-paths"
 [ "$(find "$data_repo/environment/targets" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = 1 ] || \
     fail "render created an unused platform"
 
+# Run the real generated uninstaller against the portable Codex fixture.
+cp "$codex_home/config.toml" "$test_root/config-before-real-uninstall"
+cp "$runtime_copilot" "$test_root/copilot-before-real-uninstall"
+cp "$copilot_home/skills/aec/SKILL.md" "$test_root/copilot-skill-before-real-uninstall"
+git -C "$data_repo" status --porcelain >"$test_root/data-before-real-uninstall"
+real_uninstall_head=$(git -C "$data_repo" rev-parse HEAD)
+"$generated_uninstaller" --codex-home "$codex_home" >"$test_root/real-uninstall-output"
+grep -Fx 'uninstalled' "$test_root/real-uninstall-output" >/dev/null || fail "real uninstaller did not report cleanup"
+[ ! -e "$custom_target" ] || fail "real uninstaller left the selected binary"
+[ ! -e "$generated_uninstaller" ] || fail "real uninstaller left its helper"
+[ ! -e "$codex_home/skills/aec/SKILL.md" ] || fail "real uninstaller left the Codex skill"
+if grep -F '<!-- AEC:BEGIN' "$codex_home/AGENTS.md" >/dev/null; then
+    fail "real uninstaller left the Codex control block"
+fi
+grep -F 'Codex models updated.' "$codex_home/AGENTS.md" >/dev/null || fail "real uninstaller removed Codex instructions"
+assert_file_equals "$test_root/config-before-real-uninstall" "$codex_home/config.toml"
+assert_file_equals "$test_root/copilot-before-real-uninstall" "$runtime_copilot"
+assert_file_equals "$test_root/copilot-skill-before-real-uninstall" "$copilot_home/skills/aec/SKILL.md"
+[ "$(git -C "$data_repo" rev-parse HEAD)" = "$real_uninstall_head" ] || fail "real uninstaller changed data HEAD"
+git -C "$data_repo" status --porcelain >"$test_root/data-after-real-uninstall"
+assert_file_equals "$test_root/data-before-real-uninstall" "$test_root/data-after-real-uninstall"
+
 # A small fake binary makes the generated script's all-or-nothing cleanup testable
 # without changing the actual personal Codex environment.
 fake_source="$test_root/fake-source"
@@ -385,8 +407,8 @@ printf '%s\n' 'personality = "friendly"' >"$migration_codex/config.toml"
 printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instructions.md"
 (
     export CODEX_HOME="$migration_codex" COPILOT_HOME="$migration_copilot"
-    "$custom_target" init --repo "$migration_repo" >/dev/null
-    "$custom_target" init --repo "$migration_repo" --provider=copilot >/dev/null
+    "$default_target" init --repo "$migration_repo" >/dev/null
+    "$default_target" init --repo "$migration_repo" --provider=copilot >/dev/null
     git -C "$migration_repo" add -- environment/providers/copilot/copilot-instructions.md
     git -C "$migration_repo" commit -qm 'Record migration Copilot baseline'
     git init --bare --quiet --initial-branch=main "$migration_remote"
@@ -399,7 +421,7 @@ printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instruct
     printf '%s\n' 'Preserved migration draft.' >"$test_root/migration-draft"
     cp "$test_root/migration-draft" "$migration_repo/environment/shared/instructions.md"
     printf '%s\n' Preserve DONE >"$test_root/migration-input"
-    "$custom_target" migrate 2.0 --repo "$migration_repo" \
+    "$default_target" migrate 2.0 --repo "$migration_repo" \
         <"$test_root/migration-input" >"$test_root/migration-output"
     grep -F 'type exactly DONE' "$test_root/migration-output" >/dev/null
     grep -F 'Migration completed at ' "$test_root/migration-output" >/dev/null
@@ -414,8 +436,8 @@ printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instruct
     [ "$(git --git-dir="$migration_remote" rev-parse HEAD)" = "$migration_base" ] || \
         fail "migration changed the remote tip"
 
-    "$custom_target" status --repo "$migration_repo" >"$test_root/migration-codex-status"
-    "$custom_target" status --repo "$migration_repo" --provider=copilot >"$test_root/migration-copilot-status"
+    "$default_target" status --repo "$migration_repo" >"$test_root/migration-codex-status"
+    "$default_target" status --repo "$migration_repo" --provider=copilot >"$test_root/migration-copilot-status"
     printf '%s\n' 'codex/AGENTS.md   in_sync' 'codex/config.toml in_sync' >"$test_root/migration-codex-expected"
     printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/migration-copilot-expected"
     assert_output "$test_root/migration-codex-expected" "$test_root/migration-codex-status"

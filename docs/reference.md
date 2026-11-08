@@ -888,7 +888,7 @@ commits, or deletes an AEC data repository.
 
 After preflighting every target, the command:
 
-- removes the exact supported v3 through v6 AEC block from runtime `AGENTS.md`;
+- removes an exact supported legacy or portable AEC block from runtime `AGENTS.md`;
 - preserves every non-AEC instruction byte;
 - removes only exact current or recognized official predecessor copies of
   `skills/aec/SKILL.md` and `skills/aec/agents/openai.yaml`;
