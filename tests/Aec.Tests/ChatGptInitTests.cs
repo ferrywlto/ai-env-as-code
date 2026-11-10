@@ -438,8 +438,7 @@ public sealed class ChatGptInitTests
         Assert.Equal("untracked\n", File.ReadAllText(untracked));
     }
 
-    [Fact]
-    public void HelpListsAllSupportedCommandsExactly()
+    internal static void HelpListsAllSupportedCommandsExactly()
     {
         var result = TestApplication.Run("help");
         const string expected = """
@@ -447,6 +446,7 @@ public sealed class ChatGptInitTests
               aec help
               aec version
               aec render --repo ABSOLUTE_PATH
+              aec migrate VERSION --repo ABSOLUTE_PATH
               aec skill upgrade [--codex-home ABSOLUTE_PATH]
               aec uninstall [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]

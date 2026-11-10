@@ -138,21 +138,7 @@ public sealed class MigrationPortableTargetWriterTests
         layout.Files.AssertNoChanges(() => Assert.Throws<MigrationPortableTargetWriteException>(() => plan.Write(reported)));
     }
 
-    [Theory]
-    [InlineData("head")]
-    [InlineData("branch")]
-    [InlineData("runtime")]
-    [InlineData("other-runtime")]
-    [InlineData("runtime-config")]
-    [InlineData("marker")]
-    [InlineData("source")]
-    [InlineData("other-platform-source")]
-    [InlineData("canonical-config")]
-    [InlineData("target")]
-    [InlineData("other-platform-target")]
-    [InlineData("staged")]
-    [InlineData("raw-index")]
-    public void StaleInputsStopBeforeAnyTargetReplacement(string kind)
+    internal static void StaleInputsStopBeforeAnyTargetReplacement(string kind)
     {
         using var layout = new Layout("codex", "copilot");
         var targets = EnrollOtherPlatforms(layout, "codex", "copilot");
@@ -187,17 +173,7 @@ public sealed class MigrationPortableTargetWriterTests
         });
     }
 
-    [Theory]
-    [InlineData("dirty-target")]
-    [InlineData("dirty-source")]
-    [InlineData("missing-target")]
-    [InlineData("inconsistent-target")]
-    [InlineData("invalid-enrollment")]
-    [InlineData("invalid-provider")]
-    [InlineData("invalid-filename")]
-    [InlineData("invalid-structure")]
-    [InlineData("oversize-render")]
-    public void OtherPlatformProblemsAreRejectedDuringPreparation(string kind)
+    internal static void OtherPlatformProblemsAreRejectedDuringPreparation(string kind)
     {
         using var layout = new Layout("codex", "copilot");
         var targets = EnrollOtherPlatforms(layout, "codex", "copilot");

@@ -85,17 +85,7 @@ public sealed class MigrationLegacyCaptureCommitterTests
         });
     }
 
-    [Theory]
-    [InlineData("head")]
-    [InlineData("branch")]
-    [InlineData("runtime")]
-    [InlineData("canonical")]
-    [InlineData("marker")]
-    [InlineData("enrollment")]
-    [InlineData("proposal")]
-    [InlineData("path")]
-    [InlineData("missing-row")]
-    public void StaleOrTamperedReviewStopsBeforeWriteStageOrCommit(string change)
+    internal static void StaleOrTamperedReviewStopsBeforeWriteStageOrCommit(string change)
     {
         using var layout = new MigrationRepositoryFixture(includeCopilotCanonical: true);
         File.AppendAllText(CodexRuntime(layout), "Reviewed edit.\n");

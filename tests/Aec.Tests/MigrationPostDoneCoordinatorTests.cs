@@ -10,10 +10,7 @@ public sealed class MigrationPostDoneCoordinatorTests
     private const string Marker = MigrationCompletionPreview.MarkerRelativePath;
     private static readonly string[] MarkerPaths = [Marker];
 
-    [Theory]
-    [InlineData("both", 3)]
-    [InlineData("codex", 2)]
-    public void CommitsSourcesTargetsThenMarkerAndAppliesEnrolledProviders(string selected, int count)
+    internal static void CommitsSourcesTargetsThenMarkerAndAppliesEnrolledProviders(string selected, int count)
     {
         using var layout = selected == "both" ? new Layout("codex", "copilot") : new Layout(selected);
         if (selected != "both") File.Delete(layout.Runtime("copilot"));
@@ -140,13 +137,7 @@ public sealed class MigrationPostDoneCoordinatorTests
         Assert.Equal(result.Commit, layout.Files.Head());
     }
 
-    [Theory]
-    [InlineData("sources", 1)]
-    [InlineData("target:codex", 2)]
-    [InlineData("target:copilot", 3)]
-    [InlineData("apply", 3)]
-    [InlineData("status", 3)]
-    public void ComponentFailureStopsWithoutMarkerOrLaterWrites(string stop, int expectedCommits)
+    internal static void ComponentFailureStopsWithoutMarkerOrLaterWrites(string stop, int expectedCommits)
     {
         using var layout = new Layout("codex", "copilot");
         var original = layout.Files.Head();

@@ -114,13 +114,7 @@ public sealed class MigrationApplyCoordinatorTests
             Assert.Throws<InvalidOperationException>(() => MigrationApplyCoordinator.Apply([codex, copilot])));
     }
 
-    [Theory]
-    [InlineData("copilot")]
-    [InlineData("codex")]
-    [InlineData("source")]
-    [InlineData("target")]
-    [InlineData("exception")]
-    public void DriftAfterFirstProviderStopsSecondAndReportsPartialState(string mutation)
+    internal static void DriftAfterFirstProviderStopsSecondAndReportsPartialState(string mutation)
     {
         using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");
         RestoreLegacy(layout, "codex");

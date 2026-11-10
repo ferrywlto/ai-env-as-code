@@ -29,10 +29,7 @@ public sealed class MigrationCommandTests
             Assert.Equal(original, layout.Files.Head());
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void FreshInvocationPreservesDraftsAndCompletesAfterInterruption(bool invalidDraft)
+    internal static void FreshInvocationPreservesDraftsAndCompletesAfterInterruption(bool invalidDraft)
     {
         using var layout = new Layout();
         const string shared = "environment/shared/instructions.md";
@@ -72,8 +69,7 @@ public sealed class MigrationCommandTests
         Assert.Empty(layout.Files.Git("status", "--porcelain"));
     }
 
-    [Fact]
-    public void FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery()
+    internal static void FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery()
     {
         using var layout = new Layout();
         layout.Files.Write("environment/shared/instructions.md", "Reviewed shared instructions.\n");

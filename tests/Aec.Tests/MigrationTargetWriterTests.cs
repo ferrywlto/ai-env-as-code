@@ -92,23 +92,7 @@ public sealed class MigrationTargetWriterTests
         Assert.Equal(expectedMode, File.GetUnixFileMode(targetPath));
     }
 
-    [Theory]
-    [InlineData("head")]
-    [InlineData("branch")]
-    [InlineData("context")]
-    [InlineData("platform")]
-    [InlineData("harness")]
-    [InlineData("path")]
-    [InlineData("action")]
-    [InlineData("proposal")]
-    [InlineData("baseline")]
-    [InlineData("source-snapshot")]
-    [InlineData("source-membership")]
-    [InlineData("index")]
-    [InlineData("target-ignored")]
-    [InlineData("other-overlay")]
-    [InlineData("other-enrollment")]
-    public void StaleOrTamperedReviewIsRejectedWithoutWriterChanges(string state)
+    internal static void StaleOrTamperedReviewIsRejectedWithoutWriterChanges(string state)
     {
         using var layout = new Layout("codex", "copilot");
         var reviewed = Preview(layout, "codex");

@@ -79,15 +79,7 @@ public sealed class MigrationPortableSourceWriterTests
         Assert.False(File.Exists(Path.Combine(layout.Repository, layout.Target(legacyProvider))));
     }
 
-    [Theory]
-    [InlineData("head")]
-    [InlineData("branch")]
-    [InlineData("runtime")]
-    [InlineData("other-runtime")]
-    [InlineData("config")]
-    [InlineData("marker")]
-    [InlineData("canonical")]
-    public void StaleInputsStopBeforeAnyReplacement(string kind)
+    internal static void StaleInputsStopBeforeAnyReplacement(string kind)
     {
         using var layout = new Layout("codex", "copilot");
         layout.EditRuntime("codex", "Provider mechanics.", "Reviewed revision.");

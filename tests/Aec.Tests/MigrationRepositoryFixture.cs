@@ -44,7 +44,7 @@ internal sealed class MigrationRepositoryFixture : IDisposable
         Git("remote", "add", "shared", remote);
         Git("push", "--quiet", "--set-upstream", "shared", "main");
         writer = Path.Combine(Root, "remote-writer");
-        Git("clone", "--quiet", "--origin", "shared", "--config", "core.autocrlf=false", remote, writer);
+        Git("clone", "--no-local", "--quiet", "--origin", "shared", "--config", "core.autocrlf=false", remote, writer);
     }
 
     public string Root { get; }
