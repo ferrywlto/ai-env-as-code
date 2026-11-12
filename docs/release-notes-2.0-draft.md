@@ -1,8 +1,7 @@
 # AEC 2.0 release notes — draft
 
-This draft is for release review. The development executable currently reports
-`2.0.0-alpha.4`. Stable release delivery remains subject to the acceptance
-checks in [ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2).
+The development executable remains `2.0.0-alpha.4`. The official 2.0 release
+is deferred until Ferry verifies migration and requests the release.
 
 ## Changes
 
@@ -33,17 +32,11 @@ starting a fresh invocation. Review the
 [migration reference](reference.md#interactive-migration-command) and rehearse
 on disposable copies before live use.
 
-## Before publishing
+Real Codex and GitHub Copilot harness verification is deferred to
+[ticket #4](https://github.com/ferrywlto/ai-env-as-code/issues/4). The
+2.0 migration rehearsals and native runner checks do not prove real harness
+behavior. The Copilot migration rehearsal used synthetic instructions.
 
-- Review the Windows generated-uninstaller guard on its native runner.
-- Complete migration-native verification on Linux ARM64 and Windows x64.
-- Rehearse using approved copies of actual runtime data.
-- Verify actual Codex and GitHub Copilot separately on macOS.
-- Pass the full Debug/Release regression and verification matrix.
-- Update stable executable version metadata, the `aec version` contract test,
-  the reference version history and these notes together.
-- Obtain Ferry's final release review before tagging stable 2.0.
-
-The executable version `2.0.0` and data-format marker `2.0` are separate
+The executable version and data-format marker `2.0` are separate
 values. Successful migration commits the marker after verification. A late
 failure can leave an uncommitted marker for inspection.

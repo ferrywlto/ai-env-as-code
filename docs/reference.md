@@ -5,14 +5,14 @@ For the diagram-first overview, see the [project README](../README.md).
 Shell commands with relative paths assume the engine repository root unless
 their section says otherwise.
 
-Version 2.0.0-alpha.4 adds host-agnostic Git remote preflight guidance to the
-bundled skills. `aec render` and enrollment are repository-only. On the
-development branch, ordinary `apply` and `status` use committed portable
+Version 2.0.0-alpha.4 includes host-agnostic Git remote preflight guidance
+in the bundled skills. `aec render` and enrollment are repository-only. Ordinary
+`apply` and `status` use committed portable
 targets. Both providers' `backup` commands now capture portable authored
 sources; ordinary `init` retains its provider-specific flow. These
-development changes include the public migration command and are not yet a
-released binary. See the [approved design](shared-instructions-design.md). Copilot remains alpha
-and is not verified against the real harness on any platform.
+changes include the public migration command.
+See the [approved design](shared-instructions-design.md). Current 2.0 real Codex
+and Copilot harness verification is deferred to [#4](https://github.com/ferrywlto/ai-env-as-code/issues/4).
 
 ## Glossary
 
@@ -81,7 +81,7 @@ runtime files or data repositories.
 | 2.0.0-alpha.3 | Enroll one current-platform/provider target from committed authored sources |
 | 2.0.0-alpha.4 | Guide safe remote preflight and separately approved publication through the bundled skills |
 
-The development CLI reports `2.0.0-alpha.4` through `aec version`.
+The development executable reports `2.0.0-alpha.4` through `aec version`.
 
 ## Git remote transport (skill guidance)
 
@@ -794,6 +794,7 @@ to the authored sources before rendering affected targets.
   current scope.
 - Releases remain alpha/beta until they have been exercised with the actual
   target harness; a version number alone is not a claim of harness validation.
+  Current 2.0 real-harness checks are deferred to [#4](https://github.com/ferrywlto/ai-env-as-code/issues/4).
 - The platform/provider roadmap starts with Codex on Windows and Linux, then
   Copilot, Claude, and Gemini on macOS, Windows, and Linux.
 - GitHub Actions is manual-only through `workflow_dispatch`. After explicit
@@ -812,7 +813,7 @@ below.
 
 | Harness | macOS ARM64 | Windows x64 | Linux ARM64 |
 |---|---|---|---|
-| Codex | ✓ Verified | ⚠ Not verified | ⚠ Not verified |
+| Codex | ✓ Historical checkpoint; 2.0 pending | ⚠ Not verified | ⚠ Not verified |
 | GitHub Copilot | ⚠ Alpha, not verified | ⚠ Alpha, not verified | ⚠ Alpha, not verified |
 | Claude | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 | Gemini | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |

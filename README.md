@@ -124,6 +124,10 @@ them; use the same `--repo` checkout for both harnesses yourself.
 | GitHub Copilot | ⚠ Alpha; not real-harness verified | ⚠ Alpha; not real-harness verified | ⚠ Alpha; not real-harness verified |
 | Claude and Gemini | ⚠ Not implemented | ⚠ Not implemented | ⚠ Not implemented |
 
+Current-version real Codex and Copilot harness verification is deferred to
+[#4](https://github.com/ferrywlto/ai-env-as-code/issues/4); the historical Codex
+checkpoint and isolated tests do not establish that verification for 2.0.
+
 The tests provide narrower evidence than this harness matrix:
 
 | Test layer | Where it runs | What it proves |
