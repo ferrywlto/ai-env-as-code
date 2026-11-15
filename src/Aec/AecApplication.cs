@@ -68,6 +68,7 @@ public static class AecApplication
             throw new ArgumentException("Usage: aec migrate VERSION --repo ABSOLUTE_PATH");
 
         var repository = RequireAbsolutePath(args[3], "--repo");
+        using var filterScope = GitProcess.SuppressMigrationFilters();
         output.WriteLine("Close affected harness sessions and pause other writers to this repository and its managed runtime files until migration finishes. Use a separate terminal and a plain editor. Concurrent changes can leave migration partially complete.");
         output.Flush();
 

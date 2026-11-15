@@ -167,6 +167,126 @@ public sealed class MigrationFastForwardTests
     }
 
     [Fact]
+    public void UnusedConfiguredFilterDoesNotBlockMigrationFastForward()
+    {
+        using var layout = new MigrationRepositoryFixture();
+        var unrelated = Path.Combine(layout.Repository, AecApplication.ConfigSourceRelativePath);
+        var originalBytes = File.ReadAllBytes(unrelated);
+        var notes = Path.Combine(layout.Repository, "notes.md");
+        var expectedNotes = File.ReadAllBytes(notes).Concat(Encoding.UTF8.GetBytes("Remote revision.\n")).ToArray();
+        layout.AdvanceRemote();
+        var (preflight, fetched, harnesses) = layout.Prepare();
+        var sentinel = Path.Combine(layout.Root, "filter-ran");
+        layout.Git("config", "filter.fixture.clean", $"touch '{sentinel}'");
+        MigrationPreflight result;
+        using (GitProcess.SuppressMigrationFilters())
+            result = MigrationFastForward.Execute(preflight, fetched, harnesses);
+
+        Assert.Equal(fetched.Remote.AdvertisedCommit, result.Commit);
+        Assert.Equal(originalBytes, File.ReadAllBytes(unrelated));
+        Assert.Equal(expectedNotes, File.ReadAllBytes(notes));
+        Assert.False(File.Exists(sentinel));
+        Assert.Contains("touch", layout.Git("config", "filter.fixture.clean"));
+    }
+
+    [Theory]
+    [InlineData("--assume-unchanged")]
+    [InlineData("--skip-worktree")]
+    public void FastForwardDoesNotDiscardLocallyEditedFlaggedFiles(string flag)
+    {
+        using var layout = new MigrationRepositoryFixture();
+        layout.AdvanceRemote();
+        var (preflight, fetched, harnesses) = layout.Prepare();
+        layout.Git("update-index", flag, "notes.md");
+        var path = Path.Combine(layout.Repository, "notes.md");
+        const string personalContent = "Local content must survive.\n";
+        File.WriteAllText(path, personalContent);
+        using var scope = GitProcess.SuppressMigrationFilters();
+
+        var failure = Record.Exception(() => MigrationFastForward.Execute(preflight, fetched, harnesses));
+
+        Assert.True(failure is null or InvalidOperationException, failure?.ToString());
+        Assert.Equal(personalContent, File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void IncomingSubmoduleIsRejectedBeforeFastForward()
+    {
+        using var layout = new MigrationRepositoryFixture();
+        layout.AdvanceRemote(writer =>
+        {
+            var submodule = Path.Combine(writer, "nested");
+            Directory.CreateDirectory(submodule);
+            GitProcess.RunRequired(submodule, "Submodule init failed", "init", "--quiet");
+            GitProcess.RunRequired(submodule, "Submodule name failed", "config", "user.name", "Fixture");
+            GitProcess.RunRequired(submodule, "Submodule email failed", "config", "user.email", "fixture@example.invalid");
+            GitProcess.RunRequired(submodule, "Submodule commit failed", "commit", "--quiet", "--allow-empty", "-m", "Fixture");
+        });
+        var (preflight, fetched, harnesses) = layout.Prepare();
+        using var scope = GitProcess.SuppressMigrationFilters();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            MigrationFastForward.Execute(preflight, fetched, harnesses));
+
+        Assert.Contains("submodules", error.Message);
+        Assert.Equal(preflight.Commit, layout.Head());
+    }
+
+    [Fact]
+    public void SubmoduleInIndexIsRejectedBeforeStatus()
+    {
+        using var layout = new MigrationRepositoryFixture();
+        var commit = layout.Head();
+        layout.Git("update-index", "--add", "--cacheinfo", $"160000,{commit},submodule");
+        using var scope = GitProcess.SuppressMigrationFilters();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            MigrationFastForward.EnsureSafeGitConfiguration(layout.Repository));
+
+        Assert.Contains("submodules", error.Message);
+    }
+
+    [Fact]
+    public void IncomingFilterCannotRunDuringFastForward()
+    {
+        using var layout = new MigrationRepositoryFixture();
+        layout.AdvanceRemote(writer =>
+        {
+            File.WriteAllText(Path.Combine(writer, ".gitattributes"), "incoming.txt filter=fixture\n");
+            File.WriteAllText(Path.Combine(writer, "incoming.txt"), "incoming content\n");
+        });
+        var (preflight, fetched, harnesses) = layout.Prepare();
+        var sentinel = Path.Combine(layout.Root, "filter-ran");
+        layout.Git("config", "filter.fixture.smudge", $"touch '{sentinel}'");
+        using var scope = GitProcess.SuppressMigrationFilters();
+
+        Assert.Throws<InvalidOperationException>(() => MigrationFastForward.Execute(preflight, fetched, harnesses));
+        Assert.False(File.Exists(sentinel));
+        Assert.Equal(preflight.Commit, layout.Head());
+    }
+
+    [Fact]
+    public void SelectedFilterFailsWithoutRunningItsCommand()
+    {
+        using var layout = new MigrationRepositoryFixture();
+        var sentinel = Path.Combine(layout.Root, "filter-ran");
+        layout.Git("config", "filter.Fixture.clean", $"touch '{sentinel}'");
+        layout.Git("config", "filter.fixture.clean", $"touch '{sentinel}'");
+        const string generated = "environment/shared/instructions.md";
+        File.WriteAllText(Path.Combine(layout.Repository, ".git", "info", "attributes"), $"{generated} filter=fixture\n");
+        var path = Path.Combine(layout.Repository, generated);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "content");
+        using var scope = GitProcess.SuppressMigrationFilters();
+
+        var result = GitProcess.Run(layout.Repository, "add", "--", generated);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(sentinel));
+        Assert.Empty(layout.Git("diff", "--cached", "--name-only"));
+    }
+
+    [Fact]
     public void HooksAndBranchMergeDefaultsCannotChangeTheDirection()
     {
         using var layout = new MigrationRepositoryFixture();

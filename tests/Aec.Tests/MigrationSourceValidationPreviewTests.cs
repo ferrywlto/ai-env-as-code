@@ -8,6 +8,27 @@ public sealed class MigrationSourceValidationPreviewTests
 {
     private const string Shared = "environment/shared/instructions.md";
     private const int Limit = 1024 * 1024;
+    private const string LfsPointer = "version https://git-lfs.github.com/spec/v1\noid sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nsize 123\n";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LfsPointersInWorkingOrCommittedSourcesStopValidation(bool committed)
+    {
+        using var layout = new Layout("codex", "copilot");
+        layout.Files.Write(Shared, LfsPointer);
+        if (committed)
+        {
+            layout.Commit(Shared);
+            layout.Files.Write(Shared, "Hydrated instruction content.\n");
+        }
+        var context = layout.Context();
+        layout.Files.AssertNoChanges(() =>
+        {
+            var error = Assert.Throws<InvalidDataException>(() => MigrationSourceValidationPreview.Read(context));
+            Assert.Contains("Git LFS pointer", error.Message);
+        });
+    }
 
     [Fact]
     public void CleanSourcesReturnExactCommittedAndWorkingSnapshots()

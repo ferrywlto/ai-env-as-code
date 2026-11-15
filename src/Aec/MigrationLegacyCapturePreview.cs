@@ -169,7 +169,9 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         {
             throw new InvalidDataException($"Historical migration source exceeds the supported text size: {relative}.");
         }
-        return GitProcess.RunRequiredBytes(repository, "Git could not read historical migration source",
+        var content = GitProcess.RunRequiredBytes(repository, "Git could not read historical migration source",
             "--no-replace-objects", "cat-file", "blob", fields[2]);
+        MigrationLfsPointer.Reject(content, $"Historical migration source {relative}");
+        return content;
     }
 }

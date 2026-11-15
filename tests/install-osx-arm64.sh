@@ -468,6 +468,12 @@ printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instruct
     git -C "$migration_repo" push --quiet --set-upstream shared main
     migration_base=$(git -C "$migration_repo" rev-parse HEAD)
 
+    # A globally configured LFS driver is common even when this repository has
+    # no LFS attributes. Any accidental invocation fails the smoke test.
+    printf '%s\n' '[filter "lfs"]' '    clean = false' '    smudge = false' \
+        '    process = false' '    required = true' >>"$git_config"
+    cp "$git_config" "$test_root/migration-gitconfig-original"
+
     # Prepare one draft. The remaining required sections are scaffolded by migrate.
     mkdir -p "$migration_repo/environment/shared"
     printf '%s\n' 'Preserved migration draft.' >"$test_root/migration-draft"
@@ -475,6 +481,7 @@ printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instruct
     printf '%s\n' Preserve DONE >"$test_root/migration-input"
     "$default_target" migrate 2.0 --repo "$migration_repo" \
         <"$test_root/migration-input" >"$test_root/migration-output"
+    assert_file_equals "$test_root/migration-gitconfig-original" "$git_config"
     grep -F 'type exactly DONE' "$test_root/migration-output" >/dev/null
     grep -F 'Migration completed at ' "$test_root/migration-output" >/dev/null
 

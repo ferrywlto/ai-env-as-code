@@ -4,6 +4,20 @@ namespace Aec;
 
 internal static class GitProcess
 {
+    private static readonly AsyncLocal<bool> DisableMigrationFilters = new();
+    internal static bool MigrationFiltersSuppressed => DisableMigrationFilters.Value;
+
+    internal static IDisposable SuppressMigrationFilters()
+    {
+        var previous = DisableMigrationFilters.Value;
+        DisableMigrationFilters.Value = true;
+        return new FilterScope(previous);
+    }
+
+    private sealed class FilterScope(bool previous) : IDisposable
+    {
+        public void Dispose() => DisableMigrationFilters.Value = previous;
+    }
     private static readonly string[] GitLocationVariables =
     [
         "GIT_DIR",
@@ -170,6 +184,39 @@ internal static class GitProcess
         }
 
         ClearInjectedGitConfiguration(startInfo);
+
+        if (DisableMigrationFilters.Value && workingDirectory is not null)
+        {
+            // Inspect the same effective configuration Git will use, without
+            // recursively applying overrides to the inspection itself.
+            DisableMigrationFilters.Value = false;
+            GitResult configured;
+            try
+            {
+                configured = Run(workingDirectory, "config", "--null", "--name-only", "--get-regexp",
+                    @"^filter\..*\.(clean|smudge|process|required)$");
+            }
+            finally { DisableMigrationFilters.Value = true; }
+            if (configured.ExitCode is not (0 or 1))
+                throw new InvalidOperationException("Could not inspect Git filter configuration for migration.");
+            if (configured.Output.Contains('\uFFFD'))
+                throw new InvalidOperationException("Git filter configuration contains an undecodable name; migration cannot suppress it safely.");
+            var drivers = configured.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+                .Select(key => key[7..key.LastIndexOf('.')])
+                .Distinct(StringComparer.Ordinal);
+            foreach (var driver in drivers)
+            {
+                foreach (var key in new[] { "clean", "smudge", "process" })
+                {
+                    startInfo.ArgumentList.Add("-c");
+                    startInfo.ArgumentList.Add($"filter.{driver}.{key}=");
+                }
+                // A selected driver fails closed rather than silently checking
+                // out a pointer or staging unconverted content.
+                startInfo.ArgumentList.Add("-c");
+                startInfo.ArgumentList.Add($"filter.{driver}.required=true");
+            }
+        }
 
         foreach (var argument in arguments)
         {

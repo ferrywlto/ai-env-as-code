@@ -5,6 +5,34 @@ namespace Aec.Tests;
 [Collection(ProcessStateTestGroup.Name)]
 public sealed class MigrationCommandTests
 {
+    [Fact]
+    public void PublicMigrationCompletesWithUnusedGlobalLfsFilter()
+    {
+        using var layout = new Layout();
+        var sentinel = Path.Combine(layout.Files.Root, "filter-ran");
+        var globalConfig = Path.Combine(layout.Files.Root, "global-gitconfig");
+        var config = $"[user]\n\tname = AEC Fixture\n\temail = fixture@example.invalid\n[filter \"lfs\"]\n\tclean = touch '{sentinel}'\n\tsmudge = touch '{sentinel}'\n\tprocess = touch '{sentinel}'\n\trequired = true\n";
+        File.WriteAllText(globalConfig, config);
+        var previousGlobal = Environment.GetEnvironmentVariable("GIT_CONFIG_GLOBAL");
+        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", globalConfig);
+        try
+        {
+            using var output = new StringWriter();
+            using var error = new StringWriter();
+            using var input = new EditingReader(layout, output, true);
+
+            var exitCode = AecApplication.Run(["migrate", "2.0", "--repo", layout.Repository], input, output, error);
+
+            Assert.True(exitCode == 0, error.ToString());
+            Assert.False(File.Exists(sentinel));
+            Assert.Equal(config, File.ReadAllText(globalConfig));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", previousGlobal);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

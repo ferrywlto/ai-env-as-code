@@ -24,6 +24,11 @@ internal static class MigrationFastForward
 
         if (fetched.Ancestry == MigrationAncestry.Behind)
         {
+            var incoming = GitProcess.RunRequired(current.Repository, "Git could not inspect the incoming tree",
+                "--no-replace-objects", "ls-tree", "-r", "-z", fetched.Remote.AdvertisedCommit).Output;
+            if (incoming.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+                .Any(entry => entry.StartsWith("160000 ", StringComparison.Ordinal)))
+                throw new InvalidOperationException("Migration cannot fast-forward a repository containing submodules.");
             var status = GitProcess.RunRequired(current.Repository, "Git could not inspect migration checkout",
                 "--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z",
                 "--untracked-files=all", "--ignore-submodules=none").Output;
@@ -87,19 +92,26 @@ internal static class MigrationFastForward
 
     internal static void EnsureSafeGitConfiguration(string repository)
     {
-        // Filters can execute arbitrary commands during status or checkout, even
-        // with hooks disabled. Keep this narrow step conservative: refuse them
-        // instead of altering the user's configuration or running their tools.
-        var filters = GitProcess.Run(repository, "config", "--name-only", "--get-regexp",
-            @"^filter\..*\.(clean|smudge|process)$");
-        if (filters.ExitCode != 1)
+        // Internal callers without the migration command's filter scope still
+        // fail closed before status or checkout can invoke configured commands.
+        if (!GitProcess.MigrationFiltersSuppressed)
         {
-            throw new InvalidOperationException("Migration fast-forward does not run configured external Git filters; review the checkout configuration first.");
+            var filters = GitProcess.Run(repository, "config", "--name-only", "--get-regexp",
+                @"^filter\..*\.(clean|smudge|process)$");
+            if (filters.ExitCode != 1)
+                throw new InvalidOperationException("Migration requires configured external Git filters to be suppressed.");
         }
         var monitor = GitProcess.Run(repository, "config", "--type=bool", "--get", "core.fsmonitor");
         if (monitor.ExitCode != 1 && (monitor.ExitCode != 0 || monitor.Output.Trim() != "false"))
         {
             throw new InvalidOperationException("Migration fast-forward requires Git fsmonitor to be disabled; review the checkout configuration first.");
         }
+        // Status can enter a submodule and use its own unsuppressed filters.
+        // Disable fsmonitor for this inspection as well as checking it above.
+        var index = GitProcess.RunRequired(repository, "Git could not inspect the migration index",
+            "--no-optional-locks", "-c", "core.fsmonitor=false", "ls-files", "--stage", "-z").Output;
+        if (index.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Any(entry => entry.StartsWith("160000 ", StringComparison.Ordinal)))
+            throw new InvalidOperationException("Migration cannot operate on a repository containing submodules.");
     }
 }

@@ -286,9 +286,14 @@ untracked checkout; dirty files stop without stash/reset/discard. Git advances
 only to the pinned commit using fast-forward-only behavior, with hooks, branch
 merge defaults, autostash, recursive submodule updates and automatic line-ending
 conversion disabled per command. Ignored-file collisions stop too. Configured
-external clean/smudge/process filters or enabled/custom fsmonitor are refused,
-not removed from user settings. This is deliberately conservative, even for
-unused configured filters. Afterward the exact HEAD/branch, data format and local
+external clean/smudge/process filters are suppressed for Git commands in the
+public migration flow without changing user settings. If a file selects a
+configured filter, Git fails rather than silently bypassing its conversion.
+Enabled/custom fsmonitor is refused. Managed instruction inputs must not be Git
+LFS pointers. Migration refuses repositories containing submodules, including
+submodules introduced by the incoming commit. Git's built-in attribute-based
+text and line-ending conversions still apply to files updated by fast-forward.
+Afterward the exact HEAD/branch, data format and local
 enrollment must still validate. A failure retains retrieved history for inspection
 without automatic rollback, backup or apply. This helper adds no public command,
 push, new commit or runtime write. The scaffold writer acts on reviewed

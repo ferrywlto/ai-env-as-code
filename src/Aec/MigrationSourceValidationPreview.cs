@@ -75,6 +75,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
 
         var content = ReadFile(Path.Combine(preflight.Repository, relative))
             ?? throw new InvalidOperationException($"Required instruction source is missing: {relative}.");
+        MigrationLfsPointer.Reject(content, $"Instruction source {relative}");
         return new MigrationValidatedSource(relative, committed.Content, committed.Mode, content);
     }
 
