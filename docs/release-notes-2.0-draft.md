@@ -1,7 +1,7 @@
 # AEC 2.0 release notes — draft
 
-The development executable remains `2.0.0-alpha.4`. The official 2.0 release
-is deferred until Ferry verifies migration and requests the release.
+The development executable is versioned `2.0.0`. These notes remain a draft;
+the official release requires a separate request.
 
 ## Changes
 

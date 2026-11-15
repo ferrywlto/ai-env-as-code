@@ -81,7 +81,7 @@ runtime files or data repositories.
 | 2.0.0-alpha.3 | Enroll one current-platform/provider target from committed authored sources |
 | 2.0.0-alpha.4 | Guide safe remote preflight and separately approved publication through the bundled skills |
 
-The development executable reports `2.0.0-alpha.4` through `aec version`.
+The development executable reports `2.0.0` through `aec version`.
 
 ## Git remote transport (skill guidance)
 

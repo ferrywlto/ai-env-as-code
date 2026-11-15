@@ -1,5 +1,9 @@
 # Implementation Checklist
 
+## Current increment — 2.0.0 version metadata
+
+[Ticket #6](https://github.com/ferrywlto/ai-env-as-code/issues/6) is Active. Executable metadata and current-version expectations are `2.0.0`; historical alpha evidence is retained. The focused version test passed and the development executable reports `2.0.0`. Next: open the requested PR to `main` and obtain Ferry's review. A tag, release, merge and installation are separate actions.
+
 ## Current increment — migration filter handling
 
 [Ticket #5](https://github.com/ferrywlto/ai-env-as-code/issues/5) is Done. Migration suppresses configured external filters for Git commands, rejects selected filters and managed LFS pointers, and refuses submodules. After correcting the fsmonitor guard ordering, all 84 command, preparation, fast-forward and source-validation regression cases passed (14m 35s), using fixtures under the allowed `.codex` workspace. Ferry approved the reviewed change on 13 November 2026. Do not run live migration from this harness.
@@ -33,7 +37,7 @@ Ticket #2 alpha completion is recorded, DoD 25/25 (100%), baseline v3.
 | 13e.18: editing to completion handoff | Reviewed. Exact `DONE` starts fresh validation and completion. EOF or cancellation leaves the scaffold available for editing. Release build passed with zero warnings or errors. All 16 focused tests passed. |
 | Completed boundary | Source/target commits, apply preview, both provider writers, enrolled-provider apply coordination and post-apply status verification are reviewed. |
 | Native migration smoke | macOS ARM64 passed locally at `8599e59`; Linux ARM64 and Windows x64 passed at `d6af1ad`. All three results reviewed. |
-| Current slice | Retained `2.0.0-alpha.4` per Ferry's decision. Release build passed without warnings and `aec version` reports the alpha value. Official release awaits Ferry's own migration verification and later request. |
+| Alpha completion | Retained `2.0.0-alpha.4` at the time of the approved alpha checkpoint. Official release was deferred pending Ferry's own migration verification and later request. |
 
 Evidence: [initial diagnostics](artifacts/migration-apply-preview-20261101/mutation-diagnostic/),
 [command traces](artifacts/migration-apply-preview-20261101/trace2-permitted/),
