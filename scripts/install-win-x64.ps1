@@ -112,6 +112,19 @@ if ($PSBoundParameters.ContainsKey('CodexHome') -and
     throw "-CodexHome must be an absolute Windows path: $CodexHome"
 }
 
+# A directory may have become a junction or symlink since installation.
+foreach ($path in @($installedAec, $expectedHelper)) {
+    $ancestor = $path
+    while ($null -ne $ancestor) {
+        $entry = Get-Item -LiteralPath $ancestor -Force -ErrorAction SilentlyContinue
+        if ($null -ne $entry -and
+            ($entry.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Uninstall path contains a linked file or directory: $ancestor"
+        }
+        $ancestor = [System.IO.Path]::GetDirectoryName($ancestor)
+    }
+}
+
 $entry = Get-Item -LiteralPath $installedAec -Force -ErrorAction SilentlyContinue
 if ($null -eq $entry -or $entry -isnot [System.IO.FileInfo] -or
     ($entry.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {

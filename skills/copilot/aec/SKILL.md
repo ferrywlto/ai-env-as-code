@@ -1,59 +1,137 @@
 ---
 name: aec
-description: Initialize, inspect, back up, or apply the local GitHub Copilot CLI integration for an AI Environment as Code repository.
+description: Use for AEC-managed local GitHub Copilot CLI instructions, including init, status, backup, apply, enrollment, and render.
 ---
 
 # AEC for GitHub Copilot
 
-Use this skill only when the user explicitly requests initialization, status,
-backup, or apply of their local GitHub Copilot CLI instructions through AEC.
+Require an explicitly selected absolute AEC data-repository path for `--repo`;
+never infer it from the engine checkout, current directory, executable, or
+skill. Use only for local Copilot CLI instruction work through AEC.
 
-The user must select the AEC data repository explicitly. Never infer it from the
-current directory, the executable, or the skill location. Run:
+## Git remote preflight
+
+For ordinary commands, before an AEC canonical write (`init`, `backup`,
+`render`, or a manual edit)
+or runtime `apply`, inspect Git state and use `aec status` for an existing
+enrolled provider to identify local drift and confirm direction. Skip status
+for a new repository without a baseline. Do not run preflight on unrelated
+replies. `aec status` never checks the remote.
+
+For a remote-backed repository, identify the remote from the current branch's
+upstream and query its advertised default-branch `HEAD`; assume neither
+`origin` nor `main`. Pause if tracking/default-branch identity is ambiguous,
+either local or upstream branch is not that default, or pre-existing worktree
+changes could mix with this operation. Never switch branches or silently
+absorb/discard changes.
+
+Compare local `HEAD` with the advertised tip without fetching. Equal means no
+fetch; different does not establish which is newer. If different, seek
+approval to fetch and, only when clean and strictly behind, fast-forward from
+that upstream. Stop on ahead/diverged/ambiguous state. An unreachable remote
+means freshness is unknown: stop. With no remote, permit approved local work
+but warn it is not shared. Ordinary commands never automatically pull, merge,
+rebase, or force-push.
+
+After a canonical commit, obtain separate push approval. Resolve and show the
+push destination; ask if it differs from the fetch remote or is ambiguous.
+Push only the current branch to an explicit destination and verify publication
+before routine remote-backed `apply`; stop if push fails. `backup`, `render`,
+and `init` do not themselves authorize pushing.
+
+## Migrate a 1.x data repository
+
+Only with explicit authorization for repository commits, bounded retrieval,
+and runtime apply, run from a separate terminal after closing affected harness
+sessions and pausing other writers:
 
 ```text
-aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec migrate 2.0 --repo ABSOLUTE_PATH
 ```
 
-`--copilot-home` selects the local Copilot home. When omitted, AEC uses an absolute
-`COPILOT_HOME` value and then `~/.copilot`. The command creates or updates only the
-managed block in `copilot-instructions.md`, its canonical copy under the selected
-repository, and this exact skill. It does not manage Copilot `config.json`.
+Migration discovers enrolled local Codex and Copilot homes through
+`CODEX_HOME` and `COPILOT_HOME`, then their default home paths. Both selected
+providers may be affected. It requires a tracked default-branch remote and
+may fetch and fast-forward; it never pushes. Inspect the selection and preserve
+personal data before authorization. Do not run migration inside a harness
+being migrated. Use a plain editor to review and fill the prepared sources;
+do not infer their classification. Enter exactly `DONE` only when the user has
+reviewed them. EOF or cancellation stops before completion. Inspect retained
+commits, files, staging and runtime before starting a fresh invocation. A fresh
+invocation starts at preflight and may require a new Preserve/Overwrite choice.
 
-For a read-only exact-byte comparison, run:
+## Shared instructions (2.0 development)
+
+Propose the source of each rule for review: shared across enrolled harnesses,
+platform-specific paths/OS policy, or Copilot-only overlay. Never infer a
+split from existing `copilot-instructions.md`.
+
+After all three authored sources are reviewed and committed, enroll Copilot
+on the current platform only with authorization:
+
+```text
+aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
+```
+
+Enrollment creates only the portable target: no runtime write, commit, or
+push. Review it before a separate commit. For later approved source changes,
+show affected targets, run `aec render --repo ABSOLUTE_PATH`, then review and
+separately approve the source/target commit. `render` does not touch runtime
+or Git history. Ordinary `status`/`backup`/`apply` require the enrolled,
+committed target; stop if enrollment is absent.
+
+Ordinary Copilot initialization:
+
+```text
+aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
+```
+
+Copilot home resolves from `--copilot-home`, absolute `COPILOT_HOME`, then
+`~/.copilot`. Init reconciles only native/canonical
+`copilot-instructions.md` and this skill, not `config.json`.
+With an implicit home, init stops if implicit Codex is bound to another data
+checkout. An explicit custom-home flag is outside this cross-harness check;
+keep both harnesses on one checkout yourself.
+For a pulled checkout whose committed Copilot source records another machine's
+path, stop and ask before rerunning init with `--force-path-change`. This binds
+only the local runtime block, without a path-only repository commit. A
+conflicting implicit Codex checkout still stops.
+
+Read-only comparison with the committed current-platform target and local AEC
+block:
 
 ```text
 aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 ```
 
-It reports `in_sync`, `different`, or `missing`. Exit code 0 means in sync, 2
-means drift or a missing runtime file, and 1 means validation failed. It never
-changes runtime or canonical files.
+`in_sync` exits 0; `different`/`missing` exit 2; validation failure exits 1.
+Status never changes runtime or canonical files.
 
-For an explicitly authorized runtime-to-repository capture, run:
+Only with approval for runtime-to-repository capture and commit:
 
 ```text
 aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 ```
 
-It validates the managed block and repository binding, replaces only the canonical
-Copilot instruction file when necessary, and creates the fixed Git commit `Backup
-Copilot instructions` when that canonical path differs from `HEAD`. It writes
-`unchanged` when the canonical path is already committed with the runtime bytes.
-It never changes runtime instructions or pushes the commit.
+Backup requires a stamped runtime block bound to the selected repository and
+current target digest. It attributes one changed shared, platform, or Copilot
+section, then commits only that authored source and all affected enrolled
+targets. A stale digest, edited control block, or multi-section drift stops.
+No attributable drift reports `unchanged`. It never writes runtime or pushes;
+inspect the repository before retrying after a partial write failure.
 
-For an explicitly authorized committed repository-to-runtime deployment, run:
+Only with approval for committed repository-to-runtime deployment:
 
 ```text
 aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
 ```
 
-It requires the canonical file to match its committed Git blob and repository
-binding, then atomically replaces only runtime `copilot-instructions.md`. It writes
-`unchanged` when runtime already matches. It never captures runtime changes,
-creates a commit, pushes, manages `config.json`, or installs/upgrades the skill.
+Apply requires the clean, committed current-platform target and matching
+repository/platform runtime binding, then replaces only runtime
+`copilot-instructions.md`; matching runtime reports `unchanged`. It never
+captures runtime, commits, pushes,
+manages `config.json`, or installs/upgrades the skill.
 
-Copilot support is alpha. `uninstall` and standalone skill upgrade are not yet
-available for Copilot. Do not substitute Codex commands or flags, and do not claim
-real-harness verification until Copilot CLI is installed and exercised on the
-target machine.
+Copilot support is alpha; uninstall and skill upgrade are unavailable. Do
+not substitute Codex flags or claim real-harness verification without testing
+the installed Copilot CLI on the target machine.

@@ -1,3 +1,4 @@
-skills/aec/SKILL.md text eol=lf
-skills/aec/agents/openai.yaml text eol=lf
+skills/codex/aec/SKILL.md text eol=lf
+skills/codex/aec/agents/openai.yaml text eol=lf
+skills/copilot/aec/SKILL.md text eol=lf
 tests/Aec.Tests/Fixtures/Skills/*.md text eol=lf

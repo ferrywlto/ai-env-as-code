@@ -163,6 +163,17 @@ if [ "$script_path" != "$installed_uninstaller" ]; then
   exit 1
 fi
 
+for managed_path in "$installed_aec" "$installed_uninstaller"; do
+  path_to_check=$managed_path
+  while [ "$path_to_check" != / ]; do
+    if [ -L "$path_to_check" ]; then
+      echo "Error: installed aec path contains a symbolic link: $path_to_check" >&2
+      exit 1
+    fi
+    path_to_check=$(dirname "$path_to_check")
+  done
+done
+
 if [ ! -f "$installed_aec" ] || [ ! -x "$installed_aec" ] || [ -L "$installed_aec" ]; then
   echo "Error: installed aec executable is missing or unsafe: $installed_aec" >&2
   exit 1

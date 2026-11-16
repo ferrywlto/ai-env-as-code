@@ -54,7 +54,8 @@ internal static class ApplyCommand
         CodexPersonality? expectedRuntimePersonality,
         string expectedCommit,
         byte[] expectedSource,
-        byte[] expectedConfig)
+        byte[] expectedConfig,
+        byte[]? expectedLocalRuntimeSource = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedCommit);
         ArgumentNullException.ThrowIfNull(expectedSource);
@@ -70,7 +71,8 @@ internal static class ApplyCommand
                 expectedRuntimePersonality,
                 expectedCommit,
                 expectedSource,
-                expectedConfig));
+                expectedConfig,
+                expectedLocalRuntimeSource));
     }
 
     private static int Run(
@@ -113,14 +115,25 @@ internal static class ApplyCommand
         }
 
         var binding = AecInstructionBlock.ReadRepositoryBinding(source);
+        var desiredRuntimeSource = source;
         if (binding is not null &&
             !AecInstructionBlock.RepositoryPathsEqual(binding.Repository, repository))
         {
-            throw new InvalidOperationException(
-                "Committed AEC instructions are bound to a different data repository. " +
-                $"Recorded repository: {binding.Repository}. " +
-                $"Selected repository: {repository}. " +
-                "Run `aec init` with the selected --repo path before applying it.");
+            // Only confirmed init attachment may substitute a machine-local
+            // binding. The committed bytes remain pinned and are never edited.
+            var localSource = repositoryExpectation?.LocalRuntimeSource;
+            if (localSource is null ||
+                !AecInstructionBlock.RebindRepository(source, repository)
+                    .AsSpan().SequenceEqual(localSource))
+            {
+                throw new InvalidOperationException(
+                    "Committed AEC instructions are bound to a different data repository. " +
+                    $"Recorded repository: {binding.Repository}. " +
+                    $"Selected repository: {repository}. " +
+                    "Run `aec init` with the selected --repo path before applying it.");
+            }
+
+            desiredRuntimeSource = localSource;
         }
 
         var canonicalConfig = ReadCommittedConfig(repository, commit);
@@ -174,7 +187,7 @@ internal static class ApplyCommand
             throw new InvalidOperationException("Canonical config changed during apply.");
         }
 
-        var agentsChanged = runtime is null || !runtime.AsSpan().SequenceEqual(source);
+        var agentsChanged = runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource);
         if (!agentsChanged && !configUpdate.Changed)
         {
             output.WriteLine("unchanged");
@@ -184,7 +197,7 @@ internal static class ApplyCommand
         // Init may overwrite only the exact runtime bytes captured by its baseline commit.
         if (initialization is not null &&
             (runtime is null || !runtime.AsSpan().SequenceEqual(initialization.Runtime)) &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(source)))
+            (runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource)))
         {
             throw new InvalidOperationException(
                 "Runtime target changed after the initialization backup; committed source was not applied.");
@@ -200,11 +213,11 @@ internal static class ApplyCommand
         }
 
         // Attachment uses the runtime snapshot taken before skill installation or
-        // a path-rebind commit. The already-desired state is also accepted so a
+        // a local path rebind. The already-desired state is also accepted so a
         // previously interrupted apply remains safely repeatable.
         if (repositoryExpectation is not null &&
             !MatchesOptionalBytes(runtime, repositoryExpectation.Runtime) &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(source)))
+            (runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource)))
         {
             throw new InvalidOperationException(
                 "Runtime target changed during AEC attachment; " +
@@ -244,7 +257,7 @@ internal static class ApplyCommand
             AtomicFile.ReplaceIfUnchanged(
                 runtimePath,
                 initialization?.Runtime ?? runtime,
-                source);
+                desiredRuntimeSource);
         }
 
         output.WriteLine("applied");
@@ -332,9 +345,12 @@ internal static class ApplyCommand
         var source = AecApplication.ReadRequiredTextFile(sourcePath, label);
         var committedBlob = ResolveCommittedBlob(repository, commit, relativePath, label);
 
+        // Check commit-to-index changes separately. Worktree content and mode
+        // checks below must not refresh the index or reject stat-only changes.
         EnsureDiffIsClean(
             Run(
                 repository,
+                "--no-optional-locks",
                 "diff",
                 "--cached",
                 "--quiet",
@@ -346,18 +362,7 @@ internal static class ApplyCommand
                 relativePath),
             $"{label} has staged changes.",
             $"Git could not inspect staged {label.ToLowerInvariant()} changes");
-        EnsureDiffIsClean(
-            Run(
-                repository,
-                "diff",
-                "--quiet",
-                "--exit-code",
-                "--no-ext-diff",
-                "--no-textconv",
-                "--",
-                relativePath),
-            $"{label} has unstaged changes.",
-            $"Git could not inspect unstaged {label.ToLowerInvariant()} changes");
+        EnsureWorkingModeMatchesIndex(repository, relativePath, label);
 
         // Git's normal diff can hide clean/smudge or line-ending transforms; raw hashing cannot.
         var workingBlob = RunRequired(
@@ -370,7 +375,7 @@ internal static class ApplyCommand
         if (!string.Equals(committedBlob, workingBlob, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"{label} bytes do not exactly match the committed Git blob; " +
+                $"{label} has unstaged changes: bytes do not exactly match the committed Git blob; " +
                 "filters or file changes are present.");
         }
 
@@ -382,6 +387,28 @@ internal static class ApplyCommand
         }
 
         return source;
+    }
+
+    private static void EnsureWorkingModeMatchesIndex(string repository, string relativePath, string label)
+    {
+        // The plumbing command does not refresh the on-disk index. Let Git
+        // interpret core.filemode and platform permissions instead of guessing
+        // Unix executable semantics on Windows. Content is checked by raw hash.
+        var changes = RunRequired(repository, $"Git could not inspect {label.ToLowerInvariant()} mode",
+            "--no-optional-locks", "diff-files", "--raw", "-z", "--no-renames",
+            "--no-ext-diff", "--no-textconv", "--", relativePath).Output;
+        if (changes.Length == 0) return;
+
+        // One raw record: metadata NUL exact-path NUL. A stat-only M record
+        // with equal modes is not a content change; the raw hash decides that.
+        var records = changes.Split('\0');
+        if (records.Length != 3 || records[1] != relativePath || records[2].Length != 0)
+            throw new InvalidOperationException($"Git returned malformed {label.ToLowerInvariant()} mode metadata.");
+        var fields = records[0].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (fields.Length != 5 || fields[0] is not (":100644" or ":100755"))
+            throw new InvalidOperationException($"Git returned malformed {label.ToLowerInvariant()} mode metadata.");
+        if (fields[4] != "M" || fields[0][1..] != fields[1])
+            throw new InvalidOperationException($"{label} has unstaged changes (file mode or type).");
     }
 
     private static string ResolveCommittedBlob(
@@ -517,5 +544,6 @@ internal static class ApplyCommand
         CodexPersonality? RuntimePersonality,
         string Commit,
         byte[] Source,
-        byte[] Config);
+        byte[] Config,
+        byte[]? LocalRuntimeSource);
 }

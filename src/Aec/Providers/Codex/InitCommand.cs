@@ -2,8 +2,8 @@ namespace Aec;
 
 internal static class InitCommand
 {
+    private const string LegacyInitializedRootSubject = "Initialize AEC data repository";
     private const string InitializationCommitMessage = "Initialize AEC instructions";
-    private const string RebindCommitMessage = "Rebind AEC repository path";
 
     public static int Run(
         string directoryPath,
@@ -37,6 +37,21 @@ internal static class InitCommand
             catch (Exception exception)
             {
                 throw NotAttachable(directoryPath, exception);
+            }
+
+            var platform = RenderCommand.CurrentPlatform();
+            if (CommittedTargetValidator.IsEnrolled(
+                    directoryPath, completed.Commit, platform, AecIdentifiers.Codex))
+            {
+                return AttachEnrolledRepository(
+                    directoryPath,
+                    codexHome,
+                    runtimePath,
+                    forcePathChange,
+                    completed,
+                    platform,
+                    output,
+                    warning);
             }
 
             return AttachCompletedRepository(
@@ -197,7 +212,13 @@ internal static class InitCommand
         var pathMatches = AecInstructionBlock.RepositoryPathsEqual(
             completed.Binding.Repository,
             repository);
-        if (!pathMatches && !forcePathChange)
+        var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        var runtimeBinding = pathMatches || runtime is null
+            ? null
+            : AecInstructionBlock.ReadRepositoryBinding(runtime);
+        var alreadyBoundLocally = !pathMatches && runtimeBinding is not null &&
+            AecInstructionBlock.RepositoryPathsEqual(runtimeBinding.Repository, repository);
+        if (!pathMatches && !forcePathChange && !alreadyBoundLocally)
         {
             throw new InvalidOperationException(
                 "Initialized AEC instructions are bound to a different data repository. " +
@@ -207,8 +228,7 @@ internal static class InitCommand
         }
 
         // Preflight both managed runtime inputs before installing the skill or
-        // committing a rebind; Apply repeats the reads before changing either file.
-        var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        // applying a local rebind; Apply repeats the reads before changing either file.
         var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
         var runtimeConfig = AecApplication.ReadOptionalTextFile(
             runtimeConfigPath,
@@ -220,11 +240,27 @@ internal static class InitCommand
             completed.Config,
             Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
         // A deterministic planning failure must happen before skill installation
-        // and, for a moved repository, before the rebind commit.
+        // and, for a moved repository, before the runtime-only rebind.
         _ = CodexPersonalityConfig.PlanRuntimeUpdate(
             runtimeConfig,
             runtimeConfigPath,
             desiredPersonality);
+
+        if (alreadyBoundLocally)
+        {
+            // The path was already confirmed on this machine. Preserve its
+            // possibly newer portable runtime block; status/apply own drift.
+            AecSkillInstaller.Install(codexHome);
+            if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Repository HEAD changed during Codex attachment verification.");
+            }
+
+            output.WriteLine("initialized");
+            return 0;
+        }
 
         if (pathMatches)
         {
@@ -250,30 +286,11 @@ internal static class InitCommand
             return 0;
         }
 
-        EnsureCommitIdentity(repository);
-        AecSkillInstaller.Install(codexHome);
-        GitProcess.RunRequired(
-            repository,
-            "Git could not configure exact instruction bytes",
-            "config",
-            "--local",
-            "core.autocrlf",
-            "false");
-
         var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
+        // The committed source belongs to the shared data history; only this
+        // machine's runtime control block should contain its checkout path.
         var rebound = AecInstructionBlock.RebindRepository(completed.Content, repository);
-        AtomicFile.ReplaceIfUnchanged(
-            sourcePath,
-            completed.Content,
-            rebound,
-            "Canonical source");
-
-        var commit = BackupCommand.CommitCanonicalSource(
-            repository,
-            RebindCommitMessage,
-            completed.Commit,
-            rebound,
-            allowEmpty: false);
+        AecSkillInstaller.Install(codexHome);
         ApplyCommand.RunForAttachment(
             repository,
             codexHome,
@@ -281,22 +298,160 @@ internal static class InitCommand
             warning,
             runtime,
             runtimePersonality,
-            commit,
-            rebound,
-            completed.Config);
+            completed.Commit,
+            completed.Content,
+            completed.Config,
+            rebound);
         VerifyInitializationResult(
             repository,
             sourcePath,
             runtimePath,
-            commit,
-            rebound,
-            completed.Config);
+            completed.Commit,
+            completed.Content,
+            completed.Config,
+            rebound);
 
         output.WriteLine("initialized");
         return 0;
     }
 
-    private static CompletedSnapshot LoadCompletedRepository(string repository)
+    private static int AttachEnrolledRepository(
+        string repository,
+        string codexHome,
+        string runtimePath,
+        bool forcePathChange,
+        CompletedSnapshot completed,
+        string platform,
+        TextWriter output,
+        TextWriter warning)
+    {
+        var target = CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Codex);
+        var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime target");
+        var runtimeBinding = runtime is null
+            ? null
+            : AecInstructionBlock.ReadRepositoryBinding(runtime);
+        var locallyBound = runtimeBinding is not null &&
+            AecInstructionBlock.RepositoryPathsEqual(runtimeBinding.Repository, repository);
+        if (locallyBound && runtimeBinding!.Platform is not null &&
+            !string.Equals(runtimeBinding.Platform, platform, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Codex runtime instructions are bound to a different AEC platform.");
+        }
+        var canonicalPathMatches = AecInstructionBlock.RepositoryPathsEqual(
+            completed.Binding.Repository, repository);
+        if (!forcePathChange &&
+            ((!canonicalPathMatches && !locallyBound) ||
+             (runtimeBinding is not null && !locallyBound)))
+        {
+            throw new InvalidOperationException(
+                "Codex instructions record a different data repository. " +
+                "Confirm the local path change, then rerun `aec init` with --force-path-change.");
+        }
+
+        var configPath = Path.Combine(codexHome, "config.toml");
+        var runtimeConfig = AecApplication.ReadOptionalTextFile(configPath, "Runtime config");
+        var personality = CodexPersonalityConfig.ReadCanonical(
+            completed.Config,
+            Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
+        var configUpdate = CodexPersonalityConfig.PlanRuntimeUpdate(
+            runtimeConfig, configPath, personality);
+
+        // A locally bound portable runtime belongs to status/apply, not init.
+        // A legacy block is upgraded once so this enrollment uses its target.
+        if (locallyBound && runtimeBinding!.Platform is not null)
+        {
+            AecSkillInstaller.Install(codexHome);
+            VerifyEnrolledInputs(repository, completed, platform, target);
+            output.WriteLine("initialized");
+            return 0;
+        }
+
+        var includeChatGptGuidance = AecInstructionBlock.IncludesChatGptGuidance(
+            runtimeBinding?.Version) ||
+            AecInstructionBlock.IncludesChatGptGuidance(completed.Binding.Version);
+        var desired = AecInstructionBlock.MergeForPortableTarget(
+            target, repository, platform, includeChatGptGuidance);
+        AecSkillInstaller.Install(codexHome);
+        VerifyEnrolledInputs(repository, completed, platform, target);
+
+        if (configUpdate.Changed)
+        {
+            if (configUpdate.Inserted)
+            {
+                warning.WriteLine(
+                    "warning: runtime config does not declare root `personality`; " +
+                    "the committed value will be added.");
+            }
+
+            AtomicFile.ReplaceIfUnchanged(
+                configPath, runtimeConfig, configUpdate.Content, "Runtime config",
+                UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        try
+        {
+            // The repository is shared, but only this machine's runtime gets its
+            // checkout path. Recheck after the config step before replacing instructions.
+            VerifyEnrolledInputs(repository, completed, platform, target);
+            if (runtime is null || !runtime.AsSpan().SequenceEqual(desired))
+            {
+                AtomicFile.ReplaceIfUnchanged(runtimePath, runtime, desired, "Runtime target");
+            }
+
+            VerifyEnrolledInputs(repository, completed, platform, target);
+            if (!AecApplication.ReadRequiredTextFile(runtimePath, "Runtime target")
+                    .AsSpan().SequenceEqual(desired) ||
+                !AecApplication.ReadRequiredTextFile(configPath, "Runtime config")
+                    .AsSpan().SequenceEqual(configUpdate.Content))
+            {
+                throw new IOException("Codex runtime verification failed after enrolled init.");
+            }
+        }
+        catch (Exception exception) when (configUpdate.Changed &&
+            exception is IOException or InvalidOperationException or InvalidDataException)
+        {
+            throw new InvalidOperationException(
+                $"Enrolled Codex init stopped after the config step. Config at {configPath} " +
+                $"may be updated; instructions at {runtimePath} may not be. " +
+                "Inspect both runtime files before retrying; no automatic rollback was attempted.",
+                exception);
+        }
+
+        output.WriteLine("initialized");
+        return 0;
+    }
+
+    private static void VerifyEnrolledInputs(
+        string repository,
+        CompletedSnapshot completed,
+        string platform,
+        byte[] expectedTarget)
+    {
+        if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
+                StringComparison.Ordinal) ||
+            !CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Codex)
+                .AsSpan().SequenceEqual(expectedTarget) ||
+            !ApplyCommand.ReadCommittedConfig(repository, completed.Commit)
+                .AsSpan().SequenceEqual(completed.Config))
+        {
+            throw new InvalidOperationException(
+                "Committed Codex environment changed during enrolled init.");
+        }
+    }
+
+    internal static string ValidateCompletedRepositoryForEnrollment(
+        string repository,
+        string targetRelativePath)
+    {
+        // Enrollment already checked this machine's runtime binding. The
+        // committed canonical block may retain another machine's checkout path.
+        return LoadCompletedRepository(repository, targetRelativePath).Commit;
+    }
+
+    private static CompletedSnapshot LoadCompletedRepository(
+        string repository,
+        string? allowedEnrollmentTarget = null)
     {
         AecApplication.EnsureRealDirectory(repository, "Repository");
         var gitDirectory = Path.Combine(repository, ".git");
@@ -305,7 +460,25 @@ internal static class InitCommand
         EnsureContainedGitMetadata(repository, gitDirectory);
         BackupCommand.ValidateRepository(repository);
         EnsureMainBranch(repository);
-        BackupCommand.EnsureNoChangesOutsideManagedSources(repository);
+        if (allowedEnrollmentTarget is null)
+        {
+            BackupCommand.EnsureNoChangesOutsideManagedSources(repository);
+        }
+        else
+        {
+            // A first enrollment leaves exactly one target uncommitted for review.
+            // A repeat invocation may inspect that same target, but nothing else.
+            var status = GitProcess.RunRequired(
+                repository,
+                "Git could not inspect enrollment changes",
+                "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".",
+                $":(top,exclude,literal){allowedEnrollmentTarget}");
+            if (status.Output.Length != 0)
+            {
+                throw new InvalidOperationException(
+                    "Repository has changes outside the selected enrollment target.");
+            }
+        }
 
         var commit = ApplyCommand.ResolveHeadCommit(repository);
         var content = ApplyCommand.ReadCommittedSource(repository, commit);
@@ -317,14 +490,7 @@ internal static class InitCommand
             ?? throw new InvalidDataException(
                 "Canonical instructions do not contain a supported initialized AEC block.");
 
-        var history = ReadFirstParentHistory(repository, required: true);
-        if (history.Length < 2 || !HasExpectedInitializationSubjects(repository, history))
-        {
-            throw new InvalidOperationException(
-                "Repository does not contain the expected AEC initialization history.");
-        }
-
-        ValidateInitializationHistory(repository, history[0], history[1]);
+        ValidateInitializationHistory(repository);
 
         // Pin the inspected snapshot after all history checks so a concurrent checkout
         // cannot silently redirect the later attachment apply.
@@ -339,12 +505,61 @@ internal static class InitCommand
         return new CompletedSnapshot(commit, content, config, binding);
     }
 
+    internal static void ValidateInitializationHistory(string repository)
+    {
+        // Migration needs the original history proof without init's main-branch
+        // or clean-worktree requirements: interrupted section edits are separate.
+        var history = ReadFirstParentHistory(repository, required: true);
+        var rootSubject = history.Length == 0 ? null : ReadCommitSubject(repository, history[0]);
+        if (rootSubject == LegacyInitializedRootSubject)
+        {
+            ValidateLegacyInitializedRoot(repository, history[0]);
+            return;
+        }
+        if (history.Length < 2 || !IsBackupRootSubject(rootSubject))
+        {
+            throw new InvalidOperationException(
+                "Repository does not contain the expected AEC initialization history.");
+        }
+
+        ValidateInitializationHistory(repository, history[0], history[1]);
+    }
+
     private static bool HasCompletedInitializationHistory(string repository)
     {
-        // A one-commit baseline may already contain a current block; the mandatory
-        // second commit is what distinguishes a completed initialization.
         var history = ReadFirstParentHistory(repository, required: false);
-        return history.Length >= 2 && HasExpectedInitializationSubjects(repository, history);
+        if (history.Length == 0) return false;
+
+        var rootSubject = ReadCommitSubject(repository, history[0]);
+        return rootSubject == LegacyInitializedRootSubject ||
+            (history.Length >= 2 && IsBackupRootSubject(rootSubject));
+    }
+
+    private static bool IsBackupRootSubject(string? subject) =>
+        subject is BackupCommand.CommitMessage or BackupCommand.OrdinaryCommitMessage;
+
+    private static void ValidateLegacyInitializedRoot(string repository, string commit)
+    {
+        var root = GitProcess.RunRequiredBytes(repository, "Git could not inspect the legacy AEC root",
+            "--no-replace-objects", "cat-file", "commit", commit);
+        EnsureRootCommit(root);
+
+        var entries = ReadTreeEntries(repository, commit);
+        if (entries.Count != 1 + ChatGptInitCommand.ScaffoldFileNames.Length ||
+            !entries.TryGetValue(AecApplication.SourceRelativePath, out var source) ||
+            !ChatGptInitCommand.ScaffoldFileNames.All(name =>
+                entries.ContainsKey($"environment/providers/chatgpt/{name}")))
+        {
+            throw new InvalidOperationException("The legacy AEC root has an unexpected tree shape.");
+        }
+
+        var content = ReadBoundedBlob(repository, source.ObjectId, "Legacy root canonical instructions");
+        var binding = AecInstructionBlock.ReadRepositoryBinding(content);
+        if (binding is null || binding.Platform is not null ||
+            !AecInstructionBlock.IncludesChatGptGuidance(binding.Version))
+        {
+            throw new InvalidDataException("The legacy AEC root has no supported initialized Codex and ChatGPT block.");
+        }
     }
 
     private static string[] ReadFirstParentHistory(string repository, bool required)
@@ -372,25 +587,6 @@ internal static class InitCommand
         return result.Output.Split(
             ['\r', '\n'],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    }
-
-    private static bool HasExpectedInitializationSubjects(
-        string repository,
-        string[] history)
-    {
-        var baselineSubject = ReadCommitSubject(repository, history[0]);
-        return (string.Equals(
-                    baselineSubject,
-                    BackupCommand.CommitMessage,
-                    StringComparison.Ordinal) ||
-                string.Equals(
-                    baselineSubject,
-                    BackupCommand.OrdinaryCommitMessage,
-                    StringComparison.Ordinal)) &&
-               string.Equals(
-                   ReadCommitSubject(repository, history[1]),
-                   InitializationCommitMessage,
-                   StringComparison.Ordinal);
     }
 
     private static string ReadCommitSubject(string repository, string commit)
@@ -675,7 +871,8 @@ internal static class InitCommand
         string runtimePath,
         string expectedCommit,
         byte[] expectedContent,
-        byte[] expectedConfig)
+        byte[] expectedConfig,
+        byte[]? expectedRuntimeContent = null)
     {
         var head = ResolveBaselineHead(repository, "Git could not verify initialized HEAD");
         if (!string.Equals(head, expectedCommit, StringComparison.Ordinal))
@@ -703,7 +900,7 @@ internal static class InitCommand
         }
 
         VerifyContent(sourcePath, expectedContent, "Canonical source");
-        VerifyContent(runtimePath, expectedContent, "Runtime target");
+        VerifyContent(runtimePath, expectedRuntimeContent ?? expectedContent, "Runtime target");
         var configSourcePath = Path.Combine(
             repository,
             AecApplication.ConfigSourceRelativePath);
@@ -1036,14 +1233,14 @@ internal static class InitCommand
             .Select(Path.GetFileName)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        if (!providerEntries.SequenceEqual(["codex"], StringComparer.Ordinal) &&
-            !providerEntries.SequenceEqual(["chatgpt", "codex"], StringComparer.Ordinal))
+        if (!providerEntries.SequenceEqual([AecIdentifiers.Codex], StringComparer.Ordinal) &&
+            !providerEntries.SequenceEqual([AecIdentifiers.ChatGpt, AecIdentifiers.Codex], StringComparer.Ordinal))
         {
             throw new InvalidOperationException(
                 $"Initialization baseline has unexpected entries under: {providersDirectory}");
         }
 
-        var codexDirectory = Path.Combine(repository, "environment", "providers", "codex");
+        var codexDirectory = Path.Combine(repository, "environment", "providers", AecIdentifiers.Codex);
         var codexEntries = Directory
             .EnumerateFileSystemEntries(codexDirectory)
             .Select(Path.GetFileName)
@@ -1060,7 +1257,7 @@ internal static class InitCommand
 
         if (providerEntries.Length == 2)
         {
-            var chatGptDirectory = Path.Combine(providersDirectory, "chatgpt");
+            var chatGptDirectory = Path.Combine(providersDirectory, AecIdentifiers.ChatGpt);
             EnsureOnlyEntries(chatGptDirectory, ChatGptInitCommand.ScaffoldFileNames);
             foreach (var fileName in ChatGptInitCommand.ScaffoldFileNames)
             {
@@ -1073,7 +1270,7 @@ internal static class InitCommand
         EnsureContainedGitMetadata(repository, gitDirectory);
     }
 
-    private static void EnsureContainedGitMetadata(string repository, string gitDirectory)
+    internal static void EnsureContainedGitMetadata(string repository, string gitDirectory)
     {
         EnsureSamePath(
             gitDirectory,

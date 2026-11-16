@@ -1,480 +1,194 @@
 # Implementation Checklist
 
-## v1.4.0-alpha.8 — Copilot Linux ARM64 lifecycle
-
-- [x] Extend the existing isolated Linux ARM64 installer test instead of adding
-  an overlapping workflow.
-- [x] Add coverage for Copilot init, in-sync status, runtime-to-repository backup,
-  and committed repository-to-runtime apply through the Native AOT executable.
-- [x] Verify managed files, canonical/runtime byte equality, absence of unmanaged
-  `config.json`, the backup commit subject, and unchanged `HEAD` across apply.
-- [x] Isolate Git identity and commit signing from the runner configuration.
-- [x] Keep Linux warning-marked because the test neither installs nor invokes the
-  actual Copilot CLI harness.
-- [x] Commit, push, and explicitly run the manual Linux ARM64 workflow: Native
-  AOT build, command smoke checks, installer lifecycle, and complete isolated
-  Copilot lifecycle passed in
-  [run 36283284376](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284376).
-
-Immediate next work: review the deferred v2 provider-first API migration as the
-next separately approved increment.
-
-## v1.4.0-alpha.7 — Copilot macOS Native AOT lifecycle
-
-- [x] Extend the existing isolated macOS ARM64 installer test instead of adding
-  an overlapping workflow.
-- [x] Initialize disposable Codex and Copilot homes through the built Native AOT
-  executable without accessing personal runtime state.
-- [x] Exercise Copilot init, in-sync status, runtime-to-repository backup, and
-  committed repository-to-runtime apply.
-- [x] Verify canonical/runtime byte equality, the backup commit subject, and an
-  unchanged Git `HEAD` across apply.
-- [x] Isolate Git identity and signing from the runner and developer machine.
-- [x] Keep macOS warning-marked because this test does not install or invoke the
-  actual Copilot CLI harness.
-- [x] Commit, push, and explicitly run the manual macOS ARM64 workflow: Native
-  AOT build, command smoke checks, installer lifecycle, and complete isolated
-  Copilot lifecycle passed in
-  [run 36283284718](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284718).
-
-Immediate next work: implement and validate the same isolated Copilot lifecycle
-on Linux ARM64 before beginning the deferred v2 API migration.
-
-## v1.4.0-alpha.6 — Copilot repository-to-runtime apply
-
-- [x] Add explicit Copilot apply routing with `--provider=copilot` and the
-  established `--copilot-home` resolution order.
-- [x] Require canonical instructions to be one regular committed Git file whose
-  working bytes exactly match the committed blob and selected repository binding.
-- [x] Atomically replace only runtime `copilot-instructions.md`; create a missing
-  runtime file with user-only permissions and avoid equal-byte rewrites.
-- [x] Preserve canonical bytes, Git `HEAD`, and unrelated repository changes;
-  create no commit and capture no runtime state.
-- [x] Reject dirty/uncommitted/unsupported canonical sources, path mismatches,
-  repository-contained runtime paths, and invalid provider flags before writing.
-- [x] Teach provider init to migrate the exact official backup-only skill and
-  document the apply direction in the bundled Copilot skill.
-- [x] Extend the isolated Windows lifecycle to restore committed canonical bytes
-  after runtime drift and verify that `HEAD` is unchanged.
-- [x] Run the manual Windows x64 workflow: Native AOT build, command smoke checks,
-  and the complete isolated init/status/backup/apply lifecycle passed in
-  [run 36273405366](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36273405366).
-
-Immediate next work: validate the complete lifecycle through the remaining
-isolated macOS and Linux ARM64 workflows before the v2 migration.
-
-## v1.4.0-alpha.5 — Copilot runtime-to-repository backup
-
-- [x] Add explicit Copilot backup routing with `--provider=copilot` and
-  `--copilot-home` resolution matching init/status.
-- [x] Validate canonical/runtime managed blocks and repository bindings before
-  changing the canonical file.
-- [x] Capture exact runtime instruction bytes, stage only the Copilot canonical
-  path, and create the fixed `Backup Copilot instructions` commit.
-- [x] Preserve runtime bytes and timestamps; report `unchanged` when the
-  canonical path already matches both runtime and `HEAD`.
-- [x] Reject unrelated working-tree/index changes, missing runtime files,
-  unsupported blocks, path mismatches, and invalid provider flags.
-- [x] Teach provider init to migrate the exact official status-only skill and
-  document the backup direction in the bundled Copilot skill.
-- [x] Extend the isolated Windows lifecycle to capture runtime Copilot drift and
-  verify the canonical bytes and commit subject.
-- [x] Run the manual Windows x64 workflow: Native AOT build, command smoke checks,
-  and the isolated init/status/backup lifecycle passed in
-  [run 36272081560](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36272081560).
-
-Immediate next work: implement Copilot `apply` as the repository-to-runtime
-direction.
-
-## v1.4.0-alpha.4 — Read-only Copilot status
-
-- [x] Add explicit Copilot status routing with `--provider=copilot` and the
-  established `--copilot-home` resolution order.
-- [x] Compare canonical and runtime `copilot-instructions.md` bytes without
-  mutation, returning 0 for `in_sync`, 2 for `different` or `missing`, and 1
-  for validation errors.
-- [x] Reject Codex-only flags and provider-less Copilot flags.
-- [x] Teach the bundled Copilot skill the status contract and permit provider
-  init to replace only the exact official initialization-only predecessor.
-- [x] Add focused command, immutability, resolution, argument, help, and skill
-  migration tests.
-- [x] Extend the isolated Windows Native AOT lifecycle to require an `in_sync`
-  Copilot status after provider initialization.
-- [x] Validate Copilot status through the Windows x64 Native AOT lifecycle in
-  [run 36272081560](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36272081560).
-
-Immediate next work: continue the separately recorded Copilot backup/apply
-increments without starting the deferred v2 public API migration.
-
-## v1.4.0-alpha.3 — Copilot Windows initialization smoke
-
-- [x] Exercise Copilot initialization through the Windows x64 Native AOT artifact
-  with isolated repository and Copilot-home paths.
-- [x] Verify canonical/runtime equality, the managed block, bundled skill
-  installation, and continued non-ownership of Copilot `config.json`.
-- [x] Keep the Windows support matrix warning-marked because CI does not install
-  or exercise the actual GitHub Copilot CLI harness.
-- [x] Run the manual Windows x64 workflow: Native AOT build, command smoke checks,
-  and the isolated Codex/Copilot installer lifecycle passed in
-  [run 35529409643](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35529409643).
-
-Immediate next work: continue Copilot provider operations while preserving the
-warning-marked Windows harness status until the real CLI is available.
-
-## v1.4.0-alpha.2 — Provider source-path alignment
-
-- [x] Move bundled Codex skill sources to `skills/codex/aec/`.
-- [x] Move bundled Copilot skill sources to `skills/copilot/aec/`.
-- [x] Group provider-specific engine files under `src/Aec/Providers/<provider>/`.
-- [x] Preserve namespaces, command syntax, canonical repository paths, embedded
-  resource names, and installed `<provider-home>/skills/aec/` paths.
-
-## Deferred v2 public API change
-
-After Copilot `status`, `backup`, and `apply` are complete, release the breaking
-provider-first command contract as `2.0.0-alpha.1`:
-
-```text
-aec codex init|status|backup|apply ...
-aec copilot init|status|backup|apply ...
-```
-
-- [ ] Replace implicit Codex routing with explicit provider command groups.
-- [ ] Replace `--codex-home` and `--copilot-home` with group-local `--home`.
-- [ ] Move Codex uninstall and skill upgrade beneath the Codex command group.
-- [ ] Remove legacy command forms without compatibility aliases.
-- [ ] Update installers, generated uninstallers, skills, documentation, and tests.
-- [x] Validate the complete Copilot lifecycle through isolated macOS ARM64,
-  Windows x64, and Linux ARM64 workflows.
-
-## v1.4.0-alpha.1 — Copilot macOS initialization
-
-- [x] Define the native Copilot instruction contract at
-  `copilot-instructions.md`, distinct from Codex `AGENTS.md`.
-- [x] Add explicit `--provider=copilot` and `--copilot-home` initialization,
-  resolving explicit path, `COPILOT_HOME`, then `~/.copilot`.
-- [x] Capture or reconcile the canonical and runtime instruction files while
-  preserving non-AEC bytes and rejecting path or skill conflicts.
-- [x] Install the Copilot-compatible `skills/aec/SKILL.md` without creating
-  Codex/OpenAI metadata paths.
-- [x] Keep `config.json` outside AEC ownership and document the alpha boundary.
-- [x] Add isolated xUnit coverage for initialization, resolution, repeatability,
-  runtime reconciliation, and conflict rejection.
-- [ ] Validate with a real local macOS Copilot CLI harness before changing the
-  support matrix from ⚠.
-
-Immediate next work: add Copilot `backup` and `apply` as separate directional
-slices; do not add Copilot uninstallation or standalone skill upgrade yet.
-
-## macOS Native AOT SDK selection
-
-- [x] When `SDKROOT` is not explicitly supplied, resolve Xcode's macOS SDK through
-  `xcrun` before Native AOT invokes `clang`.
-- [x] Preserve a caller-provided `SDKROOT` for advanced or CI-specific toolchains.
-
-## macOS ARM64 smoke workflow
-
-- [x] Add a manual-only `macos-15` ARM64 workflow using built-in Git checkout.
-- [x] Build the Native AOT executable and smoke-test `aec version` and
-  `aec help`.
-- [x] Run the existing isolated macOS installer/generated-uninstaller test.
-- [x] Keep CI evidence separate from the existing real local Codex verification.
-- [x] Commit, push, and explicitly run the workflow: Native AOT build, command
-  smoke checks, and isolated installer/uninstaller test passed in
-  [run 35412687899](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35412687899).
-
-Immediate next work: choose the next local harness-provider slice; macOS ARM64
-now has both real Codex dogfooding and repeatable CI regression evidence.
-
-## Linux ARM64 build and smoke slice
-
-- [x] Add a host-checked Ubuntu ARM64 Native AOT build script targeting
-  `linux-arm64` and writing under ignored `artifacts/`.
-- [x] Add a manual-only `ubuntu-24.04-arm` workflow to build and smoke-test
-  `aec version` and `aec help` without accessing personal AEC data.
-- [x] Document the build prerequisites and distinguish CI smoke from real
-  Codex harness verification.
-- [x] Commit, push, and explicitly run the Linux ARM64 workflow: Native AOT
-  build, `aec version`, and `aec help` passed in
-  [run 35409334463](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35409334463).
-- [x] Add the Linux ARM64 installer with the per-user `$HOME/.local/bin`
-  default, absolute custom-directory support, and no `PATH` mutation.
-- [x] Generate `scripts/uninstall-aec-linux-arm64.sh` beside the installer;
-  verify its original path and installed executable digest before cleanup.
-- [x] Add an isolated Linux lifecycle test covering install, reinstall, custom
-  path, tamper/copy refusal, real managed init/uninstall, and helper conflict.
-- [x] Run the isolated Linux installer lifecycle: install, reinstall, repair,
-  managed init, and uninstall passed in
-  [run 35410432127](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35410432127).
-- [ ] Later: validate with a real local Linux Codex harness before marking
-  the matrix as verified.
-
-Immediate next work: validate the installed executable against a real local
-Linux Codex harness when one is available.
-
-## Approved cross-platform decisions and Windows installer slice
-
-- [x] Record the local-harness-only configuration scope; cloud-hosted use is
-  outside the current scope.
-- [x] Keep releases alpha/beta until the actual target harness has been tested.
-- [x] Roadmap Codex on Windows/Linux first, then Copilot, Claude, and Gemini on
-  macOS/Windows/Linux.
-- [x] Keep GitHub Actions manual-only with `workflow_dispatch`; an explicitly
-  authorized `gh workflow run` may trigger it, but pushes do not start CI.
-- [x] Use isolated CI fixtures; never access the personal AEC data repository.
-- [x] Record that `act` covers suitable Linux containers locally, not Windows
-  x64 validation from an ARM Mac.
-- [x] Add the Windows x64 Native AOT build script and manual-only workflow
-  for `aec.exe version` and `aec.exe help` smoke checks.
-- [x] Run the workflow on a Windows runner: build, `version`, and `help` passed
-  in [run 35171142521](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35171142521).
-- [x] Add `scripts/install-win-x64.ps1` to consume
-  `artifacts/aec-win-x64/aec.exe`, default to the per-user
-  `$env:LOCALAPPDATA\Programs\AEC` directory, and accept an absolute
-  `-InstallDir` override.
-- [x] Keep installation free of `PATH` and PowerShell execution-policy
-  mutation; explain effective Codex `PATH` and the required Codex restart.
-- [x] Generate `scripts/uninstall-aec-win-x64.ps1` beside the installer. It
-  must run the exact installed binary's `aec uninstall` first, then remove the
-  binary and helper script, with optional `-CodexHome`, while preserving the
-  data repository and `config.toml`.
-- [x] Add an isolated Windows runner test for install, reinstall, and uninstall.
-- [x] Run the isolated Windows installer lifecycle test: install, reinstall,
-  managed init, and uninstall passed in
-  [run 35282576084](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35282576084).
-- [ ] Later: validate the installed executable against a real Windows Codex
-  harness.
-
-Immediate next work: validate against a real Windows Codex harness when one is
-available. The isolated installer lifecycle has passed on a Windows runner.
-
-## v1.3.1 — ChatGPT provider attachment
-
-- [x] Accept the exact ChatGPT scaffold generated by `aec init --provider=chatgpt`.
-- [x] Reject unexpected provider directories and ChatGPT scaffold entries.
-- [x] Add an attachment regression test for a completed provider-enabled repository.
-- [x] Build, install, dogfood, and apply the patch to the selected data repository.
-
-## v1.3.0 — Managed AEC workflow guidance
-
-- [x] Add compact provider-neutral v5 and provider-aware v6 managed blocks.
-- [x] Preserve and recognize released v3/v4 blocks while migrating to v5/v6.
-- [x] Preserve non-AEC bytes and existing provider-specific guidance.
-- [x] Update README, bundled skill guidance, version metadata, and skill-upgrade predecessor support.
-- [x] Pass focused managed-block and initialization validation.
-- [ ] Run the deferred two-machine Git round-trip rehearsal.
-
-Immediate next work: rehearse push/pull through a disposable local bare Git remote,
-then document the cross-machine workflow before adding remote convenience commands.
-
-## GitHub Pages landing page
-
-- [x] Create a dependency-free, responsive landing page under `docs/`.
-- [x] Explain AEC directionality, source-of-truth model, current platform, and installation.
-- [x] Add the public roadmap for platform and provider support.
-- [x] Add GitHub, MIT licence, citation, and PayPal coffee links.
-- [x] Explicitly enable GitHub Pages and verify its deployed public URL.
-
-## v1.2.3 — Security containment
-
-- [x] **P1:** Reject linked path ancestors and repository-contained Codex runtime paths in `status` and `backup`.
-- [x] **P1:** Disable Git replacement objects throughout `BackupCommand` validation and commit operations.
-- [x] Add focused regression tests for both P1 boundaries.
-- [x] Pass build, focused tests, the full Debug suite, and diff validation.
-- [x] Pass formatting after resetting the stale .NET build servers.
-
-Immediate next work: decide whether to reset the stale .NET build servers and retry
-formatting; do not begin P2 work.
-
-## Test scope isolation roadmap
-
-- [x] Document the current five-minute full-suite expectation and quiet VSTest output.
-- [x] Make focused class-filtered tests the normal per-change workflow.
-- [x] Reserve the full Debug and Release suites for pre-push and pre-release regression gates.
-- [x] Classify tests as unit, command integration, filesystem safety, or end-to-end.
-- [x] Add stable xUnit traits or separate test projects for those scopes.
-- [x] Measure test durations and prioritize proven bottlenecks before optimization.
-- [x] Remove process-state serialization only where isolated execution is demonstrated.
-- [x] Preserve full-suite regression coverage while making focused feedback faster.
-
-## Security review implementation backlog
-
-- [x] **P2:** Stage verified blobs without executing configured clean filters or optional Git integrations.
-- [x] **P2:** Reject linked worktrees and Git metadata outside the selected data repository.
-- [x] **P2:** Prevent fresh-init identity cleanup from deleting concurrently created repository state.
-- [x] **P2:** Close or explicitly constrain pathname-based file validation and mutation races.
-- [x] **P3:** Verify the installed executable digest before generated-uninstaller execution and deletion.
-- [x] **P3:** Create a missing runtime `AGENTS.md` with user-only permissions.
-
-## Documentation and architecture/security review
-
-- [x] Explain why generated Codex `MEMORY.md` is outside AEC ownership.
-- [x] Complete a read-only architecture review.
-- [x] Complete a read-only security review.
-- [x] Report actionable findings without bundling unapproved fixes.
-
-## v1.2.2 — Shared test infrastructure
-
-- [x] Centralize `AecApplication.Run` output capture and its result model.
-- [x] Centralize Git-backed test setup through the production isolation boundary.
-- [x] Remove duplicated test process launchers and result records.
-- [x] Preserve every test and assertion.
-- [x] Pass analyzer, Debug, Release, shell, skill, and Native AOT validation.
-- [ ] Re-run formatting validation after the Roslyn MSBuild host named-pipe timeout.
-
-## v1.2.1 — Behavior-preserving cleanup
-
-- [x] Consolidate shared compiler settings in `Directory.Build.props`.
-- [x] Enable the pinned .NET 10 recommended Roslyn rules and build-time code style.
-- [x] Replace repetitive help writes with one newline-safe raw string literal.
-- [x] Extract repeated required-option value parsing without changing diagnostics.
-- [x] Fix every compiler and analyzer diagnostic without suppression.
-- [x] Remove tests only after an exact public-path contract supersedes them.
-- [x] Pass focused, full, formatting, shell, skill, and Native AOT validation.
-
-## v1.2 — Installer-generated uninstaller
-
-- [x] Generate `scripts/uninstall-aec.sh` beside the macOS ARM64 installer.
-- [x] Embed the exact latest selected executable path so cleanup does not use `PATH`.
-- [x] Run runtime `aec uninstall` before removing the executable or helper script.
-- [x] Preserve `config.toml` and every AEC data repository.
-- [x] Refuse to overwrite a non-AEC helper and preflight source-folder write access.
-- [x] Recognize the exact v1.1.0 skill as an upgrade and uninstall predecessor.
-- [x] Pass shell, skill, Debug, Release, and macOS ARM64 Native AOT validation.
-- [x] Pass an isolated generated-uninstaller install-to-uninstall cycle.
-
-## v1.1 — Explicit AEC runtime uninstall
-
-- [x] Define `aec uninstall [--codex-home ABSOLUTE_PATH]` without `--repo`.
-- [x] Preserve every data repository and all runtime `config.toml` bytes.
-- [x] Remove only the recognized AEC instruction block and official skill files.
-- [x] Preserve unrelated instructions, skills, and extra AEC skill-directory files.
-- [x] Fail closed for unmanaged `$aec` references and customized managed files.
-- [x] Make cleanup idempotent and resumable after instruction removal.
-- [x] Recognize the exact v1.0.0 skill as an upgrade and uninstall predecessor.
-- [x] Update version metadata, help, README, and bundled skill guidance.
-- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
-
-## v1.0 — Publication
-
-- [x] Choose the MIT License and public attribution `@ferrywlto`.
-- [x] Choose developer-built Native AOT with initial `osx-arm64` support.
-- [x] Add the MIT license, project metadata, and goodwill attribution.
-- [x] Validate the licensing increment.
-- [x] Commit and push the exact licensing paths.
-- [x] Capture the developer-authored `osx-arm64` Native AOT build direction.
-- [x] Harden and validate the deterministic Native AOT build artifact.
-- [x] Add contained user-local binary installation without shell-profile edits.
-- [x] Make reinstall the explicit, idempotent binary upgrade path.
-- [x] Add binary-only uninstall guidance that preserves AEC state.
-- [x] Document prerequisites, build, install, PATH, upgrade, and uninstall.
-- [x] Validate clean install, repeated install, upgrade, and uninstall.
-- [x] Warn and validate when a custom install directory must be exposed to Codex through `PATH`.
-- [x] Commit and push the exact macOS ARM64 publication paths.
-- [x] Dogfood the installed Native AOT binary against the selected AEC repository.
-- [x] Migrate the sole pre-release v0.8 skill installation to the v0.9 baseline.
-- [x] Document the approved pulled-repository initialization, `apply` routing, and path-confirmation flow.
-- [x] Add and dogfood `aec skill upgrade` for future official skill versions.
-- [x] Document and test Codex restart troubleshooting for a newly installed AEC CLI.
-- [x] Complete v1.0 release validation and private end-to-end dogfooding.
-- [x] Prepare the `1.0.0` release source and tag target.
-- [x] Publish v1.0 publicly after the private dogfood period concludes.
-
-## v0.13.1 — Codex executable discovery troubleshooting
-
-- [x] Explain that a running Codex process retains the `PATH` from app startup.
-- [x] Keep the executable-discovery restart distinct from skill-only upgrade reload.
-- [x] Recognize the byte-exact v0.13.0 skill bundle as an upgrade predecessor.
-- [x] Pass full Debug and Release test suites plus macOS ARM64 Native AOT validation.
-- [x] Dogfood bootstrap, backup, apply, attachment, and installed-skill upgrade flows.
-
-## v0.13 — Explicit installed-skill upgrade
-
-- [x] Approve the separate binary-install and skill-guidance upgrade flow.
-- [x] Add focused failing CLI and fail-closed upgrade tests.
-- [x] Recognize only exact official v0.9.0 through v0.12.0 predecessors.
-- [x] Preflight both managed files, support safe retry, and remain idempotent.
-- [x] Update version metadata, help, README, and bundled `$aec` guidance.
-- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
-- [x] Reinstall the live executable and dogfood the installed-skill upgrade after
-  separate approval.
-
-## v0.12 — Command-aligned version reporting
-
-- [x] Replace the exceptional `aec --version` option with the `aec version` command.
-- [x] Update release metadata, help, documentation, the bundled skill, and installer probes.
-- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
-
-## v0.10 — Pulled-repository attachment and path routing
-
-- [x] Approve the pulled-repository flow and `--force-path-change` semantics.
-- [x] Capture the pivotal `$aec` skill direction from the user.
-- [x] Add focused failing tests for v3/v4 binding, attachment, rebinding, and apply routing.
-- [x] Recognize only clean completed repositories with the expected initialization history.
-- [x] Attach a matching repository through install and apply without backup or commit.
-- [x] Rebind a confirmed moved repository with one canonical-only commit.
-- [x] Route `apply` and ChatGPT provider path mismatches back to ordinary `init`.
-- [x] Update the `$aec` skill, CLI version, help, and documentation.
-- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
-- [x] Commit and push the exact v0.10 paths.
-
-## v0.11 patch series — Managed Codex configuration values
-
-- [x] Manage only selected root settings and preserve unrelated runtime config.
-- [x] Manage `personality`; accept `none`, `friendly`, and `pragmatic`, using
-  `none` as the missing-value default.
-- [x] Keep `model` and `model_reasoning_effort` outside initial ownership.
-- [x] Extend `status` to compare only the managed semantic value without mutation.
-- [x] Fail closed on invalid canonical, duplicate, unsupported, or ambiguous values.
-- [x] Release the read-only status checkpoint as v0.11.1.
-- [x] Extend `apply` to update or warn before inserting managed runtime values.
-- [x] Document and release the repository-to-runtime checkpoint as v0.11.2.
-- [x] Extend `backup` to capture existing managed values and warn and stop when
-  they are missing.
-- [x] Document and release the runtime-to-repository checkpoint as v0.11.3.
-- [x] Extend `init` to enroll existing values or warn before adding the default.
-- [x] Document the two-file initialization history, missing-value default, and
-  legacy-history compatibility for v0.11.4.
-- [x] Update the bundled skill guidance for the completed v0.11 command set.
-- [x] Pass skill, Debug, Release, and macOS ARM64 Native AOT validation.
-
-## v0.9 — Commit-first initialization
-
-- [x] Confirm a missing runtime is an error.
-- [x] Fix the second commit subject as `Initialize AEC instructions`.
-- [x] Add focused failing lifecycle and baseline-resume tests.
-- [x] Commit the exact runtime baseline through the backup flow.
-- [x] Reconcile and commit the AEC block only in the canonical source.
-- [x] Apply without overwriting runtime changes made after the committed baseline.
-- [x] Resume only a recognizable baseline-only partial initialization.
-- [x] Reject every other non-empty initialization target.
-- [x] Update the `$aec` skill, CLI version, and documentation.
-- [x] Pass skill, Debug, and Release validation.
-- [x] Commit and push the exact v0.9 engine paths.
-
-## v0.8 — Explicit repository-aware initialization
-
-- [x] Require `--repo` for `init`; remove positional/default-directory semantics.
-- [x] Define `aec help` and the missing-`--repo` diagnostic.
-- [x] Define absolute repository and ChatGPT paths for managed instructions.
-- [x] Authorize direct `dotnet run` migration and a local-only data commit.
-- [x] Add focused failing CLI and managed-block tests.
-- [x] Implement repository-aware block version migration.
-- [x] Update the `$aec` skill, CLI version, and documentation.
-- [x] Pass skill, Debug, and Release validation.
-- [x] Commit and push the exact v0.8 engine paths.
-- [x] Create the initial `aec-data` commit, apply, and verify.
-
-## v0.7 — Install the AEC skill during initialization
-
-- [x] Confirm ordinary `aec init` is the initial skill-installation point.
-- [x] Defer executable publishing and future skill upgrades.
-- [x] Capture the user-authored `$aec` behavioral contract.
-- [x] Scaffold and validate the minimal `aec` skill.
-- [x] Add failing installation and containment tests.
-- [x] Install skill metadata during ordinary `init`.
-- [x] Keep `init --provider=chatgpt` repository-only.
-- [x] Update version and user documentation.
-- [x] Pass Debug and Release verification.
-- [x] Prepare the exact engine release paths and staged secret gate.
-- [x] Complete the source-first AEC validation and canonical commit/push.
+## Current increment — 2.0.0 version metadata
+
+[Ticket #6](https://github.com/ferrywlto/ai-env-as-code/issues/6) is Active. Executable metadata and current-version expectations are `2.0.0`; historical alpha evidence is retained. The focused version test passed and the development executable reports `2.0.0`. Next: open the requested PR to `main` and obtain Ferry's review. A tag, release, merge and installation are separate actions.
+
+## Current increment — migration filter handling
+
+[Ticket #5](https://github.com/ferrywlto/ai-env-as-code/issues/5) is Done. Migration suppresses configured external filters for Git commands, rejects selected filters and managed LFS pointers, and refuses submodules. After correcting the fsmonitor guard ordering, all 84 command, preparation, fast-forward and source-validation regression cases passed (14m 35s), using fixtures under the allowed `.codex` workspace. Ferry approved the reviewed change on 13 November 2026. Do not run live migration from this harness.
+
+On 15 November, three additional cases passed: complete migration with isolated global `filter.lfs` commands, rejection of a filter on a generated instruction path, and byte preservation of an unrelated tracked configuration file across fast-forward. A further fast-forward case verified exact incoming notes bytes and unchanged configuration bytes.
+
+A later line-ending attribute experiment failed at its setup: Git reported `notes.md` as modified rather than clean after the fixture attempted to convert it to CRLF. It did not reach fast-forward; the unfinished test was removed without retry. Ferry chose normal Git conversions for upstream-updated files on 15 November. Two additional cases passed for local edits hidden by `assume-unchanged` and `skip-worktree`. Ferry approved the final changes; implementation was committed as `247bbfb`. An official release remains separate.
+
+The macOS ARM64 Native AOT build on 13 November was stopped after it remained in `dotnet publish` for over three minutes. With Ferry's approval, the 15 November retry completed; the arm64 artifact reports `2.0.0-alpha.4`. The disposable macOS installer, lifecycle, render and migration smoke passed with global `filter.lfs` entries present and unchanged. The personal executable was not installed or modified.
+
+## Current increment — AEC 2.0 alpha
+
+[Ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2) covers the completed 2.0 alpha work.
+Ferry will verify migration independently before requesting an official release.
+Current reviewed engine checkpoint: macOS ARM64 Native AOT migration smoke (`8599e59`).
+Ticket #2 alpha completion is recorded, DoD 25/25 (100%), baseline v3.
+
+| Current item | State / immediate next action |
+| --- | --- |
+| 13e.7: read-only migration apply preview | Reviewed and committed: `f4717c6` + `4f1639e`. Release warning-as-error build: zero warnings/errors; 117/117 focused checks passed with strict index/whole-fixture snapshots. No push or new release claim. |
+| 13e.8: Copilot migration apply | Reviewed and committed: `feb4641`. Release warning-as-error build: zero warnings/errors; 55/55 focused checks passed. No push or personal deployment. |
+| 13e.9: Codex migration apply | Reviewed and committed: `42c98be`. Release warning-as-error build: zero warnings/errors. Focused tests: 51/51 passed (17 new Codex migration, 22 existing Codex writer/apply, 12 Copilot migration). Architecture/reference and migration operating precondition committed separately in `a51eacf`; warning output is not implemented. No push or personal deployment. |
+| 13e.10: enrolled-provider apply coordination | Reviewed and committed: `4ca3ce2`. Release warning-as-error build: zero warnings/errors; 44/44 focused tests passed (15 coordinator, 29 existing provider writers). No completion marker, status verification, public CLI, push or personal deployment. |
+| 13e.11: post-apply status gate | Reviewed and committed: `55237f7`. Release warning-as-error build: zero warnings/errors; 27/27 focused tests passed (13 gate, 14 portable-status regressions). No marker, repair, public CLI, push or personal deployment. |
+| 13e.12: completion preview | Reviewed and committed: `dd85526`. Release warning-as-error build: zero warnings/errors (3.21s); 21/21 focused tests passed (8 preview, 13 status-gate regressions). No marker write, public CLI, push or personal deployment. |
+| 13e.13: completion marker creation | Reviewed and committed: `bb4227c`. Release warning-as-error build: zero warnings/errors (25.58s); 104/104 focused tests passed (14 writer, 90 guard regressions). No marker staging/commit, public CLI, push or personal deployment. |
+| 13e.14: completion marker commit | Reviewed and committed: `603922e`. Release warning-as-error build: zero warnings/errors (final 2.89s); 26/26 focused checks passed (12 committer, 14 writer). No public CLI, personal deployment or push. |
+| 13e.15: post-DONE completion coordination | Reviewed and committed: `4f4c2df`. Release build: zero warnings/errors; 13/13 focused tests passed. |
+| 13e.16: guarded capture | Reviewed. Capture routes by enrolled runtime format and refuses mixed formats before writing. It preserves the original history anchor and section choice. Release build: zero warnings/errors; 46/46 focused checks passed. |
+| 13e.17: capture to scaffold handoff | Reviewed. The coordinator passes the captured checkout to the existing scaffold preview and writer. Release build passed with zero warnings or errors. All 14 focused tests passed. |
+| 13e.18: editing to completion handoff | Reviewed. Exact `DONE` starts fresh validation and completion. EOF or cancellation leaves the scaffold available for editing. Release build passed with zero warnings or errors. All 16 focused tests passed. |
+| Completed boundary | Source/target commits, apply preview, both provider writers, enrolled-provider apply coordination and post-apply status verification are reviewed. |
+| Native migration smoke | macOS ARM64 passed locally at `8599e59`; Linux ARM64 and Windows x64 passed at `d6af1ad`. All three results reviewed. |
+| Alpha completion | Retained `2.0.0-alpha.4` at the time of the approved alpha checkpoint. Official release was deferred pending Ferry's own migration verification and later request. |
+
+Evidence: [initial diagnostics](artifacts/migration-apply-preview-20261101/mutation-diagnostic/),
+[command traces](artifacts/migration-apply-preview-20261101/trace2-permitted/),
+[failed refresh-toggle attempt](artifacts/migration-apply-preview-20261101/auto-refresh-fix/),
+[verified content/mode fix](artifacts/migration-apply-preview-20261101/content-mode-fix/),
+[Copilot migration apply results](artifacts/migration-copilot-apply-20261101/) (writer 7m34s; preview 13m53s),
+[Codex migration apply results](artifacts/migration-codex-apply-20261102/) (new writer 3m31s),
+[coordinator verification](artifacts/migration-apply-coordinator-20261102/verification.md) (coordinator 5m11s; writer regressions 5m30s).
+Status gate: [27 passing checks](artifacts/migration-status-gate-20261102/verification.md) (gate 1m29s; regressions 11s).
+Completion preview: [21 passing checks](artifacts/migration-completion-preview-20261102/verification.md) (preview 1m20s; status-gate regressions 1m9s).
+Marker writer: [104 passing checks](artifacts/migration-completion-writer-20261102/verification.md) (writer about 15m; regressions 26m39s).
+Marker committer: [26 passing checks](artifacts/migration-completion-committer-20261102/verification.md) (original committer 3m44s; writer regressions 4m34s; added boundary case 21s).
+Post-DONE coordinator: [13 passing checks](artifacts/migration-post-done-20261102/verification.md), including first migration from legacy files.
+Implementation chat: `019f7f16-046b-7693-a1d5-b32f284e15d5`.
+See [reference](docs/reference.md), [architecture](docs/architecture.md) and
+[shared-instruction design](docs/shared-instructions-design.md) only as needed.
+
+## DoD completion metric
+
+**100% — 25/25 alpha acceptance checks complete**, baseline v3 (12 November 2026).
+D2, E4, H2 and H4 completed after review of their evidence. The authoritative checks
+(A1–I2) are in [ticket #2](https://github.com/ferrywlto/ai-env-as-code/issues/2#definition-of-done).
+This is accepted-outcome progress, not effort, ETA or release readiness.
+Reviewed slices provide evidence; they are not the denominator.
+
+After each slice, the implementation workflow must update affected ticket DoD
+check statuses and concise evidence, recompute completed/total (nearest whole
+percent), and replace this metric in place before reporting the slice complete.
+Credit requires required verification plus Ferry review; work awaiting either
+stays unchecked. Retain failed-attempt details in chat/artifacts, not this index.
+Ferry approved deferring F1/F2 to #4 to protect credentials and personal runtime;
+baseline v2 removed those two unverified checks. Baseline v3 changes H3, I1 and I2
+to cover alpha completion; an official release is separate and requires Ferry's
+own migration verification and later request.
+
+## Remaining 2.0 acceptance gates
+
+- [x] Review fresh-start failure and retry fixtures (C6).
+- [x] Rehearse with approved actual runtime copies (D2). Actual Codex-copy rehearsal and separate synthetic Copilot migration passed and were reviewed; the synthetic fixture is not actual Copilot or real-harness evidence.
+- [x] Review the passing Linux ARM64 and Windows x64 native migration coverage (E4).
+- [x] Review CLI help, bundled skills, README and reference alignment (H1).
+- [x] Review the passing Windows runner verification of the H2 generated-uninstaller guard fixes.
+- [x] Retain alpha version metadata and the [release notes draft](docs/release-notes-2.0-draft.md) (H3). Release build passed and the version command reported `2.0.0-alpha.4`.
+- [x] Review the historical Linux ARM64 focused and Native AOT run (E3).
+- Deferred to [#4](https://github.com/ferrywlto/ai-env-as-code/issues/4): real Codex and GitHub Copilot harness verification. These checks remain unverified.
+- [x] Review the mechanical identifier-constants cleanup and independent literal-value contract test (G1).
+- [x] Complete Debug/Release regression and review the verification matrix (H4). Debug passed 1,441/1,441; Release accounted for all 1,441 across the interrupted run and remaining batches. Ferry approved the split evidence and final matrix.
+- [x] Accept alpha completion and defer the official release until Ferry's own migration verification and later request (I1).
+- [x] Record alpha completion and close #2 (I2). Official release remains separate.
+
+The latest target is 31 October–1 November 2026, not permission to waive gates.
+The breaking provider-first CLI/flag upgrade is version 3 Backlog
+[#3](https://github.com/ferrywlto/ai-env-as-code/issues/3), not a 2.0 blocker.
+Keep existing command/flag forms in 2.0; public migration wiring is still required.
+
+## Slice index
+
+Reviewed means the recorded slice passed its scoped checks and Ferry review;
+it does not certify the full release or automatically authorise the next slice.
+13d/13e are open integration umbrellas, not additional unapproved scope.
+Detailed prior results/approvals are linked, not repeated here.
+
+| Slice | Outcome | State | Evidence |
+| --- | --- | --- | --- |
+| 1 | Codex config preflight | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 2 | Codex config/instruction writer | Reviewed | [2c8a604](https://github.com/ferrywlto/ai-env-as-code/commit/2c8a604) |
+| 3 | Single-section backup preview | Reviewed | [cd5b6e7](https://github.com/ferrywlto/ai-env-as-code/commit/cd5b6e7) |
+| 4 | Backup rejection boundaries | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 5 | Authored-source and target writing | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 6 | Exact-path backup commit | Reviewed | [76eb5be](https://github.com/ferrywlto/ai-env-as-code/commit/76eb5be) |
+| 7 | Internal provider status | Reviewed | [668e655](https://github.com/ferrywlto/ai-env-as-code/commit/668e655) |
+| 8 | Public Codex apply | Reviewed | [9ea08ab](https://github.com/ferrywlto/ai-env-as-code/commit/9ea08ab) |
+| 9 | Public Copilot apply | Reviewed | [3c93214](https://github.com/ferrywlto/ai-env-as-code/commit/3c93214) |
+| 10 | Public provider status | Reviewed | [d93be42](https://github.com/ferrywlto/ai-env-as-code/commit/d93be42) |
+| 11 | Public Codex backup | Reviewed | [1dbcdd9](https://github.com/ferrywlto/ai-env-as-code/commit/1dbcdd9) |
+| 12 | Public Copilot backup | Reviewed | [cfb86dd](https://github.com/ferrywlto/ai-env-as-code/commit/cfb86dd) |
+| 13 | Pulled-repository enrollment and path confirmation | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13a | Legacy migration rehearsal | Reviewed | [1e967e6](https://github.com/ferrywlto/ai-env-as-code/commit/1e967e6) |
+| 13b | Interactive migration contract | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13c | Data-format preflight | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d | Migration preparation (integration umbrella) | Integration open | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.1 | Local harness selection | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.2 | Dirty-section choices | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.3 | Remote/default-branch preflight | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.4 | Fetch-only preparation | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.5 | Guarded fast-forward | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.6 | Preparation coordinator | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.7 | Legacy capture preview | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.8 | Terminology glossary | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.9 | Legacy capture writer | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.10 | Legacy capture write/commit | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.11 | Portable runtime capture preview | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.12 | Single-provider capture | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13d.13 | Combined authored-source writer | Reviewed | [f99e2eb](https://github.com/ferrywlto/ai-env-as-code/commit/f99e2eb) |
+| 13d.14 | Combined target writer | Reviewed | [7e4ba8e](https://github.com/ferrywlto/ai-env-as-code/commit/7e4ba8e) |
+| 13d.15 | Combined capture/commit | Reviewed | [e41b3e1](https://github.com/ferrywlto/ai-env-as-code/commit/e41b3e1) |
+| 13d.16 | Required scaffold preview | Reviewed | [bd1dbbb](https://github.com/ferrywlto/ai-env-as-code/commit/bd1dbbb) |
+| 13d.17 | Missing-only scaffold writer | Reviewed | [7bbc46e](https://github.com/ferrywlto/ai-env-as-code/commit/7bbc46e) |
+| 13d.18 | Scaffold validation performance | Reviewed | [7779a9a](https://github.com/ferrywlto/ai-env-as-code/commit/7779a9a) |
+| 13d.19 | Overwrite preview | Reviewed | [758fd64](https://github.com/ferrywlto/ai-env-as-code/commit/758fd64) |
+| 13d.20 | Reviewed scaffold reset writer | Reviewed | [14adaf3](https://github.com/ferrywlto/ai-env-as-code/commit/14adaf3) |
+| 13e | Completion flow (integration umbrella) | Integration open | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 13e.1 | Exact-DONE prompt | Reviewed | [3b2a23a](https://github.com/ferrywlto/ai-env-as-code/commit/3b2a23a) |
+| 13e.2 | Post-DONE source validation | Reviewed | [43f6a4e](https://github.com/ferrywlto/ai-env-as-code/commit/43f6a4e) |
+| 13e.3 | Source-only commit | Reviewed | [e01b76b](https://github.com/ferrywlto/ai-env-as-code/commit/e01b76b) |
+| 13e.4 | Single-harness target preview | Reviewed | [23560bd](https://github.com/ferrywlto/ai-env-as-code/commit/23560bd) |
+| 13e.5 | Single-harness target writer | Reviewed | [7f7254a](https://github.com/ferrywlto/ai-env-as-code/commit/7f7254a) |
+| 13e.6 | Single-harness target commit | Reviewed | [f9f6f7e](https://github.com/ferrywlto/ai-env-as-code/commit/f9f6f7e) |
+| 13e.7 | Read-only migration apply preview | Reviewed | `f4717c6` + `4f1639e`; [117 passing checks](artifacts/migration-apply-preview-20261101/content-mode-fix/) |
+| 13e.8 | Copilot single-file migration apply | Reviewed | `feb4641`; [55 passing checks](artifacts/migration-copilot-apply-20261101/). |
+| 13e.9 | Codex two-file migration apply | Reviewed | `42c98be`; [51 passing checks](artifacts/migration-codex-apply-20261102/); diagrams and operating precondition in `a51eacf`. |
+| 13e.10 | Enrolled-provider apply coordination | Reviewed | `4ca3ce2`; [44 passing checks](artifacts/migration-apply-coordinator-20261102/verification.md); all-provider review, ordered writes, no-op, stale inputs and partial-failure boundaries. |
+| 13e.11 | Post-apply migration status gate | Reviewed | `55237f7`; [27 passing checks](artifacts/migration-status-gate-20261102/verification.md); read-only enrolled-provider/config checks, stale inputs and persistent drift refusal. |
+| 13e.12 | Migration completion preview | Reviewed | `dd85526`; [21 passing checks](artifacts/migration-completion-preview-20261102/verification.md); fresh status, marker proposal, exact context observations and persistent-drift refusal. |
+| 13e.13 | Completion marker creation | Reviewed | `bb4227c`; [104 passing checks](artifacts/migration-completion-writer-20261102/verification.md); private CreateNew marker, stale/competing input refusal and retained failure state. |
+| 13e.14 | Completion marker commit | Reviewed | `603922e`; [26 passing checks](artifacts/migration-completion-committer-20261102/verification.md); exact publication, signing failure and retained phase drift. |
+| 13e.15 | Post-DONE completion coordination | Reviewed | `4f4c2df`; [13 passing checks](artifacts/migration-post-done-20261102/verification.md). |
+| 13e.16 | Guarded capture after preparation | Reviewed | 46/46 focused checks (7 coordinator, 39 committer regressions). Legacy and combined portable capture, unchanged inputs, mixed formats and stale HEAD. |
+| 13e.17 | Capture to scaffold handoff | Reviewed | 2 handoff tests and 12 scaffold regressions passed. Next step is wiring the editing and `DONE` boundary. |
+| 13e.18 | Editing to completion handoff | Reviewed | 16 focused tests passed, including first legacy migration through the prompt, EOF and cancellation. |
+| 13e.19 | Public migration command | Reviewed | Release build passed with zero warnings or errors. All 15 focused tests passed, including public dispatch through DONE and EOF. Built CLI help and relative path rejection checked. |
+| 13f | Full command rehearsal and native coverage | Actual Codex-copy and synthetic Copilot rehearsals reviewed (D2). macOS ARM64 smoke passed at `8599e59`; Linux ARM64 and Windows x64 passed at `d6af1ad` and were reviewed (E4). |
+| 14 | Provider-first CLI contract | Deferred to v3 | [#3](https://github.com/ferrywlto/ai-env-as-code/issues/3) |
+| 15 | Provider-first installer/skills/docs alignment | Deferred to v3 | [#3](https://github.com/ferrywlto/ai-env-as-code/issues/3) |
+| 16 | Two-checkout Git round trip | Reviewed | [3d4f8e0](https://github.com/ferrywlto/ai-env-as-code/commit/3d4f8e0) |
+| 17 | macOS ARM64 native lifecycle | Reviewed | [checkpoint](https://github.com/ferrywlto/ai-env-as-code/commit/db3ea38) |
+| 18 | Windows x64 native lifecycle | Reviewed | [runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40201089188) |
+| 19 | Linux ARM64 native lifecycle | Passed and reviewed (E3) | [runner at `85fbd192`](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40218058322) |
+| 19a | Mechanical identifier-constant cleanup | Reviewed | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+| 20 | Stable release acceptance | Open | [record](docs/history/aec-2-progress-before-compaction-2026-11-01.md#ticket-snapshot) |
+
+## Retained follow-ups and historical uncertainties
+
+| Item | Treatment |
+| --- | --- |
+| Top-level migration warning | Required when wiring the public flow: print once before its first mutation; require the operator to close affected harness sessions and pause other writers until completion. Separate terminal/plain editor; no automatic process detection or termination. Warning emission is not implemented by this documentation slice. |
+| Migration check-ownership refactor | After the functional flow is complete, seek separate approval to consolidate overlapping full-context checks. Keep independently safe components, mutation/commit boundary protections, existing contracts and tests; no generic transaction framework. Deferred work, not implemented or credited as release acceptance here. |
+| Real Windows/Linux Codex harness checks | Still unverified follow-ups; do not upgrade the support matrix using fixtures/native smoke alone. Existing platform requirements remain; this cleanup changes no scope. |
+| Earlier five-commit semantic rewording | Historical unchecked item; reconcile with current history before claiming resolved. No rebase or automatic retry authorised here. |
+| Formatting check after Roslyn named-pipe timeout | Historical unchecked item; recheck at an approved verification gate. |
+| Earlier prerelease skill-packaging checkbox | Historical unchecked row is superseded by the recorded alpha.4 packaging completion; installed personal skill state is not inferred. |
+
+## Record ownership
+
+- Ticket: outcome, scope, DoD, current blocker and next action.
+- This checklist: one short row per slice, latest state and evidence pointer.
+- Chat, Git and test artifacts: approvals, failed attempts and detailed verification.
+- Design docs: current contracts/decisions, not execution diaries.
+- Update current rows in place; do not append a transcript for every approval or rerun.
+- Commit only exact reviewed paths after verification and Ferry approval; push is separately authorised.
+
+[Historical snapshot](docs/history/aec-2-progress-before-compaction-2026-11-01.md) preserves the pre-cleanup ticket and checklist,
+including previous release history, evidence locations and intermediate failures.
+It is reference-only, not a live progress index.

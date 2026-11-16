@@ -1,0 +1,95 @@
+namespace Aec;
+
+// A pulled target is repository data, not evidence that this harness is active
+// locally. Read the selected runtime and its exact AEC binding before planning.
+internal sealed record PortableRuntimeSnapshot(
+    string Repository,
+    string Platform,
+    string Provider,
+    string RuntimePath,
+    string Commit,
+    byte[] Target,
+    byte[]? Runtime,
+    int? BlockVersion)
+{
+    public static PortableRuntimeSnapshot Read(
+        string repository,
+        string provider,
+        string providerHome)
+    {
+        if (!Path.IsPathFullyQualified(repository) ||
+            !Path.IsPathFullyQualified(providerHome))
+        {
+            throw new ArgumentException("Repository and provider home must be absolute paths.");
+        }
+
+        var fileName = provider switch
+        {
+            AecIdentifiers.Codex => "AGENTS.md",
+            AecIdentifiers.Copilot => "copilot-instructions.md",
+            _ => throw new ArgumentException($"Unsupported provider: {provider}")
+        };
+
+        repository = Path.GetFullPath(repository);
+        providerHome = Path.GetFullPath(providerHome);
+        AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
+        AecApplication.EnsureRealDirectory(repository, "Repository");
+        AecApplication.EnsureNoLinksInExistingPath(providerHome, "Provider home path");
+        AecApplication.EnsureRealDirectory(providerHome, "Provider home");
+        ApplyCommand.EnsureRuntimeOutsideRepository(
+            repository, providerHome, fileName, "Provider runtime target");
+
+        var platform = RenderCommand.CurrentPlatform();
+        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        var target = CommittedTargetValidator.Read(repository, platform, provider);
+        var runtimePath = Path.Combine(providerHome, fileName);
+        var runtime = AecApplication.ReadOptionalTextFile(
+            runtimePath, "Provider runtime instructions");
+        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Repository HEAD changed during portable runtime preflight.");
+        }
+
+        if (runtime is null)
+        {
+            return new PortableRuntimeSnapshot(
+                repository, platform, provider, runtimePath, commit, target, null, null);
+        }
+
+        var codexBinding = provider == AecIdentifiers.Codex
+            ? AecInstructionBlock.ReadRepositoryBinding(runtime)
+            : null;
+        var copilotBinding = provider == AecIdentifiers.Copilot
+            ? CopilotInstructionBlock.ReadManagedBinding(runtime)
+            : null;
+        var recordedRepository = codexBinding?.Repository ?? copilotBinding?.Repository;
+        if (recordedRepository is null ||
+            !AecInstructionBlock.RepositoryPathsEqual(recordedRepository, repository))
+        {
+            throw new InvalidOperationException(
+                "Provider runtime instructions are not bound to the selected AEC repository. " +
+                "Run ordinary provider init first.");
+        }
+
+        var recordedPlatform = codexBinding?.Platform ?? copilotBinding?.Platform;
+        if (recordedPlatform is not null &&
+            !string.Equals(recordedPlatform, platform, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Provider runtime instructions are bound to a different AEC platform. " +
+                "Run ordinary provider init first.");
+        }
+
+        return new PortableRuntimeSnapshot(
+            repository,
+            platform,
+            provider,
+            runtimePath,
+            commit,
+            target,
+            runtime,
+            codexBinding?.Version ?? copilotBinding?.Version);
+    }
+}

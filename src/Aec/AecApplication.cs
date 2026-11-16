@@ -10,7 +10,11 @@ public static class AecApplication
     internal const string CopilotSourceRelativePath =
         "environment/providers/copilot/copilot-instructions.md";
 
-    public static int Run(string[] args, TextWriter output, TextWriter error)
+    public static int Run(string[] args, TextWriter output, TextWriter error) =>
+        Run(args, Console.In, output, error);
+
+    internal static int Run(string[] args, TextReader input, TextWriter output, TextWriter error,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -32,6 +36,9 @@ public static class AecApplication
             return args[0] switch
             {
                 "version" => RunVersion(args, output),
+                "migrate" => RunMigration(args, input, output, error, cancellationToken),
+                "render" => RenderCommand.Run(
+                    RequireAbsolutePath(ParseRenderRepository(args), "--repo"), output),
                 "skill" => RunSkill(args, output),
                 "uninstall" => RunUninstall(ParseCodexHomeArguments(args, 1), output),
                 "status" => RunStatus(ParseProviderRepositoryArguments(args, "status"), output),
@@ -54,56 +61,51 @@ public static class AecApplication
         }
     }
 
+    private static int RunMigration(string[] args, TextReader input, TextWriter output, TextWriter error,
+        CancellationToken cancellationToken)
+    {
+        if (args.Length != 4 || args[2] != "--repo")
+            throw new ArgumentException("Usage: aec migrate VERSION --repo ABSOLUTE_PATH");
+
+        var repository = RequireAbsolutePath(args[3], "--repo");
+        using var filterScope = GitProcess.SuppressMigrationFilters();
+        output.WriteLine("Close affected harness sessions and pause other writers to this repository and its managed runtime files until migration finishes. Use a separate terminal and a plain editor. Concurrent changes can leave migration partially complete.");
+        output.Flush();
+
+        var preparation = MigrationPreparation.Run(repository, args[1], input, output, cancellationToken);
+        if (preparation is not null && !cancellationToken.IsCancellationRequested)
+        {
+            var scaffold = MigrationScaffoldCoordinator.CaptureAndScaffold(preparation);
+            var result = MigrationPostDoneCoordinator.WaitAndComplete(scaffold, input, output, cancellationToken);
+            if (result is not null)
+            {
+                output.WriteLine($"Migration completed at {result.Commit}.");
+                return 0;
+            }
+        }
+
+        error.WriteLine("Migration stopped before completion. Inspect the checkout before starting again.");
+        return 1;
+    }
+
     private static int RunStatus(ProviderRepositoryOptions options, TextWriter output)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
-
-        if (options.Provider == "copilot")
+        if (options.Provider == AecIdentifiers.Copilot)
         {
             var copilotHome = ResolveCopilotHome(options.CopilotHome);
-            return CopilotStatusCommand.Run(repository, copilotHome, output);
+            var status = PortableEnvironmentStatus.Inspect(
+                repository, AecIdentifiers.Copilot, copilotHome);
+            output.WriteLine($"copilot/copilot-instructions.md {status.Instructions}");
+            return status.InSync ? 0 : 2;
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
-
-        EnsureNoLinksInManagedRoots(repository, codexHome);
-        ApplyCommand.EnsureRuntimeOutsideRepository(repository, codexHome);
-        EnsureRealDirectory(repository, "Repository");
-        EnsureSourceDirectories(repository);
-        EnsureRealDirectory(codexHome, "Codex home");
-
-        var sourcePath = Path.Combine(repository, SourceRelativePath);
-        var targetPath = Path.Combine(codexHome, "AGENTS.md");
-        var desired = ReadRequiredTextFile(sourcePath, "Canonical source");
-        var current = ReadOptionalTextFile(targetPath, "Runtime target");
-        var agentsStatus = CompareExactBytes(desired, current);
-
-        var canonicalConfigPath = Path.Combine(repository, ConfigSourceRelativePath);
-        var canonicalConfig = ReadOptionalTextFile(canonicalConfigPath, "Canonical config")
-            ?? throw new FileNotFoundException(
-                "Canonical config does not exist: " + canonicalConfigPath +
-                ". Create it with only a supported root `personality` value " +
-                "(`none`, `friendly`, or `pragmatic`) before running status.");
-        var desiredPersonality = CodexPersonalityConfig.ReadCanonical(
-            canonicalConfig,
-            canonicalConfigPath);
-
-        var runtimeConfigPath = Path.Combine(codexHome, "config.toml");
-        var runtimeConfig = ReadOptionalTextFile(runtimeConfigPath, "Runtime config");
-        var currentPersonality = runtimeConfig is null
-            ? null
-            : CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath);
-        var configStatus = currentPersonality is null
-            ? "missing"
-            : currentPersonality == desiredPersonality
-                ? "in_sync"
-                : "different";
-
-        // Validate both artifacts before writing so an invalid config never leaves
-        // callers with a misleading partial status report.
-        output.WriteLine($"codex/AGENTS.md   {agentsStatus}");
-        output.WriteLine($"codex/config.toml {configStatus}");
-        return agentsStatus == "in_sync" && configStatus == "in_sync" ? 0 : 2;
+        var codexStatus = PortableEnvironmentStatus.Inspect(
+            repository, AecIdentifiers.Codex, codexHome);
+        output.WriteLine($"codex/AGENTS.md   {codexStatus.Instructions}");
+        output.WriteLine($"codex/config.toml {codexStatus.Config}");
+        return codexStatus.InSync ? 0 : 2;
     }
 
     private static int RunVersion(string[] args, TextWriter output)
@@ -160,21 +162,44 @@ public static class AecApplication
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
 
-        if (options.Provider == "copilot")
+        if (options.Provider == AecIdentifiers.Copilot)
         {
             var copilotHome = ResolveCopilotHome(options.CopilotHome);
-            return CopilotBackupCommand.Run(repository, copilotHome, output);
+            var copilotPreview = PortableCopilotBackupPreview.Create(repository, copilotHome);
+            PortableBackupCommitter.RequireLocalBranch(repository);
+            if (copilotPreview.Instructions.Section is null)
+            {
+                output.WriteLine("unchanged");
+                return 0;
+            }
+
+            var copilotCommit = PortableCopilotBackupWriter.WriteAndCommit(copilotPreview);
+            output.WriteLine($"committed {copilotCommit}");
+            return 0;
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
+        PortableCodexBackupPreview preview;
+        try
+        {
+            preview = PortableCodexBackupPreview.Create(repository, codexHome);
+        }
+        catch (MissingRuntimePersonalityException missing)
+        {
+            warning.WriteLine($"warning: {missing.Message}");
+            return 1;
+        }
 
-        EnsureNoLinksInManagedRoots(repository, codexHome);
-        ApplyCommand.EnsureRuntimeOutsideRepository(repository, codexHome);
-        EnsureRealDirectory(repository, "Repository");
-        EnsureSourceDirectories(repository);
-        EnsureRealDirectory(codexHome, "Codex home");
+        PortableBackupCommitter.RequireLocalBranch(repository);
+        if (!preview.HasChanges)
+        {
+            output.WriteLine("unchanged");
+            return 0;
+        }
 
-        return BackupCommand.Run(repository, codexHome, output, warning);
+        var commit = PortableCodexBackupWriter.WriteAndCommit(preview);
+        output.WriteLine($"committed {commit}");
+        return 0;
     }
 
     private static int RunInit(
@@ -184,26 +209,86 @@ public static class AecApplication
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
 
+        if (options.EnrollShared)
+        {
+            var provider = options.Provider ?? AecIdentifiers.Codex;
+            var providerHome = provider == AecIdentifiers.Copilot
+                ? ResolveCopilotHome(options.CopilotHome)
+                : ResolveCodexHome(options.CodexHome);
+            return SharedEnrollmentCommand.Run(repository, provider, providerHome, output);
+        }
+
         // ChatGPT has no local runtime. Copilot is a local provider and needs its
         // explicit runtime home only for this provider-specific initialization flow.
-        if (options.Provider == "chatgpt")
+        if (options.Provider == AecIdentifiers.ChatGpt)
         {
             return ChatGptInitCommand.Run(repository, output);
         }
 
-        if (options.Provider == "copilot")
+        if (options.Provider == AecIdentifiers.Copilot)
         {
             var copilotHome = ResolveCopilotHome(options.CopilotHome);
-            return CopilotInitCommand.Run(repository, copilotHome, output);
+            if (options.CopilotHome is null)
+            {
+                EnsureOtherImplicitHarnessUsesRepository(repository, AecIdentifiers.Codex);
+            }
+
+            return CopilotInitCommand.Run(
+                repository, copilotHome, options.ForcePathChange, output);
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
+        if (options.CodexHome is null)
+        {
+            EnsureOtherImplicitHarnessUsesRepository(repository, AecIdentifiers.Copilot);
+        }
+
         return InitCommand.Run(
             repository,
             codexHome,
             options.ForcePathChange,
             output,
             warning);
+    }
+
+    private static void EnsureOtherImplicitHarnessUsesRepository(
+        string repository,
+        string otherProvider)
+    {
+        // Explicit custom homes are outside this guard: there is no safe way to
+        // discover an arbitrary other-harness directory on the same machine.
+        var otherHome = otherProvider == AecIdentifiers.Codex
+            ? ResolveCodexHome(null)
+            : ResolveCopilotHome(null);
+        EnsureNoLinksInExistingPath(otherHome, $"{otherProvider} home path");
+        if (!Directory.Exists(otherHome))
+        {
+            return;
+        }
+
+        EnsureRealDirectory(otherHome, $"{otherProvider} home");
+        var runtimePath = Path.Combine(otherHome,
+            otherProvider == AecIdentifiers.Codex ? "AGENTS.md" : "copilot-instructions.md");
+        var runtime = ReadOptionalTextFile(runtimePath,
+            $"{otherProvider} runtime instructions");
+        if (runtime is null)
+        {
+            return;
+        }
+
+        var recordedRepository = otherProvider == AecIdentifiers.Codex
+            ? AecInstructionBlock.ReadRepositoryBinding(runtime)?.Repository
+            : CopilotInstructionBlock.ReadRepositoryBinding(runtime);
+        if (recordedRepository is not null &&
+            !AecInstructionBlock.RepositoryPathsEqual(recordedRepository, repository))
+        {
+            throw new InvalidOperationException(
+                $"Default {otherProvider} runtime is bound to a different AEC data repository. " +
+                $"Recorded repository: {recordedRepository}. " +
+                $"Selected repository: {repository}. " +
+                "Resolve both default harnesses to one checkout before initializing; " +
+                "--force-path-change cannot override this conflict.");
+        }
     }
 
     private static int RunApply(
@@ -213,20 +298,35 @@ public static class AecApplication
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
 
-        if (options.Provider == "copilot")
+        if (options.Provider == AecIdentifiers.Copilot)
         {
             var copilotHome = ResolveCopilotHome(options.CopilotHome);
-            return CopilotApplyCommand.Run(repository, copilotHome, output);
+            // Ordinary apply consumes the enrolled, committed rendered target;
+            // provider init retains its separate first-installation flow.
+            var copilotPreview = PortableApplyPreview.Create(repository, AecIdentifiers.Copilot, copilotHome);
+            var result = PortableInstructionWriter.Apply(copilotPreview.Snapshot);
+            if (PortableApplyPreview.Create(repository, AecIdentifiers.Copilot, copilotHome).WouldReplace)
+            {
+                throw new IOException("Copilot runtime instructions differ after apply.");
+            }
+
+            output.WriteLine(result);
+            return 0;
         }
 
         var codexHome = ResolveCodexHome(options.CodexHome);
+        // Ordinary apply now consumes the enrolled rendered target. Init and
+        // attachment retain their checkpointed legacy writer separately.
+        var preview = PortableApplyPreview.Create(repository, AecIdentifiers.Codex, codexHome);
+        if (preview.CodexConfig?.Inserted == true)
+        {
+            warning.WriteLine(
+                "warning: runtime config does not declare root `personality`; " +
+                "the committed value will be added.");
+        }
 
-        EnsureNoLinksInManagedRoots(repository, codexHome);
-        EnsureRealDirectory(repository, "Repository");
-        EnsureSourceDirectories(repository);
-        EnsureRealDirectory(codexHome, "Codex home");
-
-        return ApplyCommand.Run(repository, codexHome, output, warning);
+        output.WriteLine(PortableCodexWriter.Apply(preview));
+        return 0;
     }
 
     private static RepositoryOptions ParseRepositoryArguments(string[] args, string command)
@@ -272,6 +372,27 @@ public static class AecApplication
         return new RepositoryOptions(repository, codexHome);
     }
 
+    private static string ParseRenderRepository(string[] args)
+    {
+        if (args.Length == 1)
+        {
+            throw new ArgumentException(
+                "render requires --repo with the source-of-truth data repository.");
+        }
+
+        if (args.Length != 3 || args[1] != "--repo")
+        {
+            throw new ArgumentException($"Unknown render argument: {args[1]}");
+        }
+
+        if (args[2].StartsWith("--", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("--repo requires a value.");
+        }
+
+        return args[2];
+    }
+
     private static ProviderRepositoryOptions ParseProviderRepositoryArguments(
         string[] args,
         string command)
@@ -292,7 +413,7 @@ public static class AecApplication
                 }
 
                 provider = argument["--provider=".Length..];
-                if (provider != "copilot")
+                if (provider != AecIdentifiers.Copilot)
                 {
                     throw new ArgumentException($"Unsupported {command} provider: {provider}");
                 }
@@ -341,7 +462,7 @@ public static class AecApplication
                 $"{command} requires --repo with the source-of-truth data repository.");
         }
 
-        if (provider == "copilot" && codexHome is not null)
+        if (provider == AecIdentifiers.Copilot && codexHome is not null)
         {
             throw new ArgumentException("--codex-home is not valid with --provider=copilot.");
         }
@@ -360,6 +481,7 @@ public static class AecApplication
         string? codexHome = null;
         string? provider = null;
         var forcePathChange = false;
+        var enrollShared = false;
         string? copilotHome = null;
 
         for (var index = 1; index < args.Length; index++)
@@ -384,7 +506,7 @@ public static class AecApplication
                 }
 
                 provider = argument["--provider=".Length..];
-                if (provider is not ("chatgpt" or "copilot"))
+                if (provider is not (AecIdentifiers.ChatGpt or AecIdentifiers.Copilot))
                 {
                     throw new ArgumentException($"Unsupported provider: {provider}");
                 }
@@ -426,9 +548,15 @@ public static class AecApplication
                 continue;
             }
 
-            if (argument.StartsWith("--", StringComparison.Ordinal))
+            if (argument == "--enroll-shared")
             {
-                throw new ArgumentException($"Unknown argument: {argument}");
+                if (enrollShared)
+                {
+                    throw new ArgumentException("--enroll-shared may be specified only once.");
+                }
+
+                enrollShared = true;
+                continue;
             }
 
             throw new ArgumentException($"Unknown argument: {argument}");
@@ -440,17 +568,17 @@ public static class AecApplication
                 "init requires --repo with the source-of-truth data repository.");
         }
 
-        if (provider == "chatgpt" && codexHome is not null)
+        if (provider == AecIdentifiers.ChatGpt && codexHome is not null)
         {
             throw new ArgumentException("--codex-home is not valid with --provider=chatgpt.");
         }
 
-        if (provider == "chatgpt" && copilotHome is not null)
+        if (provider == AecIdentifiers.ChatGpt && copilotHome is not null)
         {
             throw new ArgumentException("--copilot-home is not valid with --provider=chatgpt.");
         }
 
-        if (provider == "copilot" && codexHome is not null)
+        if (provider == AecIdentifiers.Copilot && codexHome is not null)
         {
             throw new ArgumentException("--codex-home is not valid with --provider=copilot.");
         }
@@ -460,10 +588,22 @@ public static class AecApplication
             throw new ArgumentException("--copilot-home requires --provider=copilot.");
         }
 
-        if (provider is not null && forcePathChange)
+        if (provider == AecIdentifiers.ChatGpt && forcePathChange)
         {
             throw new ArgumentException(
-                "--force-path-change is not valid with --provider initialization.");
+                "--force-path-change is not valid with --provider=chatgpt.");
+        }
+
+        if (enrollShared && forcePathChange)
+        {
+            throw new ArgumentException(
+                "--enroll-shared cannot be combined with --force-path-change.");
+        }
+
+        if (enrollShared && provider == AecIdentifiers.ChatGpt)
+        {
+            throw new ArgumentException(
+                "--enroll-shared supports only local Codex or Copilot providers.");
         }
 
         return new InitOptions(
@@ -471,7 +611,8 @@ public static class AecApplication
             codexHome,
             copilotHome,
             provider,
-            forcePathChange);
+            forcePathChange,
+            enrollShared);
     }
 
     private static CodexHomeOptions ParseCodexHomeArguments(string[] args, int startIndex)
@@ -580,7 +721,7 @@ public static class AecApplication
     {
         var environment = Path.Combine(repository, "environment");
         var providers = Path.Combine(environment, "providers");
-        var codex = Path.Combine(providers, "codex");
+        var codex = Path.Combine(providers, AecIdentifiers.Codex);
 
         EnsureRealDirectory(environment, "Source directory");
         EnsureRealDirectory(providers, "Source directory");
@@ -736,17 +877,27 @@ public static class AecApplication
             Usage:
               aec help
               aec version
+              aec render --repo ABSOLUTE_PATH
+              aec migrate VERSION --repo ABSOLUTE_PATH
               aec skill upgrade [--codex-home ABSOLUTE_PATH]
               aec uninstall [--codex-home ABSOLUTE_PATH]
               aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
               aec init --repo ABSOLUTE_PATH --provider=chatgpt
-              aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
+              aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
+              aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
               aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+
+            Shared instruction scope:
+              shared: every enrolled harness
+              platform: local paths or OS rules
+              provider: one harness's mechanics
+            Review and commit authored sources before --enroll-shared; it does not deploy.
             """;
 
         output.WriteLine(usage.ReplaceLineEndings(output.NewLine));
@@ -781,5 +932,6 @@ public static class AecApplication
         string? CodexHome,
         string? CopilotHome,
         string? Provider,
-        bool ForcePathChange);
+        bool ForcePathChange,
+        bool EnrollShared);
 }

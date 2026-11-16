@@ -1,7 +1,9 @@
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
-public sealed class BackupTests
+// The 1.x capture engine remains part of provider initialization. Its direct
+// tests stay here; public ordinary backup has separate portable-command tests.
+public sealed class LegacyBackupCommandTests
 {
     private const string SourceRelativePath = "environment/providers/codex/AGENTS.md";
     private const string ConfigSourceRelativePath = "environment/providers/codex/config.toml";
@@ -211,19 +213,6 @@ public sealed class BackupTests
             Git(layout, "ls-tree", "-r", "--name-only", "HEAD").Output.Trim());
         Assert.Equal("Backup Codex environment", Git(layout, "log", "-1", "--format=%s").Output.Trim());
         Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
-
-        var statusOutput = new StringWriter();
-        var statusError = new StringWriter();
-        var statusExitCode = AecApplication.Run(
-            ["status", "--repo", layout.Repository, "--codex-home", layout.CodexHome],
-            statusOutput,
-            statusError);
-        Assert.Equal(0, statusExitCode);
-        Assert.Equal(
-            $"codex/AGENTS.md   in_sync{Environment.NewLine}" +
-            $"codex/config.toml in_sync{Environment.NewLine}",
-            statusOutput.ToString());
-        Assert.Empty(statusError.ToString());
     }
 
     [Fact]
@@ -604,93 +593,6 @@ public sealed class BackupTests
         Assert.Equal("external\n", File.ReadAllText(referent));
     }
 
-    [Theory]
-    [InlineData("repository")]
-    [InlineData("codex-home")]
-    public void RejectsSymbolicLinkAncestorForRepositoryOrCodexHome(string linkedTarget)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        using var layout = new BackupLayout("runtime\n");
-        var alias = Path.Combine(layout.Root, $"{linkedTarget}-alias");
-        var repository = layout.Repository;
-        var codexHome = layout.CodexHome;
-        if (linkedTarget == "repository")
-        {
-            Directory.CreateSymbolicLink(alias, layout.Repository);
-            repository = alias;
-        }
-        else
-        {
-            Directory.CreateSymbolicLink(alias, layout.Root);
-            codexHome = Path.Combine(alias, "codex home");
-        }
-
-        var sourceBefore = File.ReadAllBytes(layout.Source);
-        var statusBefore = Git(layout, "status", "--porcelain=v1", "-z").Output;
-        var indexBefore = Git(layout, "diff", "--cached", "--binary").Output;
-        try
-        {
-            var result = Run(repository, codexHome);
-
-            Assert.Equal(1, result.ExitCode);
-            Assert.Empty(result.Output);
-            Assert.Contains("must not contain a symbolic link", result.Error, StringComparison.Ordinal);
-            Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
-            Assert.False(File.Exists(layout.ConfigSource));
-            Assert.Equal(statusBefore, Git(layout, "status", "--porcelain=v1", "-z").Output);
-            Assert.Equal(indexBefore, Git(layout, "diff", "--cached", "--binary").Output);
-        }
-        finally
-        {
-            Directory.Delete(alias);
-        }
-    }
-
-    [Fact]
-    public void RejectsCodexHomeInsideSelectedRepository()
-    {
-        using var layout = new BackupLayout("runtime\n");
-        var sourceBefore = File.ReadAllBytes(layout.Source);
-        var statusBefore = Git(layout, "status", "--porcelain=v1", "-z").Output;
-        var indexBefore = Git(layout, "diff", "--cached", "--binary").Output;
-
-        var result = Run(layout.Repository, layout.Repository);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("outside the data repository", result.Error, StringComparison.Ordinal);
-        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
-        Assert.False(File.Exists(layout.ConfigSource));
-        Assert.Equal(statusBefore, Git(layout, "status", "--porcelain=v1", "-z").Output);
-        Assert.Equal(indexBefore, Git(layout, "diff", "--cached", "--binary").Output);
-    }
-
-    [Fact]
-    public void NestedDirectoryIsRejectedAsTheRepositoryArgument()
-    {
-        using var layout = new BackupLayout("runtime\n");
-        var nested = Path.Combine(layout.Repository, "nested");
-        var nestedSource = Path.Combine(nested, SourceRelativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(nestedSource)!);
-        File.WriteAllText(nestedSource, "nested\n");
-        var output = new StringWriter();
-        var error = new StringWriter();
-
-        var exitCode = AecApplication.Run(
-            ["backup", "--repo", nested, "--codex-home", layout.CodexHome],
-            output,
-            error);
-
-        Assert.Equal(1, exitCode);
-        Assert.Empty(output.ToString());
-        Assert.Contains("repository root", error.ToString(), StringComparison.Ordinal);
-        Assert.Equal("nested\n", File.ReadAllText(nestedSource));
-    }
-
     [Fact]
     public void DetachedHeadIsRejectedBeforeWriting()
     {
@@ -758,55 +660,6 @@ public sealed class BackupTests
         Assert.Equal(SourceRelativePath, Git(layout, "diff", "--cached", "--name-only").Output.Trim());
     }
 
-    [Fact]
-    public void ExplicitCodexHomeOverridesTheEnvironment()
-    {
-        using var layout = new BackupLayout("explicit\n");
-        var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
-
-        try
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", Path.Combine(layout.Root, "missing home"));
-
-            var result = Run(layout);
-
-            Assert.Equal(0, result.ExitCode);
-            Assert.Equal("explicit\n", File.ReadAllText(layout.Source));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", previous);
-        }
-    }
-
-    [Fact]
-    public void UsesCodexHomeFromTheEnvironmentWhenTheFlagIsAbsent()
-    {
-        using var layout = new BackupLayout("environment\n");
-        var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
-
-        try
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
-            var output = new StringWriter();
-            var error = new StringWriter();
-
-            var exitCode = AecApplication.Run(
-                ["backup", "--repo", layout.Repository],
-                output,
-                error);
-
-            Assert.Equal(0, exitCode);
-            Assert.StartsWith("committed ", output.ToString(), StringComparison.Ordinal);
-            Assert.Empty(error.ToString());
-            Assert.Equal("environment\n", File.ReadAllText(layout.Source));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", previous);
-        }
-    }
-
     private static CommandResult Run(BackupLayout layout)
     {
         return Run(layout.Repository, layout.CodexHome);
@@ -814,12 +667,18 @@ public sealed class BackupTests
 
     private static CommandResult Run(string repository, string codexHome)
     {
-        return TestApplication.Run(
-            "backup",
-            "--repo",
-            repository,
-            "--codex-home",
-            codexHome);
+        var output = new StringWriter();
+        var warning = new StringWriter();
+        try
+        {
+            var exitCode = BackupCommand.Run(repository, codexHome, output, warning);
+            return new CommandResult(exitCode, output.ToString(), warning.ToString());
+        }
+        catch (Exception error)
+        {
+            warning.WriteLine($"error: {error.Message}");
+            return new CommandResult(1, output.ToString(), warning.ToString());
+        }
     }
 
     private static GitResult Git(BackupLayout layout, params string[] arguments)

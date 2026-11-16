@@ -17,7 +17,13 @@ internal static class AecSkillInstaller
             [
                 "7bfd08be9c22c7efd1dfec14d75ae9060ce7bd69ec288d517477681b9cd394e9",
                 "adfaa1f7037cf68484693215e59d988e4c1e5f90d72ed9fc55a14ff4df83d314",
-                "2be86f3a85f8daae019da03d7d8977b82a2dd4b641d0b67b95c27aa4351b23f2"
+                "2be86f3a85f8daae019da03d7d8977b82a2dd4b641d0b67b95c27aa4351b23f2",
+                "bf6b4f2f8c7d5fe6c249dc95d0bf77d8f038db8615d48c8ba2e1a97b7146d179",
+                "34130bb3dce9f023dc6717fb88b55e58b82190021b2f3812cedfe1c55de01f43",
+                "89cdd1cf025acdd02788a69222c78033f5da11110192d4320516ea362d7ef007",
+                "ebac80a1919835527b8588c20c390427af9e0610aafbabffdbe389b398965129",
+                "a9eee1bc30bc28bb3aeb8c54955cd974960f451688ae9524fc9af0454339fbdb",
+                "a4b377fb690a5305422b4c3ee82ccdae81d75d3812bd6d09c2112ae22693141a"
             ])
     ];
 
@@ -37,7 +43,16 @@ internal static class AecSkillInstaller
                 "60754cc941dbfaf17042c4eb4093c9706ea0054c526001f096da2fc4a795aec9",
                 "af5dd269b6807429d4c6079bcc79340c2c10f2bac8e91f52383fd8d7b766581f",
                 "2924f13eb5d90cd088642533461de6f37fa99c73ce94ba95b395ae5f1cd7b535",
-                "6181d99ddde36b53ed3007066ec716369f46a84c2067e58337f152005865f352"
+                "6181d99ddde36b53ed3007066ec716369f46a84c2067e58337f152005865f352",
+                "38c275ecae9f400ff6ce149620889b72d09c04087184ab8d5971f72f62e5a26d",
+                "d12924f66bebbf1cb8b9a0acfd620a5ecedd28e4cae3913fe2c8eecc8feae1f7",
+                "0b4886e4d1385c1662cc08ef71703dfcb879551b813ff716a9054758978cd6f3",
+                "3a7834dc34376c1c9ab26569d79702b8e8f7f19eb4da3bcfa2941b2681fbbd90",
+                "7fa537668cf5a1a61e05ea76374370df3f73889d9f198e1094286fbb496eb113",
+                "a71ba03a5f0d04aef107ddb3074ae0d7ecfe3e16ac8dad9121571d81ecafb7fe",
+                "2bc8e3e77b2389d08c8a995a56b9e5ca3ae47b7c47b1079317b2f1279ffb4087",
+                "2a8adf156a11164301fee33193188897dbc770a7a2c3cecb11cf15a74cb65c27",
+                "f7154226b4ebe5b21d07b88be4dac6e4c5028eefb746b19ba2bdde556933a5d2"
             ]),
         new(
             Path.Combine(AgentsDirectoryName, OpenAiFileName),

@@ -66,6 +66,15 @@ generated_uninstaller="$source_root/scripts/uninstall-aec.sh"
 default_target="$test_root/home/.local/bin/aec"
 default_dir=$(dirname "$default_target")
 
+mkdir "$test_root/real-install-parent"
+ln -s "$test_root/real-install-parent" "$test_root/linked-install-parent"
+if "$installer" --install-dir "$test_root/linked-install-parent/bin" >"$test_root/linked-install-output" 2>"$test_root/linked-install-error"; then
+    fail "installer accepted a linked install-directory ancestor"
+fi
+grep -F 'install directory path cannot contain a symbolic link' "$test_root/linked-install-error" >/dev/null
+assert_empty "$test_root/real-install-parent/bin"
+assert_empty "$generated_uninstaller"
+
 "$installer" --install-dir "$default_dir" >"$test_root/initial-output"
 printf 'installed %s\ninstalled %s\n' "$default_target" "$generated_uninstaller" >"$test_root/initial-expected"
 assert_output "$test_root/initial-expected" "$test_root/initial-output"
@@ -120,8 +129,10 @@ export GIT_CONFIG_NOSYSTEM=1
 codex_home="$test_root/codex-home"
 data_repo="$test_root/aec-data"
 mkdir -p "$codex_home"
-printf '%s\n' 'Personal Codex instructions' >"$codex_home/AGENTS.md"
-printf '%s\n' 'personality = "none"' >"$codex_home/config.toml"
+printf '%s\n' 'Shared approval.' 'Local paths.' 'Codex models.' >"$codex_home/AGENTS.md"
+printf '%s\n' 'model = "keep-local-model"' 'personality = "friendly"' \
+    '[features]' 'local_setting = true' >"$codex_home/config.toml"
+cp "$codex_home/config.toml" "$test_root/codex-config-original"
 "$custom_target" init --repo "$data_repo" --codex-home "$codex_home" >/dev/null
 
 copilot_home="$test_root/copilot-home"
@@ -129,7 +140,9 @@ runtime_copilot="$copilot_home/copilot-instructions.md"
 canonical_copilot="$data_repo/environment/providers/copilot/copilot-instructions.md"
 copilot_skill="$copilot_home/skills/aec/SKILL.md"
 mkdir -p "$copilot_home"
-printf '%s\n' 'Personal Copilot instructions' >"$runtime_copilot"
+printf '%s\n' 'Shared approval.' 'Local paths.' 'Copilot tools.' >"$runtime_copilot"
+printf '%s\n' '{"localSetting":true}' >"$copilot_home/config.json"
+cp "$copilot_home/config.json" "$test_root/copilot-config-original"
 "$custom_target" init --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" >/dev/null
 
 [ -f "$canonical_copilot" ] || fail "canonical Copilot instructions were not created"
@@ -137,47 +150,225 @@ printf '%s\n' 'Personal Copilot instructions' >"$runtime_copilot"
 assert_file_equals "$canonical_copilot" "$runtime_copilot"
 grep -F '<!-- AEC:COPILOT:BEGIN' "$runtime_copilot" >/dev/null || \
     fail "Copilot managed block was not installed"
-assert_empty "$copilot_home/config.json"
+# Ordinary init retains the historical canonical files. Commit Copilot's
+# baseline before authoring the reviewed split; public 2.0 commands require
+# committed portable targets rather than silently using these legacy files.
+git -C "$data_repo" add -- environment/providers/copilot/copilot-instructions.md
+git -C "$data_repo" commit -m 'Record smoke Copilot baseline' >/dev/null
+cp "$codex_home/AGENTS.md" "$test_root/codex-legacy-original"
+cp "$runtime_copilot" "$test_root/copilot-legacy-original"
+platform=macos-arm64
+shared_source="$data_repo/environment/shared/instructions.md"
+platform_source="$data_repo/environment/platforms/$platform/policy.md"
+mkdir -p "$(dirname "$shared_source")" "$(dirname "$platform_source")"
+printf '%s\n' 'Shared approval.' >"$shared_source"
+printf '%s\n' 'Local paths.' >"$platform_source"
+printf '%s\n' 'Codex models.' >"$data_repo/environment/providers/codex/overlay.md"
+printf '%s\n' 'Copilot tools.' >"$data_repo/environment/providers/copilot/overlay.md"
+git -C "$data_repo" add -- environment/shared/instructions.md \
+    "environment/platforms/$platform/policy.md" environment/providers/codex/overlay.md \
+    environment/providers/copilot/overlay.md
+git -C "$data_repo" commit -m 'Author smoke instruction sources' >/dev/null
 
-"$custom_target" status --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
-    >"$test_root/copilot-status"
-printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/copilot-status-expected"
-assert_output "$test_root/copilot-status-expected" "$test_root/copilot-status"
+# Keep provider selection in one place so both Native AOT lifecycle cases
+# execute the same commands, always with explicit disposable repo/home paths.
+run_provider() {
+    case "$1" in
+        codex) shift; "$custom_target" "$@" --repo "$data_repo" --codex-home "$codex_home" ;;
+        copilot) shift; "$custom_target" "$@" --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" ;;
+    esac
+}
 
-# Backup must copy runtime drift into the canonical file and create exactly one
-# source-of-truth commit with the documented subject.
-printf '\n%s\n' 'macOS backup drift' >>"$runtime_copilot"
-"$custom_target" backup --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
-    >"$test_root/copilot-backup"
-grep -E '^committed [0-9a-f]+$' "$test_root/copilot-backup" >/dev/null || \
-    fail "Copilot backup did not report its commit"
-assert_file_equals "$canonical_copilot" "$runtime_copilot"
-[ "$(git -C "$data_repo" log -1 --format=%s)" = 'Backup Copilot instructions' ] || \
-    fail "Copilot backup used an unexpected commit subject"
+# Enrollment writes only one target and never deploys or commits it. Review
+# and commit that target before enrolling the next provider.
+for provider in codex copilot; do
+    case "$provider" in
+        codex) instruction_file=AGENTS.md ;;
+        copilot) instruction_file=copilot-instructions.md ;;
+    esac
+    target_relative="environment/targets/$platform/$provider/$instruction_file"
+    head_before_enroll=$(git -C "$data_repo" rev-parse HEAD)
+    run_provider "$provider" init --enroll-shared >"$test_root/enroll-output"
+    printf 'enrolled %s\n' "$target_relative" >"$test_root/enroll-expected"
+    assert_output "$test_root/enroll-expected" "$test_root/enroll-output"
+    [ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_enroll" ] || fail "enrollment committed"
+    git -C "$data_repo" diff --cached --quiet || fail "enrollment staged changes"
+    assert_file_equals "$test_root/codex-legacy-original" "$codex_home/AGENTS.md"
+    assert_file_equals "$test_root/copilot-legacy-original" "$runtime_copilot"
+    if [ "$provider" = codex ]; then
+        assert_empty "$data_repo/environment/targets/$platform/copilot"
+    fi
+    git -C "$data_repo" add -- "$target_relative"
+    git -C "$data_repo" commit -m "Enroll smoke $provider target" >/dev/null
+done
 
-# Apply must restore the committed canonical bytes without changing Git HEAD.
-head_before_apply=$(git -C "$data_repo" rev-parse HEAD)
-printf '%s\n' 'macOS apply drift' >>"$runtime_copilot"
-"$custom_target" apply --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
-    >"$test_root/copilot-apply"
-printf '%s\n' 'applied' >"$test_root/copilot-apply-expected"
-assert_output "$test_root/copilot-apply-expected" "$test_root/copilot-apply"
-assert_file_equals "$canonical_copilot" "$runtime_copilot"
-[ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || \
-    fail "Copilot apply changed repository HEAD"
+for provider in codex copilot; do
+    case "$provider" in
+        codex)
+            runtime="$codex_home/AGENTS.md"
+            instruction_file=AGENTS.md
+            original_line='Codex models.'
+            updated_line='Codex models updated.'
+            commit_subject='Backup portable Codex environment'
+            ;;
+        copilot)
+            runtime="$runtime_copilot"
+            instruction_file=copilot-instructions.md
+            original_line='Copilot tools.'
+            updated_line='Copilot tools updated.'
+            commit_subject='Backup portable instructions'
+            ;;
+    esac
+    target_relative="environment/targets/$platform/$provider/$instruction_file"
+    overlay_relative="environment/providers/$provider/overlay.md"
+    head_before_apply=$(git -C "$data_repo" rev-parse HEAD)
+    run_provider "$provider" apply >"$test_root/apply-output"
+    printf '%s\n' applied >"$test_root/apply-expected"
+    assert_output "$test_root/apply-expected" "$test_root/apply-output"
+    [ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || fail "initial apply changed HEAD"
+    run_provider "$provider" status >"$test_root/status-output"
+    if [ "$provider" = codex ]; then
+        printf '%s\n' 'codex/AGENTS.md   in_sync' >"$test_root/status-expected"
+        printf '%s\n' 'codex/config.toml in_sync' >>"$test_root/status-expected"
+    else
+        printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/status-expected"
+    fi
+    assert_output "$test_root/status-expected" "$test_root/status-output"
 
-"$custom_target" status --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" \
-    >"$test_root/copilot-final-status"
-assert_output "$test_root/copilot-status-expected" "$test_root/copilot-final-status"
+    # Change exactly one authored provider section, leaving all markers intact.
+    # Command substitution removes awk's final newline: rendered targets end
+    # at their last marker, and extra outside-section bytes are not attributable.
+    changed_runtime=$(awk -v before="$original_line" -v after="$updated_line" \
+        '$0 == before { $0 = after } { print }' "$runtime")
+    printf '%s' "$changed_runtime" >"$runtime"
+    cp "$runtime" "$test_root/$provider-runtime-before-backup"
+    head_before_backup=$(git -C "$data_repo" rev-parse HEAD)
+    run_provider "$provider" backup >"$test_root/backup-output"
+    printf 'committed %s\n' "$(git -C "$data_repo" rev-parse HEAD)" >"$test_root/backup-expected"
+    assert_output "$test_root/backup-expected" "$test_root/backup-output"
+    [ "$(git -C "$data_repo" log -1 --format=%s)" = "$commit_subject" ] || fail "unexpected backup subject"
+    [ "$(git -C "$data_repo" rev-parse HEAD^)" = "$head_before_backup" ] || fail "backup did not create one commit"
+    printf '%s\n' "$updated_line" >"$test_root/overlay-expected"
+    assert_file_equals "$test_root/overlay-expected" "$data_repo/$overlay_relative"
+    printf '%s\n' "$overlay_relative" "$target_relative" >"$test_root/backup-paths-expected"
+    git -C "$data_repo" diff-tree --no-commit-id --name-only -r HEAD >"$test_root/backup-paths"
+    assert_output "$test_root/backup-paths-expected" "$test_root/backup-paths"
+    assert_file_equals "$test_root/$provider-runtime-before-backup" "$runtime"
+
+    # Backup does not rewrite the runtime's last-applied digest. Status must
+    # report drift until apply refreshes that block from the new committed target.
+    status_exit=0
+    run_provider "$provider" status >"$test_root/status-output" || status_exit=$?
+    [ "$status_exit" = 2 ] || fail "backup did not leave expected digest drift"
+    sed 's/ in_sync$/ different/' "$test_root/status-expected" >"$test_root/status-drift-expected"
+    if [ "$provider" = codex ]; then
+        printf '%s\n' 'codex/AGENTS.md   different' 'codex/config.toml in_sync' >"$test_root/status-drift-expected"
+    fi
+    assert_output "$test_root/status-drift-expected" "$test_root/status-output"
+    run_provider "$provider" apply >"$test_root/apply-output"
+    assert_output "$test_root/apply-expected" "$test_root/apply-output"
+    run_provider "$provider" status >"$test_root/status-output"
+    assert_output "$test_root/status-expected" "$test_root/status-output"
+    cp "$runtime" "$test_root/$provider-runtime-after-backup"
+
+    # Explicit apply replaces drift from committed portable data, not from
+    # the preserved historical provider file. It never commits runtime writes.
+    printf '\n%s\n' 'macOS apply drift' >>"$runtime"
+    head_before_apply=$(git -C "$data_repo" rev-parse HEAD)
+    run_provider "$provider" apply >"$test_root/apply-output"
+    assert_output "$test_root/apply-expected" "$test_root/apply-output"
+    assert_file_equals "$test_root/$provider-runtime-after-backup" "$runtime"
+    [ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || fail "apply changed HEAD"
+    run_provider "$provider" status >"$test_root/status-output"
+    assert_output "$test_root/status-expected" "$test_root/status-output"
+    run_provider "$provider" backup >"$test_root/backup-again-output"
+    printf '%s\n' unchanged >"$test_root/unchanged-expected"
+    assert_output "$test_root/unchanged-expected" "$test_root/backup-again-output"
+    run_provider "$provider" apply >"$test_root/apply-again-output"
+    assert_output "$test_root/unchanged-expected" "$test_root/apply-again-output"
+    [ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_apply" ] || fail "idempotent commands changed HEAD"
+done
+assert_file_equals "$test_root/codex-legacy-original" "$data_repo/environment/providers/codex/AGENTS.md"
+assert_file_equals "$test_root/copilot-legacy-original" "$canonical_copilot"
+assert_file_equals "$test_root/codex-config-original" "$codex_home/config.toml"
+assert_file_equals "$test_root/copilot-config-original" "$copilot_home/config.json"
+[ -z "$(git -C "$data_repo" status --porcelain)" ] || fail "lifecycle left repository changes"
+
+# Repository-only render updates both enrolled targets after a shared edit,
+# never runtime files, the Git index, or history. No other platform is invented.
+
+cp "$codex_home/AGENTS.md" "$test_root/codex-runtime-before-render"
+cp "$codex_home/config.toml" "$test_root/config-before-render"
+cp "$runtime_copilot" "$test_root/copilot-runtime-before-render"
+head_before_render=$(git -C "$data_repo" rev-parse HEAD)
+printf '%s\n' 'Shared approval updated.' >"$shared_source"
+"$custom_target" render --repo "$data_repo" >"$test_root/render-output"
+printf 'rendered environment/targets/%s/codex/AGENTS.md\nrendered environment/targets/%s/copilot/copilot-instructions.md\n' \
+    "$platform" "$platform" >"$test_root/render-expected-output"
+assert_output "$test_root/render-expected-output" "$test_root/render-output"
+for provider in codex copilot; do
+    case "$provider" in
+        codex) instruction_file=AGENTS.md; overlay='Codex models updated.' ;;
+        copilot) instruction_file=copilot-instructions.md; overlay='Copilot tools updated.' ;;
+    esac
+    printf '%s\n' \
+        '<!-- AEC:SOURCE:SHARED:BEGIN -->' 'Shared approval updated.' '' \
+        '<!-- AEC:SOURCE:SHARED:END -->' '' \
+        '<!-- AEC:SOURCE:PLATFORM:BEGIN -->' 'Local paths.' '' \
+        '<!-- AEC:SOURCE:PLATFORM:END -->' '' \
+        '<!-- AEC:SOURCE:PROVIDER:BEGIN -->' "$overlay" '' \
+        >"$test_root/render-expected-content"
+    printf '%s' '<!-- AEC:SOURCE:PROVIDER:END -->' >>"$test_root/render-expected-content"
+    assert_file_equals "$test_root/render-expected-content" "$data_repo/environment/targets/$platform/$provider/$instruction_file"
+done
+"$custom_target" render --repo "$data_repo" >"$test_root/render-again-output"
+printf '%s\n' unchanged >"$test_root/render-again-expected"
+assert_output "$test_root/render-again-expected" "$test_root/render-again-output"
+[ "$(git -C "$data_repo" rev-parse HEAD)" = "$head_before_render" ] || \
+    fail "render changed repository HEAD"
+git -C "$data_repo" diff --cached --quiet || fail "render staged repository changes"
+assert_file_equals "$test_root/codex-runtime-before-render" "$codex_home/AGENTS.md"
+assert_file_equals "$test_root/config-before-render" "$codex_home/config.toml"
+assert_file_equals "$test_root/copilot-runtime-before-render" "$runtime_copilot"
+assert_file_equals "$test_root/copilot-config-original" "$copilot_home/config.json"
+printf '%s\n' environment/shared/instructions.md \
+    "environment/targets/$platform/codex/AGENTS.md" \
+    "environment/targets/$platform/copilot/copilot-instructions.md" >"$test_root/render-paths-expected"
+git -C "$data_repo" diff --name-only >"$test_root/render-paths"
+assert_output "$test_root/render-paths-expected" "$test_root/render-paths"
+[ "$(find "$data_repo/environment/targets" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = 1 ] || \
+    fail "render created an unused platform"
+
+# Run the real generated uninstaller against the portable Codex fixture.
+cp "$codex_home/config.toml" "$test_root/config-before-real-uninstall"
+cp "$runtime_copilot" "$test_root/copilot-before-real-uninstall"
+cp "$copilot_home/skills/aec/SKILL.md" "$test_root/copilot-skill-before-real-uninstall"
+git -C "$data_repo" status --porcelain >"$test_root/data-before-real-uninstall"
+real_uninstall_head=$(git -C "$data_repo" rev-parse HEAD)
+"$generated_uninstaller" --codex-home "$codex_home" >"$test_root/real-uninstall-output"
+grep -Fx 'uninstalled' "$test_root/real-uninstall-output" >/dev/null || fail "real uninstaller did not report cleanup"
+[ ! -e "$custom_target" ] || fail "real uninstaller left the selected binary"
+[ ! -e "$generated_uninstaller" ] || fail "real uninstaller left its helper"
+[ ! -e "$codex_home/skills/aec/SKILL.md" ] || fail "real uninstaller left the Codex skill"
+if grep -F '<!-- AEC:BEGIN' "$codex_home/AGENTS.md" >/dev/null; then
+    fail "real uninstaller left the Codex control block"
+fi
+grep -F 'Codex models updated.' "$codex_home/AGENTS.md" >/dev/null || fail "real uninstaller removed Codex instructions"
+assert_file_equals "$test_root/config-before-real-uninstall" "$codex_home/config.toml"
+assert_file_equals "$test_root/copilot-before-real-uninstall" "$runtime_copilot"
+assert_file_equals "$test_root/copilot-skill-before-real-uninstall" "$copilot_home/skills/aec/SKILL.md"
+[ "$(git -C "$data_repo" rev-parse HEAD)" = "$real_uninstall_head" ] || fail "real uninstaller changed data HEAD"
+git -C "$data_repo" status --porcelain >"$test_root/data-after-real-uninstall"
+assert_file_equals "$test_root/data-before-real-uninstall" "$test_root/data-after-real-uninstall"
 
 # A small fake binary makes the generated script's all-or-nothing cleanup testable
 # without changing the actual personal Codex environment.
-fake_source="$test_root/fake-source"
+fake_source="$test_root/fake's source"
 fake_artifact="$test_root/fake-aec"
 mkdir -p "$fake_source/scripts" "$fake_source/artifacts/aec-osx-arm64"
 cp "$source_installer" "$fake_source/scripts/install-osx-arm64.sh"
 printf '%s\n' '#!/bin/sh' \
-    'if [ "$1" = "version" ]; then printf "1.4.0-alpha.8\\n"; exit 0; fi' \
+    'if [ "$1" = "version" ]; then printf "2.0.0\\n"; exit 0; fi' \
     'if [ "$AEC_TEST_UNINSTALL_RESULT" = "fail" ]; then exit 17; fi' \
     'printf "%s\\n" "$*" > "$AEC_TEST_ARGS_FILE"' \
     'exit 0' >"$fake_artifact"
@@ -193,6 +384,49 @@ mkdir -p "$fake_codex_home"
 printf 'runtime config remains owned by aec\n' >"$fake_codex_home/config.toml"
 data_sentinel="$test_root/data-repository-sentinel"
 printf 'canonical data remains untouched\n' >"$data_sentinel"
+
+copied_uninstaller="$test_root/copied-uninstaller.sh"
+cp "$fake_uninstaller" "$copied_uninstaller"
+if AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$copied_uninstaller" >"$test_root/copy-output" 2>"$test_root/copy-error"; then
+    fail "generated uninstaller ran from a copied path"
+fi
+grep -F 'run the uninstaller from its generated path' "$test_root/copy-error" >/dev/null
+assert_empty "$test_root/fake-args"
+[ -x "$fake_target" ] || fail "copied helper removed the binary"
+[ -x "$fake_uninstaller" ] || fail "copied helper removed the generated helper"
+
+ln -s "$fake_source/scripts" "$test_root/linked-helper-parent"
+linked_uninstaller="$test_root/linked-helper-parent/uninstall-aec.sh"
+if AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$linked_uninstaller" >"$test_root/helper-link-output" 2>"$test_root/helper-link-error"; then
+    fail "generated uninstaller ran through a linked helper ancestor"
+fi
+grep -F 'uninstaller or executable path cannot contain a symbolic link' "$test_root/helper-link-error" >/dev/null
+assert_empty "$test_root/fake-args"
+[ -x "$fake_target" ] || fail "linked helper ancestor removed the binary"
+[ -x "$fake_uninstaller" ] || fail "linked helper ancestor removed the generated helper"
+
+mv "$fake_target_dir" "$test_root/moved-fake-bin"
+ln -s "$test_root/moved-fake-bin" "$fake_target_dir"
+if AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$fake_uninstaller" >"$test_root/link-output" 2>"$test_root/link-error"; then
+    fail "generated uninstaller used a linked install-directory ancestor"
+fi
+grep -F 'uninstaller or executable path cannot contain a symbolic link' "$test_root/link-error" >/dev/null
+assert_empty "$test_root/fake-args"
+[ -x "$fake_target" ] || fail "linked install directory lost the binary"
+[ -x "$fake_uninstaller" ] || fail "linked install directory lost the helper"
+rm "$fake_target_dir"
+mv "$test_root/moved-fake-bin" "$fake_target_dir"
+
+printf '%s\n' '# changed executable bytes' >>"$fake_target"
+if AEC_TEST_UNINSTALL_RESULT=success AEC_TEST_ARGS_FILE="$test_root/fake-args" "$fake_uninstaller" >"$test_root/digest-output" 2>"$test_root/digest-error"; then
+    fail "generated uninstaller accepted a replaced executable"
+fi
+grep -F 'installed aec executable differs from the installed artifact' "$test_root/digest-error" >/dev/null
+assert_empty "$test_root/fake-args"
+[ -x "$fake_target" ] || fail "digest refusal removed the executable"
+[ -x "$fake_uninstaller" ] || fail "digest refusal removed the helper"
+"$fake_source/scripts/install-osx-arm64.sh" --install-dir "$fake_target_dir" >"$test_root/fake-repair-output"
+assert_file_equals "$fake_artifact" "$fake_target"
 
 if "$fake_uninstaller" --codex-home relative >"$test_root/invalid-output" 2>"$test_root/invalid-error"; then
     fail "generated uninstaller accepted a relative --codex-home"
@@ -214,4 +448,59 @@ assert_empty "$fake_uninstaller"
 printf 'uninstall --codex-home %s\n' "$fake_codex_home" >"$test_root/fake-args-expected"
 assert_output "$test_root/fake-args-expected" "$test_root/fake-args"
 
-printf '%s\n' 'installer generated-uninstaller tests passed'
+# Rehearse public migration with a separate legacy repository and homes.
+migration_repo="$test_root/migration-data"
+migration_remote="$test_root/migration-remote.git"
+migration_codex="$test_root/migration-codex"
+migration_copilot="$test_root/migration-copilot"
+mkdir -p "$migration_codex" "$migration_copilot"
+printf '%s\n' 'Codex migration fixture.' >"$migration_codex/AGENTS.md"
+printf '%s\n' 'personality = "friendly"' >"$migration_codex/config.toml"
+printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instructions.md"
+(
+    export CODEX_HOME="$migration_codex" COPILOT_HOME="$migration_copilot"
+    "$default_target" init --repo "$migration_repo" >/dev/null
+    "$default_target" init --repo "$migration_repo" --provider=copilot >/dev/null
+    git -C "$migration_repo" add -- environment/providers/copilot/copilot-instructions.md
+    git -C "$migration_repo" commit -qm 'Record migration Copilot baseline'
+    git init --bare --quiet --initial-branch=main "$migration_remote"
+    git -C "$migration_repo" remote add shared "$migration_remote"
+    git -C "$migration_repo" push --quiet --set-upstream shared main
+    migration_base=$(git -C "$migration_repo" rev-parse HEAD)
+
+    # A globally configured LFS driver is common even when this repository has
+    # no LFS attributes. Any accidental invocation fails the smoke test.
+    printf '%s\n' '[filter "lfs"]' '    clean = false' '    smudge = false' \
+        '    process = false' '    required = true' >>"$git_config"
+    cp "$git_config" "$test_root/migration-gitconfig-original"
+
+    # Prepare one draft. The remaining required sections are scaffolded by migrate.
+    mkdir -p "$migration_repo/environment/shared"
+    printf '%s\n' 'Preserved migration draft.' >"$test_root/migration-draft"
+    cp "$test_root/migration-draft" "$migration_repo/environment/shared/instructions.md"
+    printf '%s\n' Preserve DONE >"$test_root/migration-input"
+    "$default_target" migrate 2.0 --repo "$migration_repo" \
+        <"$test_root/migration-input" >"$test_root/migration-output"
+    assert_file_equals "$test_root/migration-gitconfig-original" "$git_config"
+    grep -F 'type exactly DONE' "$test_root/migration-output" >/dev/null
+    grep -F 'Migration completed at ' "$test_root/migration-output" >/dev/null
+
+    assert_file_equals "$test_root/migration-draft" "$migration_repo/environment/shared/instructions.md"
+    printf '2.0\n' >"$test_root/migration-marker-expected"
+    git -C "$migration_repo" show HEAD:.aec-version >"$test_root/migration-marker"
+    assert_file_equals "$test_root/migration-marker-expected" "$test_root/migration-marker"
+    [ "$(git -C "$migration_repo" diff-tree --no-commit-id --name-only -r HEAD)" = .aec-version ] || \
+        fail "migration completion commit included unexpected paths"
+    [ -z "$(git -C "$migration_repo" status --porcelain)" ] || fail "migration left repository changes"
+    [ "$(git --git-dir="$migration_remote" rev-parse HEAD)" = "$migration_base" ] || \
+        fail "migration changed the remote tip"
+
+    "$default_target" status --repo "$migration_repo" >"$test_root/migration-codex-status"
+    "$default_target" status --repo "$migration_repo" --provider=copilot >"$test_root/migration-copilot-status"
+    printf '%s\n' 'codex/AGENTS.md   in_sync' 'codex/config.toml in_sync' >"$test_root/migration-codex-expected"
+    printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/migration-copilot-expected"
+    assert_output "$test_root/migration-codex-expected" "$test_root/migration-codex-status"
+    assert_output "$test_root/migration-copilot-expected" "$test_root/migration-copilot-status"
+)
+
+printf '%s\n' 'macOS installer, AEC lifecycle, render, and migration smoke passed'

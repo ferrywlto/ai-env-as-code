@@ -33,7 +33,7 @@ internal static class ChatGptInitCommand
                 "Run ordinary `aec init` to confirm the path change first.");
         }
 
-        var providerDirectory = Path.Combine(repository, "environment", "providers", "chatgpt");
+        var providerDirectory = Path.Combine(repository, "environment", "providers", AecIdentifiers.ChatGpt);
         var scaffoldPaths = ScaffoldFileNames
             .Select(fileName => Path.Combine(providerDirectory, fileName))
             .ToArray();

@@ -1,9 +1,22 @@
+using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec;
 
 internal static class AecInstructionBlock
 {
+    // Each adjacent pair is the same format with or without manual ChatGPT guidance.
+    // These are managed-block format versions, not AEC CLI release versions.
+    private const int LegacyStandardVersion = 3;
+    private const int LegacyChatGptVersion = 4;
+    private const int CanonicalStandardVersion = 5;
+    private const int CanonicalChatGptVersion = 6;
+    private const int PortableStandardVersion = 7;
+    private const int PortableChatGptVersion = 8;
+    private const int StampedPortableStandardVersion = 9;
+    private const int StampedPortableChatGptVersion = 10;
+
     private const string BeginStemText = "<!-- AEC:BEGIN";
     private const string BeginPrefixText = "<!-- AEC:BEGIN version=";
     private const string MarkerSuffixText = " -->";
@@ -19,17 +32,42 @@ internal static class AecInstructionBlock
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
 
+    private static byte[] VersionBytes(int version) =>
+        Encoding.ASCII.GetBytes(version.ToString(CultureInfo.InvariantCulture));
+
+    private static string BeginMarker(int version) =>
+        BeginPrefixText + version.ToString(CultureInfo.InvariantCulture) + MarkerSuffixText;
+
     public static byte[] Merge(byte[] content, string repository) =>
         Merge(
             content,
             CodexBlockLines(NormalizeRepository(repository)),
-            "5"u8,
-            protectedOlderVersion: "4"u8);
+            VersionBytes(CanonicalStandardVersion),
+            protectedOlderVersion: VersionBytes(LegacyChatGptVersion));
 
     public static byte[] MergeForChatGptProvider(byte[] content, string repository)
     {
         var normalizedRepository = NormalizeRepository(repository);
-        return Merge(content, ChatGptBlockLines(normalizedRepository), "6"u8);
+        return Merge(content, ChatGptBlockLines(normalizedRepository),
+            VersionBytes(CanonicalChatGptVersion));
+    }
+
+    // 2.0 previews use new markers while ordinary init/apply retain their 1.x blocks.
+    internal static byte[] MergeForPortableTarget(
+        byte[] content,
+        string repository,
+        string platform,
+        bool includeChatGptGuidance)
+    {
+        var normalizedRepository = NormalizeRepository(repository);
+        platform = ValidatePlatform(platform);
+        // Hash the authored target, not a pre-existing local AEC control block.
+        var targetDigest = Convert.ToHexStringLower(SHA256.HashData(Remove(content).Content));
+        return includeChatGptGuidance
+            ? Merge(content, PortableChatGptBlockLines(normalizedRepository, platform,
+                targetDigest), VersionBytes(StampedPortableChatGptVersion))
+            : Merge(content, PortableCodexBlockLines(normalizedRepository, platform,
+                targetDigest), VersionBytes(StampedPortableStandardVersion));
     }
 
     internal static RepositoryBinding? ReadRepositoryBinding(
@@ -38,6 +76,10 @@ internal static class AecInstructionBlock
     {
         return ReadInitializedBlock(content, allowLegacyProviderUpgrade)?.Binding;
     }
+
+    internal static bool IncludesChatGptGuidance(int? version) =>
+        version is LegacyChatGptVersion or CanonicalChatGptVersion or
+            PortableChatGptVersion or StampedPortableChatGptVersion;
 
     internal static RemovalResult Remove(byte[] content)
     {
@@ -126,10 +168,14 @@ internal static class AecInstructionBlock
         var lines = blockText.Split(newLine, StringSplitOptions.None);
         var expectedLineCount = version switch
         {
-            3 => 8,
-            4 => 12,
-            5 => 14,
-            6 => 18,
+            LegacyStandardVersion => 8,
+            LegacyChatGptVersion => 12,
+            CanonicalStandardVersion => 14,
+            CanonicalChatGptVersion => 18,
+            PortableStandardVersion => 16,
+            PortableChatGptVersion => 20,
+            StampedPortableStandardVersion => 17,
+            StampedPortableChatGptVersion => 21,
             _ => throw UnsupportedInitializedBlock()
         };
         if (lines.Length != expectedLineCount)
@@ -139,7 +185,7 @@ internal static class AecInstructionBlock
 
         const string repositoryPrefix = "The AEC data repository selected by `--repo` is `";
         const string repositorySuffix = "`.";
-        var repositoryLine = lines[version <= 4 ? 3 : 5];
+        var repositoryLine = lines[version <= LegacyChatGptVersion ? 3 : 5];
         if (!repositoryLine.StartsWith(repositoryPrefix, StringComparison.Ordinal) ||
             !repositoryLine.EndsWith(repositorySuffix, StringComparison.Ordinal))
         {
@@ -158,14 +204,61 @@ internal static class AecInstructionBlock
             throw UnsupportedInitializedBlock(exception);
         }
 
+        string? platform = null;
+        if (version is PortableStandardVersion or PortableChatGptVersion or
+            StampedPortableStandardVersion or StampedPortableChatGptVersion)
+        {
+            const string platformPrefix = "The selected AEC platform is `";
+            var platformLine = lines[7];
+            if (!platformLine.StartsWith(platformPrefix, StringComparison.Ordinal) ||
+                !platformLine.EndsWith(repositorySuffix, StringComparison.Ordinal))
+            {
+                throw UnsupportedInitializedBlock();
+            }
+
+            try
+            {
+                platform = ValidatePlatform(
+                    platformLine[platformPrefix.Length..^repositorySuffix.Length]);
+            }
+            catch (ArgumentException exception)
+            {
+                throw UnsupportedInitializedBlock(exception);
+            }
+        }
+
+        string? targetDigest = null;
+        if (version is StampedPortableStandardVersion or StampedPortableChatGptVersion)
+        {
+            const string digestPrefix = "The last-applied target SHA-256 is `";
+            var digestLine = lines[9];
+            if (!digestLine.StartsWith(digestPrefix, StringComparison.Ordinal) ||
+                !digestLine.EndsWith(repositorySuffix, StringComparison.Ordinal))
+            {
+                throw UnsupportedInitializedBlock();
+            }
+
+            targetDigest = digestLine[digestPrefix.Length..^repositorySuffix.Length];
+            if (!IsLowerHexSha256(targetDigest))
+            {
+                throw UnsupportedInitializedBlock();
+            }
+        }
+
         // Re-rendering makes recognition strict: only blocks emitted by a supported AEC
         // version can authorize applying or rebinding a pulled repository.
         var expectedLines = version switch
         {
-            3 => LegacyCodexBlockLines(normalizedRepository),
-            4 => LegacyChatGptBlockLines(normalizedRepository),
-            5 => CodexBlockLines(normalizedRepository),
-            6 => ChatGptBlockLines(normalizedRepository),
+            LegacyStandardVersion => LegacyCodexBlockLines(normalizedRepository),
+            LegacyChatGptVersion => LegacyChatGptBlockLines(normalizedRepository),
+            CanonicalStandardVersion => CodexBlockLines(normalizedRepository),
+            CanonicalChatGptVersion => ChatGptBlockLines(normalizedRepository),
+            PortableStandardVersion => PortableCodexBlockLines(normalizedRepository, platform!),
+            PortableChatGptVersion => PortableChatGptBlockLines(normalizedRepository, platform!),
+            StampedPortableStandardVersion => PortableCodexBlockLines(
+                normalizedRepository, platform!, targetDigest),
+            StampedPortableChatGptVersion => PortableChatGptBlockLines(
+                normalizedRepository, platform!, targetDigest),
             _ => throw UnsupportedInitializedBlock()
         };
         var expectedBlock = RenderCurrentBlock(newLine, expectedLines);
@@ -176,7 +269,7 @@ internal static class AecInstructionBlock
         }
 
         return new InitializedBlock(
-            new RepositoryBinding(version.Value, normalizedRepository),
+            new RepositoryBinding(version.Value, normalizedRepository, platform, targetDigest),
             begin.FirstIndex,
             suffixOffset,
             newLine);
@@ -188,9 +281,28 @@ internal static class AecInstructionBlock
             ?? throw UnsupportedInitializedBlock();
         var normalizedRepository = NormalizeRepository(repository);
 
-        return binding.Version is 3 or 5
-            ? Merge(content, CodexBlockLines(normalizedRepository), "5"u8)
-            : Merge(content, ChatGptBlockLines(normalizedRepository), "6"u8);
+        return binding.Version switch
+        {
+            LegacyStandardVersion or CanonicalStandardVersion => Merge(
+                content, CodexBlockLines(normalizedRepository),
+                VersionBytes(CanonicalStandardVersion)),
+            LegacyChatGptVersion or CanonicalChatGptVersion => Merge(
+                content, ChatGptBlockLines(normalizedRepository),
+                VersionBytes(CanonicalChatGptVersion)),
+            PortableStandardVersion => Merge(
+                content, PortableCodexBlockLines(normalizedRepository, binding.Platform!),
+                VersionBytes(PortableStandardVersion)),
+            PortableChatGptVersion => Merge(
+                content, PortableChatGptBlockLines(normalizedRepository, binding.Platform!),
+                VersionBytes(PortableChatGptVersion)),
+            StampedPortableStandardVersion => Merge(
+                content, PortableCodexBlockLines(normalizedRepository, binding.Platform!,
+                    binding.TargetDigest), VersionBytes(StampedPortableStandardVersion)),
+            StampedPortableChatGptVersion => Merge(
+                content, PortableChatGptBlockLines(normalizedRepository, binding.Platform!,
+                    binding.TargetDigest), VersionBytes(StampedPortableChatGptVersion)),
+            _ => throw UnsupportedInitializedBlock()
+        };
     }
 
     internal static byte[] MergeForVersion(byte[] content, string repository, int version)
@@ -198,10 +310,14 @@ internal static class AecInstructionBlock
         var normalizedRepository = NormalizeRepository(repository);
         return version switch
         {
-            3 => Merge(content, LegacyCodexBlockLines(normalizedRepository), "3"u8),
-            4 => Merge(content, LegacyChatGptBlockLines(normalizedRepository), "4"u8),
-            5 => Merge(content, CodexBlockLines(normalizedRepository), "5"u8),
-            6 => Merge(content, ChatGptBlockLines(normalizedRepository), "6"u8),
+            LegacyStandardVersion => Merge(content, LegacyCodexBlockLines(normalizedRepository),
+                VersionBytes(LegacyStandardVersion)),
+            LegacyChatGptVersion => Merge(content, LegacyChatGptBlockLines(normalizedRepository),
+                VersionBytes(LegacyChatGptVersion)),
+            CanonicalStandardVersion => Merge(content, CodexBlockLines(normalizedRepository),
+                VersionBytes(CanonicalStandardVersion)),
+            CanonicalChatGptVersion => Merge(content, ChatGptBlockLines(normalizedRepository),
+                VersionBytes(CanonicalChatGptVersion)),
             _ => throw UnsupportedInitializedBlock()
         };
     }
@@ -226,12 +342,12 @@ internal static class AecInstructionBlock
             repository,
             "environment",
             "providers",
-            "codex",
+            AecIdentifiers.Codex,
             "AGENTS.md");
 
         return
         [
-            "<!-- AEC:BEGIN version=5 -->",
+            BeginMarker(CanonicalStandardVersion),
             "## AI Environment as Code",
             string.Empty,
             "Use the `$aec` skill for changes to managed personal Codex instructions or configuration.",
@@ -250,7 +366,7 @@ internal static class AecInstructionBlock
 
     private static string[] LegacyCodexBlockLines(string normalizedRepository) =>
     [
-        "<!-- AEC:BEGIN version=3 -->",
+        BeginMarker(LegacyStandardVersion),
         "## AI Environment as Code",
         string.Empty,
         $"The AEC data repository selected by `--repo` is `{normalizedRepository}`.",
@@ -265,7 +381,7 @@ internal static class AecInstructionBlock
         var repository = normalizedRepository;
         return
         [
-            "<!-- AEC:BEGIN version=6 -->",
+            BeginMarker(CanonicalChatGptVersion),
             .. CodexBlockLines(repository)[1..^1],
             string.Empty,
             .. ChatGptGuidanceLines(repository),
@@ -273,12 +389,59 @@ internal static class AecInstructionBlock
         ];
     }
 
+    private static string[] PortableCodexBlockLines(
+        string repository,
+        string platform,
+        string? targetDigest = null)
+    {
+        var target = Path.Combine(repository, "environment", "targets", platform,
+            AecIdentifiers.Codex, "AGENTS.md");
+        return
+        [
+            targetDigest is null
+                ? BeginMarker(PortableStandardVersion)
+                : BeginMarker(StampedPortableStandardVersion),
+            "## AI Environment as Code",
+            string.Empty,
+            "Use the `$aec` skill for changes to managed personal Codex instructions or configuration.",
+            string.Empty,
+            $"The AEC data repository selected by `--repo` is `{repository}`.",
+            "Treat its Git commit history as the source of truth.",
+            $"The selected AEC platform is `{platform}`.",
+            $"The committed Codex instruction target is `{target}`.",
+            .. targetDigest is null
+                ? []
+                : new[] { $"The last-applied target SHA-256 is `{targetDigest}`." },
+            "Edit the authored shared, platform, or Codex overlay source; run `aec render`, review, and commit the generated target. Do not edit the target directly.",
+            "Preserve instructions outside this managed block; do not edit the runtime `AGENTS.md` as the source of truth.",
+            string.Empty,
+            "For repository-to-runtime changes, run `aec apply`, then verify with `aec status`.",
+            "Use `aec backup` only for an explicitly authorized runtime-to-repository capture.",
+            "If AEC is unavailable or validation fails, stop without changing managed runtime state.",
+            EndMarkerText
+        ];
+    }
+
+    private static string[] PortableChatGptBlockLines(
+        string repository,
+        string platform,
+        string? targetDigest = null) =>
+    [
+        targetDigest is null
+            ? BeginMarker(PortableChatGptVersion)
+            : BeginMarker(StampedPortableChatGptVersion),
+        .. PortableCodexBlockLines(repository, platform, targetDigest)[1..^1],
+        string.Empty,
+        .. ChatGptGuidanceLines(repository),
+        EndMarkerText
+    ];
+
     private static string[] LegacyChatGptBlockLines(string normalizedRepository)
     {
         var repository = normalizedRepository;
         return
         [
-            "<!-- AEC:BEGIN version=4 -->",
+            BeginMarker(LegacyChatGptVersion),
             .. LegacyCodexBlockLines(repository)[1..^1],
             string.Empty,
             .. ChatGptGuidanceLines(repository),
@@ -292,7 +455,7 @@ internal static class AecInstructionBlock
             repository,
             "environment",
             "providers",
-            "chatgpt");
+            AecIdentifiers.ChatGpt);
         if (!Path.EndsInDirectorySeparator(providerDirectory))
         {
             providerDirectory += Path.DirectorySeparatorChar;
@@ -324,6 +487,12 @@ internal static class AecInstructionBlock
 
         return Path.TrimEndingDirectorySeparator(Path.GetFullPath(repository));
     }
+
+    private static string ValidatePlatform(string platform) => platform switch
+    {
+        AecIdentifiers.MacOsArm64 or AecIdentifiers.WindowsX64 or AecIdentifiers.LinuxArm64 => platform,
+        _ => throw new ArgumentException($"Unsupported AEC platform: {platform}")
+    };
 
     private static byte[] Merge(
         byte[] content,
@@ -577,7 +746,8 @@ internal static class AecInstructionBlock
         VersionKind relativeToVersionThree;
         try
         {
-            relativeToVersionThree = ReadVersion(beginLine, "3"u8);
+            relativeToVersionThree = ReadVersion(beginLine,
+                VersionBytes(LegacyStandardVersion));
         }
         catch (InvalidDataException exception)
         {
@@ -592,13 +762,24 @@ internal static class AecInstructionBlock
 
         if (relativeToVersionThree == VersionKind.Current)
         {
-            return 3;
+            return LegacyStandardVersion;
         }
 
         var version = beginLine[BeginPrefix.Length..^MarkerSuffix.Length];
-        if (version.SequenceEqual("4"u8)) return 4;
-        if (version.SequenceEqual("5"u8)) return 5;
-        if (version.SequenceEqual("6"u8)) return 6;
+        if (version.SequenceEqual(VersionBytes(LegacyChatGptVersion)))
+            return LegacyChatGptVersion;
+        if (version.SequenceEqual(VersionBytes(CanonicalStandardVersion)))
+            return CanonicalStandardVersion;
+        if (version.SequenceEqual(VersionBytes(CanonicalChatGptVersion)))
+            return CanonicalChatGptVersion;
+        if (version.SequenceEqual(VersionBytes(PortableStandardVersion)))
+            return PortableStandardVersion;
+        if (version.SequenceEqual(VersionBytes(PortableChatGptVersion)))
+            return PortableChatGptVersion;
+        if (version.SequenceEqual(VersionBytes(StampedPortableStandardVersion)))
+            return StampedPortableStandardVersion;
+        if (version.SequenceEqual(VersionBytes(StampedPortableChatGptVersion)))
+            return StampedPortableChatGptVersion;
 
         throw UnsupportedInitializedBlock();
     }
@@ -629,7 +810,15 @@ internal static class AecInstructionBlock
 
     private readonly record struct Occurrences(int Count, int FirstIndex);
 
-    internal sealed record RepositoryBinding(int Version, string Repository);
+    private static bool IsLowerHexSha256(string value) =>
+        value.Length == 64 && value.All(character =>
+            character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    internal sealed record RepositoryBinding(
+        int Version,
+        string Repository,
+        string? Platform = null,
+        string? TargetDigest = null);
 
     internal sealed record RemovalResult(byte[] Content, bool Removed);
 
