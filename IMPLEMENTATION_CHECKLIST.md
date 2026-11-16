@@ -1,8 +1,12 @@
 # Implementation Checklist
 
-## Current increment — 2.0.0 version metadata
+## Current increment — 2.0 landing page
 
-[Ticket #6](https://github.com/ferrywlto/ai-env-as-code/issues/6) is Active. Executable metadata and current-version expectations are `2.0.0`; historical alpha evidence is retained. The focused version test passed and the development executable reports `2.0.0`. Next: open the requested PR to `main` and obtain Ferry's review. A tag, release, merge and installation are separate actions.
+[Ticket #8](https://github.com/ferrywlto/ai-env-as-code/issues/8) is Active on branch `8_update_landing_page_for_2_0`. Ferry approved the landing-page change. Content was checked against the 2.0 documentation and key links and anchors were checked; the browser blocked local preview, so rendered layout and complete link verification remain outstanding. Next: submit the requested PR and complete those checks before marking the ticket Done.
+
+## Completed increment — 2.0.0 version metadata
+
+[Ticket #6](https://github.com/ferrywlto/ai-env-as-code/issues/6) is Done; [PR #7](https://github.com/ferrywlto/ai-env-as-code/pull/7) merged to `main` on 16 November 2026. The focused version test passed and the executable reports `2.0.0`. An official release and installation remain separate.
 
 ## Current increment — migration filter handling
 
