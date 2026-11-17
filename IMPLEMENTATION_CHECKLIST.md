@@ -1,8 +1,8 @@
 # Implementation Checklist
 
-## Current increment — 2.0 landing page
+## Completed increment — 2.0 landing page
 
-[Ticket #8](https://github.com/ferrywlto/ai-env-as-code/issues/8) is Active on branch `8_update_landing_page_for_2_0`. Ferry approved the landing-page change. Content was checked against the 2.0 documentation and key links and anchors were checked; the browser blocked local preview, so rendered layout and complete link verification remain outstanding. Next: submit the requested PR and complete those checks before marking the ticket Done.
+[Ticket #8](https://github.com/ferrywlto/ai-env-as-code/issues/8) is Done. Ferry approved the landing-page change and verified that the rendered layout and links work as expected on 17 November 2026. Content was reviewed against the 2.0 documentation and `git diff --check` passed. [PR #10](https://github.com/ferrywlto/ai-env-as-code/pull/10) contains the approved change.
 
 ## Completed increment — 2.0.0 version metadata
 
