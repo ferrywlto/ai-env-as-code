@@ -1,8 +1,19 @@
 # Implementation Checklist
 
+## Completed increment — documentation clarity
+
+[Ticket #11](https://github.com/ferrywlto/ai-env-as-code/issues/11) is Done.
+Ferry approved the final documentation on 17 November 2026. Simplified the README,
+reference, migration and development guides; removed repeated migration internals
+and collapsed technical examples and evidence. All 18 original diagrams are
+unchanged. Local links/anchors, expandable sections and `git diff --check` passed.
+Ferry approved committing the changes on `11_improve_documentation`; publication is separate.
+Next selected ticket: [#9](https://github.com/ferrywlto/ai-env-as-code/issues/9),
+refactoring, remains Ready and has not started.
+
 ## Current increment — 2.0.0 version metadata
 
-[Ticket #6](https://github.com/ferrywlto/ai-env-as-code/issues/6) is Active. Executable metadata and current-version expectations are `2.0.0`; historical alpha evidence is retained. The focused version test passed and the development executable reports `2.0.0`. Next: open the requested PR to `main` and obtain Ferry's review. A tag, release, merge and installation are separate actions.
+[Ticket #6](https://github.com/ferrywlto/ai-env-as-code/issues/6) is Done; [PR #7](https://github.com/ferrywlto/ai-env-as-code/pull/7) merged to `main`. The focused version test passed and the executable reports `2.0.0`. An official release and installation remain separate.
 
 ## Current increment — migration filter handling
 
