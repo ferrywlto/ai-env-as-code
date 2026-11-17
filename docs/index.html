@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="AI Environment as Code keeps your Codex instructions and selected configuration in an explicit Git-backed workflow."
+      content="AEC 2.0 is a local .NET CLI for authoring shared AI instructions, rendering portable Codex and Copilot targets, and controlling runtime changes through Git."
     >
     <meta name="theme-color" content="#07111f">
     <title>AI Environment as Code</title>
@@ -23,59 +23,82 @@
 
     <main id="main">
       <section id="top" class="hero" aria-labelledby="hero-title">
-        <p class="eyebrow">Git-backed personal AI setup</p>
-        <h1 id="hero-title">Version your AI environment, automatically.</h1>
+        <p class="eyebrow">AEC 2.0 · Local .NET CLI</p>
+        <h1 id="hero-title">Version your AI setup with clear control.</h1>
         <p class="hero-copy">
-          Keep your Codex instructions and selected personal configuration in an
-          explicit data repository, with Git history as the source of truth.
+          Write shared instructions once, add platform and provider guidance,
+          then render the targets you choose. Git history records the reviewed
+          content behind each change.
         </p>
         <div class="actions">
           <a class="button primary" href="#install">Build on macOS ARM64</a>
           <a class="button secondary" href="https://github.com/ferrywlto/ai-env-as-code">Explore the repository</a>
         </div>
+        <p class="verification-note">
+          The source currently reports version 2.0.0. No official 2.0 release
+          has been published; the release notes are still a draft.
+        </p>
       </section>
 
       <section class="flow-section" aria-labelledby="flow-title">
         <div class="section-heading">
-          <p class="eyebrow">Explicit data flow</p>
-          <h2 id="flow-title">One direction at a time.</h2>
+          <p class="eyebrow">The 2.0 workflow</p>
+          <h2 id="flow-title">From authored instructions to your runtime.</h2>
         </div>
-        <div class="flow" role="img" aria-label="Runtime environment backs up to the Git data repository, and the Git data repository applies to the runtime environment. Status only inspects the two sides.">
-          <article class="flow-card runtime">
-            <p>Runtime</p>
-            <strong>Codex environment</strong>
-            <span>AGENTS.md + managed config</span>
+        <div class="flow" role="img" aria-label="Shared instructions, platform policy and provider overlays are reviewed and rendered into portable Codex or GitHub Copilot targets. Committed targets apply to the local runtime. Backup captures runtime changes into authored sources. Status compares the runtime and committed targets.">
+          <article class="flow-card repository">
+            <p>Authored sources</p>
+            <strong>Shared + platform + provider</strong>
+            <span>Reviewed files in your selected Git repository</span>
           </article>
           <div class="flow-steps">
-            <span><code>aec backup</code> records approved runtime changes</span>
-            <span><code>aec apply</code> restores committed canonical content</span>
-            <span><code>aec status</code> only inspects drift</span>
+            <span><code>aec render</code> creates enrolled portable targets in the repository</span>
+            <span>Review and commit the source and target changes</span>
+            <span><code>aec apply</code> deploys committed targets to an enrolled runtime</span>
+            <span><code>aec backup</code> captures attributable runtime changes into sources and commits them</span>
+            <span><code>aec status</code> compares runtime state with committed content</span>
           </div>
-          <article class="flow-card repository">
-            <p>Source of truth</p>
-            <strong>Data repository</strong>
-            <span>Canonical files + Git history</span>
+          <article class="flow-card runtime">
+            <p>Selected local runtime</p>
+            <strong>Codex or GitHub Copilot</strong>
+            <span>One explicitly enrolled platform and provider target</span>
           </article>
         </div>
+        <p class="verification-note">
+          Rendering only changes files in the data repository. It does not
+          change a runtime or create a Git commit. Ordinary AEC commands do not
+          fetch or push.
+        </p>
       </section>
 
       <section class="principles" aria-labelledby="principles-title">
         <div class="section-heading">
           <p class="eyebrow">Designed for control</p>
-          <h2 id="principles-title">Small commands. Clear boundaries.</h2>
+          <h2 id="principles-title">Separate sources. Explicit operations.</h2>
         </div>
         <div class="card-grid">
           <article>
-            <h3>No ambiguous sync</h3>
-            <p><code>backup</code> is runtime to repository. <code>apply</code> is committed repository to runtime.</p>
+            <h3>Author for each scope</h3>
+            <p>
+              Put shared guidance, platform-specific policy, and provider-only
+              instructions in separate sources. Explicitly enroll each target
+              from reviewed, committed sources.
+            </p>
           </article>
           <article>
-            <h3>Git is the record</h3>
-            <p>There is no separate backup store. Your approved commits are the history.</p>
+            <h3>Preserve unrelated settings</h3>
+            <p>
+              Codex personality updates preserve other TOML entries. GitHub
+              Copilot instruction management preserves unrelated configuration.
+            </p>
           </article>
           <article>
-            <h3>Fail closed</h3>
-            <p>Path containment, symbolic-link checks, and exact content validation protect managed files.</p>
+            <h3>Migration has its own review</h3>
+            <p>
+              Existing 1.x data repositories use the explicit
+              <code>aec migrate 2.0</code> flow. Review the prepared changes
+              and rehearse on a disposable copy before migrating.
+            </p>
           </article>
         </div>
       </section>
@@ -83,29 +106,44 @@
       <section id="install" class="install" aria-labelledby="install-title">
         <div class="section-heading">
           <p class="eyebrow">Get started</p>
-          <h2 id="install-title">Build it yourself.</h2>
+          <h2 id="install-title">Build on macOS ARM64.</h2>
         </div>
         <p>
-          The first supported platform is macOS on Apple silicon. You need Git, the
-          .NET 10 SDK, and Xcode Command Line Tools to build; the installed Native
-          AOT executable does not require the .NET runtime.
+          You need Git, the .NET 10 SDK, and Xcode Command Line Tools. The
+          installer places a self-contained Native AOT executable in your user
+          directory; it does not install the .NET runtime.
         </p>
         <pre><code>git clone https://github.com/ferrywlto/ai-env-as-code.git
 cd ai-env-as-code
 ./scripts/build-osx-arm64.sh
 ./scripts/install-osx-arm64.sh
-aec init --repo /absolute/path/to/aec-data</code></pre>
-        <a class="text-link" href="https://github.com/ferrywlto/ai-env-as-code#build-test-and-run">Read the complete installation guide</a>
+aec version</code></pre>
+        <p>
+          Choose a data repository, initialize AEC, and review and commit the
+          shared instructions, platform policy, and provider overlay before
+          enrolling a target with
+          <code>aec init --repo /absolute/path/to/aec-data --enroll-shared</code>.
+          The setup guide explains the complete order.
+        </p>
+        <p>
+          For an existing 1.x repository, run
+          <code>aec migrate 2.0 --repo /absolute/path/to/aec-data</code> only
+          after reviewing the migration guide and rehearsing on a copy.
+        </p>
+        <div class="footer-links">
+          <a class="text-link" href="https://github.com/ferrywlto/ai-env-as-code#start-on-apple-silicon-macos">Read the setup guide</a>
+          <a class="text-link" href="https://github.com/ferrywlto/ai-env-as-code/blob/main/docs/reference.md#interactive-migration-command">Read the migration guide</a>
+        </div>
       </section>
 
-      <section class="roadmap" aria-labelledby="roadmap-title">
+      <section class="roadmap" aria-labelledby="support-title">
         <div class="section-heading">
-          <p class="eyebrow">Roadmap</p>
-          <h2 id="roadmap-title">More environments, same explicit model.</h2>
+          <p class="eyebrow">Current verification</p>
+          <h2 id="support-title">Build checks are not harness checks.</h2>
         </div>
         <div class="support-table-wrap">
           <table class="support-table">
-            <caption>Local harness verification</caption>
+            <caption>Verification with the actual local harness for 2.0</caption>
             <thead>
               <tr>
                 <th scope="col">Harness</th>
@@ -115,25 +153,26 @@ aec init --repo /absolute/path/to/aec-data</code></pre>
               </tr>
             </thead>
             <tbody>
-              <tr><th scope="row">Codex</th><td>✓ Verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
-              <tr><th scope="row">GitHub Copilot</th><td>⚠ Alpha, not verified</td><td>⚠ Alpha, not verified</td><td>⚠ Alpha, not verified</td></tr>
-              <tr><th scope="row">Claude</th><td>⚠ Not verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
-              <tr><th scope="row">Gemini</th><td>⚠ Not verified</td><td>⚠ Not verified</td><td>⚠ Not verified</td></tr>
+              <tr><th scope="row">Codex</th><td>Migrated setup verified</td><td>Not verified</td><td>Not verified</td></tr>
+              <tr><th scope="row">GitHub Copilot</th><td>Not verified</td><td>Not verified</td><td>Not verified</td></tr>
+              <tr><th scope="row">Claude</th><td>Not implemented</td><td>Not implemented</td><td>Not implemented</td></tr>
+              <tr><th scope="row">Gemini</th><td>Not implemented</td><td>Not implemented</td><td>Not implemented</td></tr>
             </tbody>
           </table>
         </div>
         <p class="verification-note">
-          ✓ means tested with the actual local harness. ⚠ means not yet verified.
-          Passing Windows build and installer CI checks does not verify Codex on Windows.
-          Copilot's complete AEC lifecycle is covered by isolated tests on all three
-          platforms, but remains unverified until exercised with the local Copilot CLI harness.
+          Isolated tests cover AEC commands and lifecycle fixtures on all three
+          operating systems. On macOS ARM64, Codex is in use with a 2.0
+          data repository, and AEC status reports its instructions and managed
+          configuration in sync. Ferry verified the migrated Codex setup.
+          Further documented harness verification, including GitHub Copilot,
+          remains open in
+          <a href="https://github.com/ferrywlto/ai-env-as-code/issues/4">issue #4</a>.
         </p>
-        <ul>
-          <li><span>01</span> Windows and Linux support for Codex</li>
-          <li><span>02</span> Verify GitHub Copilot against installed local harnesses</li>
-          <li><span>03</span> Claude support after it adopts <code>AGENTS.md</code></li>
-          <li><span>04</span> Further model and provider support</li>
-        </ul>
+        <div class="footer-links">
+          <a href="https://github.com/ferrywlto/ai-env-as-code/blob/main/docs/reference.md">Detailed command reference</a>
+          <a href="https://github.com/ferrywlto/ai-env-as-code/blob/main/docs/release-notes-2.0-draft.md">2.0 release notes (draft)</a>
+        </div>
       </section>
     </main>
 
