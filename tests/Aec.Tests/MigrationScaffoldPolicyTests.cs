@@ -1,6 +1,7 @@
 namespace Aec.Tests;
 
 // Policy tests use no Git process, filesystem fixture or process-wide settings.
+[Trait("Category", "Unit")]
 public sealed class MigrationScaffoldPolicyTests
 {
     [Theory]

@@ -1,5 +1,18 @@
 # Implementation Checklist
 
+## Completed increment — fast unit test command
+
+[Ticket #13](https://github.com/ferrywlto/ai-env-as-code/issues/13) was accepted
+by Ferry on 18 November 2026 under
+[test suite refactoring #9](https://github.com/ferrywlto/ai-env-as-code/issues/9).
+Seven in-memory test classes are tagged `Category=Unit`. The documented command
+passed all 127 tests on macOS ARM64 with .NET SDK 10.0.404 in 5.33 seconds wall
+time, including restore, build, and test startup. A separate run with a
+positive-controlled Git shim passed all 127 tests and recorded zero Git calls.
+The initial sandboxed timing and shim attempts stopped at NuGet audit access
+and the test runner's local socket, respectively. Both checks passed with the
+approved permissions. Next, publish the reviewed branch.
+
 ## Completed increment — documentation clarity
 
 [Ticket #11](https://github.com/ferrywlto/ai-env-as-code/issues/11) is Done.
@@ -8,8 +21,6 @@ reference, migration and development guides; removed repeated migration internal
 and collapsed technical examples and evidence. All 18 original diagrams are
 unchanged. Local links/anchors, expandable sections and `git diff --check` passed.
 Ferry approved committing the changes on `11_improve_documentation`; publication is separate.
-Next selected ticket: [#9](https://github.com/ferrywlto/ai-env-as-code/issues/9),
-refactoring, remains Ready and has not started.
 
 ## Completed increment — 2.0 landing page
 

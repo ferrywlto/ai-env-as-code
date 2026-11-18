@@ -1,5 +1,6 @@
 namespace Aec.Tests;
 
+[Trait("Category", "Unit")]
 public sealed class InstructionComposerTests
 {
     [Fact]

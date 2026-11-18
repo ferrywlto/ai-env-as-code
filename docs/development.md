@@ -1,7 +1,8 @@
 # Build, test, and run
 
 Use these commands from the engine repository root unless stated otherwise.
-You need the .NET 10 SDK and Git. See the [command reference](reference.md).
+You need the .NET 10 SDK. The integration tests also require Git. See the
+[command reference](reference.md).
 
 ### Test strategy and expected duration
 
@@ -14,9 +15,15 @@ flowchart LR
     Full --> Release["Full Release regression<br/>before release"]
 ```
 
-Run the smallest relevant test group while developing. Run all tests before
-pushing, and run them in Release mode before publishing a release. Full runs
-can take around 16 minutes and may stay quiet until the final summary.
+Run the fast unit suite after each edit. It runs in memory without Git.
+
+```bash
+dotnet test tests/Aec.Tests/Aec.Tests.csproj --filter "Category=Unit"
+```
+
+Run the affected integration tests before review and all tests before pushing.
+Run all tests in Release mode before publishing a release. Full runs can take
+around 16 minutes and may stay quiet until the final summary.
 
 <details>
 <summary>Why full tests take longer</summary>
@@ -31,16 +38,12 @@ without a coverage dependency.
 
 </details>
 
-Choose the relevant test group:
+To run a focused integration group, filter by test class.
 
 ```bash
-# Fast instruction-block unit tests
+# One affected command suite
 dotnet test tests/Aec.Tests/Aec.Tests.csproj \
-  --filter "FullyQualifiedName~AecInstructionBlockTests"
-
-# One affected command suite; replace BackupTests as needed
-dotnet test tests/Aec.Tests/Aec.Tests.csproj \
-  --filter "FullyQualifiedName~BackupTests"
+  --filter "FullyQualifiedName~PortableCodexBackupCommandTests"
 
 # Migration and two-checkout rehearsals; process-backed Git integration
 dotnet test tests/Aec.Tests/Aec.Tests.csproj -c Release \
