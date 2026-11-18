@@ -15,6 +15,14 @@ internal sealed record PortableApplyPreview(
         string providerHome)
     {
         var snapshot = PortableRuntimeSnapshot.Read(repository, provider, providerHome);
+        var preview = PlanInstructions(snapshot);
+        return provider == AecIdentifiers.Codex
+            ? preview with { CodexConfig = PortableCodexConfigPreview.Create(snapshot) }
+            : preview;
+    }
+
+    internal static PortableApplyPreview PlanInstructions(PortableRuntimeSnapshot snapshot)
+    {
         if (snapshot.Runtime is null)
         {
             throw new InvalidOperationException(
@@ -22,15 +30,12 @@ internal sealed record PortableApplyPreview(
         }
 
         var desired = RenderDesiredRuntime(snapshot);
-        var config = provider == AecIdentifiers.Codex
-            ? PortableCodexConfigPreview.Create(snapshot)
-            : null;
         return new PortableApplyPreview(
             snapshot,
             snapshot.RuntimePath,
             desired,
             !snapshot.Runtime.AsSpan().SequenceEqual(desired),
-            config);
+            CodexConfig: null);
     }
 
     internal static byte[] RenderDesiredRuntime(PortableRuntimeSnapshot snapshot) =>

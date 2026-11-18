@@ -13,12 +13,7 @@ internal static class PortableEnvironmentStatus
         string repository, string provider, string providerHome)
     {
         var snapshot = PortableRuntimeSnapshot.Read(repository, provider, providerHome);
-        var instructions = snapshot.Runtime is null
-            ? "missing"
-            : snapshot.Runtime.AsSpan().SequenceEqual(
-                PortableApplyPreview.RenderDesiredRuntime(snapshot))
-                ? "in_sync"
-                : "different";
+        var instructions = ClassifyInstructions(snapshot);
 
         if (provider == AecIdentifiers.Copilot)
         {
@@ -28,9 +23,22 @@ internal static class PortableEnvironmentStatus
         // Codex status validates the committed config even when instructions
         // are missing, so one invalid artifact cannot hide behind another.
         var config = PortableCodexConfigPreview.Create(snapshot);
-        var configStatus = config.Inserted
-            ? "missing"
-            : config.WouldReplace ? "different" : "in_sync";
-        return new PortableStatusReport(instructions, configStatus);
+        return new PortableStatusReport(instructions, ClassifyConfig(config));
     }
+
+    internal static string ClassifyInstructions(PortableRuntimeSnapshot snapshot)
+    {
+        if (snapshot.Runtime is null)
+        {
+            return "missing";
+        }
+
+        return snapshot.Runtime.AsSpan().SequenceEqual(
+            PortableApplyPreview.RenderDesiredRuntime(snapshot))
+            ? "in_sync"
+            : "different";
+    }
+
+    internal static string ClassifyConfig(PortableCodexConfigPreview config) =>
+        config.Inserted ? "missing" : config.WouldReplace ? "different" : "in_sync";
 }
