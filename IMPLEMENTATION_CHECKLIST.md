@@ -1,5 +1,23 @@
 # Implementation Checklist
 
+## Current increment — in-memory regression coverage
+
+[Ticket #14](https://github.com/ferrywlto/ai-env-as-code/issues/14) is Active under
+[test suite refactoring #9](https://github.com/ferrywlto/ai-env-as-code/issues/9).
+The backup attribution slice adds 14 in-memory cases across Codex and Copilot
+for unchanged runtime, single-section edits, multiple-section edits, stale
+targets, and missing target digests. The fast suite passed 141 tests in
+3.41 seconds wall time on macOS ARM64 with zero Git calls.
+
+Coverage map: [PortableBackupAttributionTests](tests/Aec.Tests/PortableBackupAttributionTests.cs)
+covers the decision and exact authored path. The
+[Codex](tests/Aec.Tests/PortableCodexBackupCommandTests.cs) and
+[Copilot](tests/Aec.Tests/PortableCopilotBackupCommandTests.cs) CLI suites retain
+real-Git coverage for reading the committed target, writing the source, rendering
+affected targets, and exact commits and refusals. Backup preview and CLI tests
+remain in place. Ferry accepted the backup slice on 18 November 2026.
+Next, cover apply and status decisions.
+
 ## Completed increment — fast unit test command
 
 [Ticket #13](https://github.com/ferrywlto/ai-env-as-code/issues/13) was accepted
@@ -11,7 +29,9 @@ time, including restore, build, and test startup. A separate run with a
 positive-controlled Git shim passed all 127 tests and recorded zero Git calls.
 The initial sandboxed timing and shim attempts stopped at NuGet audit access
 and the test runner's local socket, respectively. Both checks passed with the
-approved permissions. Next, publish the reviewed branch.
+approved permissions. [PR #16](https://github.com/ferrywlto/ai-env-as-code/pull/16)
+merged to `main` on 18 November 2026 and #13 closed. Ferry approved using the
+fast-suite result for this PR after the full Debug run timed out.
 
 ## Completed increment — documentation clarity
 
