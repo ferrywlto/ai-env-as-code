@@ -3,6 +3,7 @@ using System.Text;
 
 namespace Aec.Tests;
 
+[Trait("Category", "Unit")]
 public sealed class CopilotInstructionBlockTests
 {
     private static readonly string Repository = Path.Combine(

@@ -1,6 +1,7 @@
 namespace Aec.Tests;
 
 // These tests exercise only the in-memory confirmation prompt; they do not run migration work.
+[Trait("Category", "Unit")]
 public sealed class MigrationDoneGateTests
 {
     [Fact]
