@@ -1,12 +1,13 @@
 # AI Environment as Code
 
-Version your AI environment, automatically.
+Version your AI environment with explicit control.
 
 AEC is a local .NET CLI that keeps selected AI-harness instructions in an
 explicitly chosen Git data repository. Git history is the source of truth.
 Ordinary AEC commands do not fetch or push. The explicit `migrate` command
 may fetch and fast-forward its tracked default branch. It never pushes.
-The bundled skills can coordinate Git remote checks and an explicitly approved push without depending on GitHub or GitLab.
+Bundled skills can coordinate remote checks and an explicitly approved push
+without depending on GitHub or GitLab.
 
 ## How it works today
 
@@ -23,8 +24,7 @@ flowchart LR
 deploys committed repository content to runtime. `status` only inspects drift.
 The commands have separate directions; there is no automatic `sync`.
 
-The 2.0 development branch adds portable target enrollment and rendering,
-plus Git-remote guidance in the bundled skills:
+Portable targets combine instructions for a platform and provider:
 
 ```mermaid
 flowchart LR
@@ -35,13 +35,11 @@ flowchart LR
     Targets -->|aec apply| Runtime[Local harness]
 ```
 
-`render` changes neither runtime nor Git history. The new
-`init --enroll-shared` creates one selected target from reviewed, committed
-sources without changing runtime or committing. Codex and Copilot `status`
-and `apply` use enrolled committed targets. Codex `backup` attributes at most
-one changed instruction section to an authored source and/or captures its
-managed root personality in one commit. Copilot `backup` now captures one
-attributed instruction section and affected enrolled targets in one commit.
+`render` changes neither runtime nor Git history. `init --enroll-shared`
+creates one target from reviewed, committed sources without deploying or
+committing it. Codex and Copilot `status` and `apply` use enrolled committed
+targets; `backup` can attribute a changed instruction section to its source.
+See the [backup reference](docs/reference.md#backup) for provider-specific details.
 Ordinary provider `init` retains its provider-specific flow.
 
 See the [architecture diagrams](docs/architecture.md) for current component
@@ -58,10 +56,9 @@ flowchart TD
     Scope -->|Only Codex or only Copilot| Provider[Provider overlay]
 ```
 
-For example, “ask before committing” is shared; approved local folder paths
-belong to platform policy; a Codex model choice belongs to its overlay. AEC
-does not guess this split from an existing instruction file. Review and commit
-all three authored sources before explicitly enrolling a target:
+For example, “ask before committing” is shared; local paths are platform
+policy; a Codex model choice belongs to its overlay. AEC does not classify
+existing instructions for you. Review and commit all three sources:
 
 ```text
 environment/shared/instructions.md
@@ -69,15 +66,16 @@ environment/platforms/<current-platform>/policy.md
 environment/providers/<selected-provider>/overlay.md
 ```
 
-Then run `aec init --repo ABSOLUTE_PATH --enroll-shared` for Codex, or add
-`--provider=copilot` for Copilot. Review and separately commit the new target.
-This opt-in follows ordinary initialization; it does not deploy the target.
+After ordinary initialization, run `aec init --repo ABSOLUTE_PATH --enroll-shared`
+for Codex, or add `--provider=copilot`. Review and separately commit the new
+target; enrollment does not deploy it.
+
 For an existing 1.x repository, the explicitly authorized
-`aec migrate 2.0 --repo ABSOLUTE_PATH` flow prepares the sources, waits for
-exact `DONE`, then commits targets, applies enrolled providers and verifies status.
-Close affected harness sessions and pause other writers throughout migration.
-Review the [migration reference](docs/reference.md#interactive-migration-command)
-and rehearse with disposable copies before live use.
+`aec migrate 2.0 --repo ABSOLUTE_PATH` prepares sources, waits for exact `DONE`,
+commits targets, applies enrolled providers and verifies status. Close affected
+harness sessions and pause other writers throughout migration. Review the
+[migration guide](docs/migration.md#interactive-migration-command) and
+rehearse with disposable copies before live use.
 
 ## Start on Apple-silicon macOS
 
@@ -99,22 +97,16 @@ repository and initialize Codex:
 aec init --repo /absolute/path/to/aec-data
 ```
 
-On this 2.0 development branch, complete the authored-source and target enrollment
-steps above before running `status`, `backup`, or `apply`.
-Review the changes and history before pushing your data repository to a remote.
-If it has no remote, AEC remains local-only; the skill warns rather than guessing
-where to publish it. For a cloned repository, the skill checks its tracked remote
-and default branch before a canonical change or runtime apply.
-See the [two-checkout workflow](docs/reference.md#sharing-migrated-instructions-between-machines)
-for explicit Git transport and machine-local runtime bindings.
-For pulled repositories, path changes, other providers, custom install paths,
-and uninstallation, use the [detailed reference](docs/reference.md).
+Complete the authored-source and target enrollment steps above before using
+portable `status`, `backup`, or `apply`. Review changes and history before
+pushing. Without a remote, AEC stays local; the skill will not choose one for you.
+For clones, the skill checks the tracked remote and default branch before a
+canonical change or runtime apply. See the [two-checkout workflow](docs/reference.md#sharing-migrated-instructions-between-machines)
+and [detailed reference](docs/reference.md) for other providers, paths and installation options.
 
-2.0 alpha checks that the *implicit* Codex and Copilot homes select the same
-data repository during ordinary init. These homes resolve through their
-environment variables, then `~/.codex` and `~/.copilot`. Explicit custom-home
-flags remain available, but cross-harness conflict detection does not cover
-them; use the same `--repo` checkout for both harnesses yourself.
+Ordinary init checks that the implicit Codex and Copilot homes select the same
+repository. Custom-home flags are not covered by that check: use the same
+`--repo` checkout for both harnesses yourself.
 
 ## What has been verified
 
@@ -124,33 +116,18 @@ them; use the same `--repo` checkout for both harnesses yourself.
 | GitHub Copilot | ⚠ Alpha; not real-harness verified | ⚠ Alpha; not real-harness verified | ⚠ Alpha; not real-harness verified |
 | Claude and Gemini | ⚠ Not implemented | ⚠ Not implemented | ⚠ Not implemented |
 
-Current-version real Codex and Copilot harness verification is deferred to
-[#4](https://github.com/ferrywlto/ai-env-as-code/issues/4); the historical Codex
-checkpoint and isolated tests do not establish that verification for 2.0.
-
-The tests provide narrower evidence than this harness matrix:
-
-| Test layer | Where it runs | What it proves |
-|---|---|---|
-| xUnit | Local macOS ARM64 and manually dispatched OS runners | Command logic against disposable files and real temporary Git repositories on the host OS; not cross-platform emulation |
-| Native AOT smoke | Manually dispatched macOS, Windows, and Linux GitHub Actions OS runners | Built executable and isolated install/lifecycle flows on those operating systems; no container is declared |
-| Real harness | A machine with the actual harness installed | Historical local Codex on macOS checkpoint; current 2.0 release acceptance remains open |
-
-The three manually dispatched workflows include focused composition, section,
-`render`, and enrollment xUnit tests. The [macOS ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570129)
-and [Linux ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570825)
-runs passed. After a test-fixture cleanup fix, the
-[Windows x64 rerun](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36789513384)
-passed 41/41 focused tests, Native AOT build, and isolated smoke checks.
-All three OS-runner Native AOT smokes invoke `aec render` in isolated
-fixtures. The historical local Codex on macOS checkpoint does not cover unfinished 2.0 release acceptance.
+Current 2.0 Codex and Copilot real-harness verification is deferred to
+[#4](https://github.com/ferrywlto/ai-env-as-code/issues/4). The historical
+checkpoint and isolated tests do not establish it. See [verification details
+and historical runs](docs/reference.md#local-harness-verification).
 
 ## Read more
 
 - [Shared-instruction design](docs/shared-instructions-design.md): ownership,
   enrollment, rendering, and safe directional flows.
-- [Detailed reference](docs/reference.md): commands, release history, build
-  instructions, test commands, and troubleshooting.
+- [Detailed reference](docs/reference.md): commands, workflows and release history.
+- [Migration guide](docs/migration.md): migration steps and safety requirements.
+- [Build and test guide](docs/development.md): platform builds, tests and troubleshooting.
 - [Implementation checklist](IMPLEMENTATION_CHECKLIST.md): completed increments
   and the immediate next work.
 - [Landing page](docs/index.html).

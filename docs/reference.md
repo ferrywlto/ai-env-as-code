@@ -1,18 +1,15 @@
 # AI Environment as Code — detailed reference
 
-This is the command, release-history, build, and troubleshooting reference.
+This is the command and workflow reference. Detailed [migration](migration.md) and
+[build and test](development.md) guides are separate.
 For the diagram-first overview, see the [project README](../README.md).
 Shell commands with relative paths assume the engine repository root unless
 their section says otherwise.
 
-Version 2.0.0-alpha.4 includes host-agnostic Git remote preflight guidance
-in the bundled skills. `aec render` and enrollment are repository-only. Ordinary
-`apply` and `status` use committed portable
-targets. Both providers' `backup` commands now capture portable authored
-sources; ordinary `init` retains its provider-specific flow. These
-changes include the public migration command.
-See the [approved design](shared-instructions-design.md). Current 2.0 real Codex
-and Copilot harness verification is deferred to [#4](https://github.com/ferrywlto/ai-env-as-code/issues/4).
+AEC keeps instructions in a Git repository and copies reviewed, committed
+versions to your local AI tools. See the [README](../README.md) for the workflow.
+Current 2.0 real-harness verification remains open in
+[#4](https://github.com/ferrywlto/ai-env-as-code/issues/4).
 
 ## Glossary
 
@@ -25,21 +22,21 @@ flowchart LR
 
 These arrows show data directions, not an automatically executed sequence.
 
-| Term | Meaning in AEC | Example |
-|---|---|---|
-| **Capture** | Bring live runtime state into canonical sources in the selected data repository: runtime → repository. The term alone does not imply a commit or push. | Capture changed Codex instructions through `backup`. |
-| **Preflight** | Safety checks before proceeding with an operation. A check may query remote state, but does not perform the planned capture or deployment. | Verify repository format, branch and runtime binding before migration. |
-| **Target** | In 2.0 rendering, a generated, deployable instruction file for one platform/harness pair—not the authored source. | `environment/targets/macos-arm64/codex/AGENTS.md`. |
-| **Preview** | A read-only proposal showing what would change, or why the change must stop. It does not perform the proposed write. | List canonical files needing runtime capture, or identify a pulled/runtime conflict. |
-| **Fixture** | Controlled setup and data used by tests, separate from the user's personal environment. | A disposable Git repository and fake Codex/Copilot homes. |
+| Term | Plain meaning |
+|---|---|
+| **Capture** | Copy local tool changes into repository source files. This alone does not mean commit or push. |
+| **Preflight** | Check whether an operation can proceed safely. |
+| **Target** | A generated instruction file for one platform and AI tool. |
+| **Preview** | Show proposed changes without writing them. |
+| **Fixture** | Disposable test files, separate from your personal environment. |
 
-“Target version” means the destination data format, such as `2.0`, not a generated
-file. “Runtime target” means the destination file in the harness home. A preview
-of capture is therefore not a capture, just as passing preflight is not applying
-anything. Fixtures let tests exercise those operations without using personal
-runtime files or data repositories.
+“Target version” means a data format such as `2.0`. “Runtime” means the files
+used by your local AI tool. Safety checks and previews do not apply changes.
 
 ## Version history
+
+<details>
+<summary>Earlier versions and development milestones</summary>
 
 | Version | Increment |
 |---|---|
@@ -83,6 +80,8 @@ runtime files or data repositories.
 
 The development executable reports `2.0.0` through `aec version`.
 
+</details>
+
 ## Git remote transport (skill guidance)
 
 ```mermaid
@@ -103,18 +102,16 @@ flowchart TD
     Work -->|If remote-backed commit created| Push[Separately approved push and verification]
 ```
 
-Ordinary commands do not fetch, pull, or push. The
-[interactive migration](#interactive-migration-command) performs bounded fetch
-and fast-forward retrieval, and does not push.
-The bundled skills run this
-preflight only before an AEC canonical write or runtime apply—not on every
-reply. They identify a cloned repository's remote through the current branch's
-upstream and query its advertised `HEAD`, assuming neither `origin` nor `main`.
-Equal tips need no fetch; different tips do not establish which is newer.
-Fetch and any strictly-behind fast-forward require approval. Ambiguous tracking,
-an unreachable remote, pre-existing worktree changes, or a non-default branch
+Ordinary commands do not fetch, pull, or push. The [interactive migration](#interactive-migration-command)
+can fetch and fast-forward within its bounds, but does not push. Bundled skills
+run this preflight before a canonical write or runtime apply, not every reply.
+For a clone they identify the remote from the current branch's upstream and
+query its advertised `HEAD`, without assuming `origin` or `main`. Equal tips
+need no fetch; different tips do not establish which is newer. Fetch and a
+strictly-behind fast-forward require approval. Ambiguous tracking, an
+unreachable remote, pre-existing worktree changes, or a non-default branch
 pause the operation. The skill never automatically pulls, merges, rebases,
-switches branches, or force-pushes. A new repository without a remote remains
+switches branches, or force-pushes. A new repository without a remote stays
 local-only with a warning. Before a separately approved push, show its
 destination and ask if it differs from the fetch remote.
 
@@ -163,554 +160,19 @@ machine's checkout; it never rewrites that canonical block.
 
 ## Migrating an existing 1.x repository to 2.0
 
+For the complete process and safety requirements, see the [migration guide](migration.md).
+
 ### Migration operating precondition
 
-```mermaid
-flowchart LR
-    Close[Close affected harness sessions and pause other writers] --> Terminal[Run migration from a separate terminal]
-    Terminal --> Quiet[Keep them closed through section editing and completion]
-```
-
-> Close all affected harness sessions and pause other tools that modify the selected AEC
-> repository or its managed runtime configurations. Keep them closed until
-> migration finishes. Concurrent changes may cause migration to stop with
-> partially updated state.
-
-This precondition applies to the manual sequence below and the migration command.
-Do not run live migration from the harness being migrated; use a plain editor
-during the section-editing / `DONE` pause. Existing component guards remain
-best-effort change detection, not a lock or an atomic multi-file transaction.
-AEC will not detect or terminate running processes automatically.
-
-The migration command prints this warning once before its first mutation,
-including fetch or capture.
+See the [migration operating precondition](migration.md#migration-operating-precondition).
 
 ### Interactive migration command
 
-```mermaid
-flowchart TD
-    Validate["Validate forward data-format migration<br/>and selected local harness bindings"] --> Dirty{"Dirty migration section files?"}
-    Dirty -->|"Yes"| Choice["Warn: explicitly choose<br/>Preserve or Overwrite"]
-    Dirty -->|"No"| Pull["Fast-forward-only pull; revalidate<br/>then format-compatible capture"]
-    Choice --> Pull
-    Pull --> Scaffold["Prepare only required shared,<br/>current-platform and provider files"]
-    Scaffold --> Confirm{"User finishes editing<br/>and types exactly DONE"}
-    Confirm -->|"Other input: keep waiting"| Confirm
-    Confirm -->|"EOF or cancellation"| Stop["Stop; migration incomplete"]
-    Confirm -->|"DONE"| Commit["Validate and commit reviewed sources<br/>Enroll/render; commit targets"]
-    Commit --> Deploy["Apply each selected provider<br/>Verify status"]
-    Deploy --> Complete["Record target data-format version<br/>only after successful verification"]
-```
-
-Syntax: `aec migrate 2.0 --repo ABSOLUTE_PATH`. One invocation runs
-through the prompt; there is no `--continue` flag, saved continuation, or resume
-checkpoint. Unless migration completes, the next invocation starts again at
-preflight, not at the prompt. Preserve any prior commits or partial writes for
-inspection; never silently reset them or report success after a failed step.
-EOF or cancellation returns a nonzero exit code. If Ctrl+C arrives while the
-command is waiting for console input, press Enter to let the pending read return.
-
-| Boundary | Required behavior |
-|---|---|
-| Concurrent writers | Print the operating-precondition warning once at the top level before the first mutation. Keep affected harnesses/other writers closed until completion. No automatic process detection or termination; existing component guards stay unchanged. |
-| Version | Check both binary capability and the **data repository format**, not the AEC block version. Use canonical `major.minor` targets such as `2.0`; reject invalid/unsupported, equal/current, or older targets. Git-tracked root `.aec-version` records the completed data format. Without it, recognize legacy `1.0` only through validated original AEC initialization history; draft sections/targets do not prove completion. |
-| Dirty initialization | Before pull/backup, list dirty migration-owned section paths and require an explicit Preserve/Overwrite choice. Preserve retains edits; Overwrite warns of lost edits and resets eligible unstaged sections to empty files for refilling. No default choice; EOF/cancellation stops. Unrelated dirt stops migration. |
-| Pull and capture | Resolve the tracked remote/default branch without assuming `origin`/`main`; stop if safe fast-forward-only pull is unavailable. Revalidate after pull. Never silently back up stale runtime over newly pulled canonical changes. Use format-compatible legacy capture: current 2.0 `backup` requires targets that do not exist yet. No automatic stash, reset, merge commits, rebase, or push. |
-| Scope and review | Use confirmed locally enrolled harnesses and the current platform, not repository folder presence alone. Capture reviewed legacy runtime changes and managed personality while preserving unrelated configuration, manual backups, and history. The user initializes the sections; do not automatically classify instructions. |
-| Completion | Wait for exactly `DONE`; other text keeps this invocation waiting without source commits or deployment. EOF/cancellation stops. Validate/commit source paths; enroll and commit each selected target before the next, then render/commit changes and apply/status. Completion requires successful verification. No executable installation or skill upgrade. |
-
-Choosing Preserve does not waive Git safety checks. Stop rather than discard
-edits when pull or capture cannot proceed safely. Revalidate user edits before
-committing, and never overwrite dirty targets through render. Ordinary
-`status`, `backup`, `render`, and `apply` keep their existing directions and
-no-network behavior; the migration command alone owns this documented
-pull exception. Prove it on disposable data/runtime copies before live use.
-
-The internal read-only `MigrationPreflight` now validates format versions,
-original initialization history, and usable current committed legacy instructions
-and personality config. It requires an existing marker's working/index
-bytes to match its committed blob; a dirty, untracked, deleted, or malformed
-marker cannot fall back to legacy detection. Binary major/minor capability and
-an explicitly implemented migration path must both support the target; patch
-and prerelease labels are not data formats. The only recognized completed
-marker is `2.0`; legacy releases never issued a `1.0` marker. Completion commits `.aec-version` after status verification.
-A late failure can leave an uncommitted marker that blocks a fresh invocation.
-
-The internal `MigrationHarnessSelection` resolves only the existing implicit
-Codex/Copilot homes (`CODEX_HOME` / `COPILOT_HOME`, otherwise profile defaults).
-It skips missing homes/files, but stops on an existing unbound/malformed AEC file,
-links, repository-contained runtimes, or a different checkout/platform binding.
-It returns selected provider/home/runtime paths without creating anything or
-consulting canonical/target folders as enrollment evidence. All absent means an
-empty selection. Recognized portable blocks remain selected after an incomplete
-migration; the capture coordinator selects legacy or portable routing and
-refuses mixed formats.
-This checks runtime enrollment, not whether the harness application is installed.
-
-Internal `MigrationDirtySections` checks exact shared/current-platform/selected
-provider source paths only. Other dirt, renames, conflicts, type changes, links,
-nonregular Git entries, and ignored section files stop. Clean sections need no
-prompt. Otherwise it lists the exact dirty paths, warns of future loss, and accepts
-exactly `Preserve` or `Overwrite`; blank/other text repeats the prompt with no
-default. EOF/cancellation returns Cancelled. The result is a decision only: no
-overwrite, staging, network, or runtime change. Later preparation must revalidate
-HEAD and dirty paths; Preserve never bypasses Git safety.
-
-Internal `MigrationRemotePreflight` requires one named configured upstream and
-remote URL; it never guesses `origin`/`main`. A bounded `ls-remote --symref` query
-must advertise one default branch/tip matching both the checkout and its tracked
-branch. Missing/ambiguous config, local-only tracking, detached/non-default or
-unresolved HEAD, unreachable transport and timeouts stop without fetch/pull.
-Git terminal prompts are disabled and child stdin is closed; a 30-second query
-budget plus up to one second for timeout cleanup prevents an indefinite wait.
-The returned tip is advisory, not an ahead/behind classification from stale local
-tracking refs. Later pull preparation must revalidate. Tests use disposable local
-bare remotes only; SSH/HTTPS transport integration is not verified by that proof.
-
-Internal `MigrationFetchPreparation` revalidates the approved remote name, URL,
-default branch and advertised tip before and after a bounded, pinned-commit fetch.
-The configured URL is retained for comparison, never echoed in diagnostics.
-Fetch receives objects only: no destination ref, configured refmap, tags,
-submodules or `FETCH_HEAD` update. Its budget is two minutes plus up to one second
-for timeout cleanup. Actual commit ancestry, with replacement refs disabled,
-returns Equal, Behind or Ahead; divergence stops. Local HEAD/branch are checked
-again before returning. Received objects may remain on failure, but refs, index,
-authored files and runtime are not advanced. This is not a pull, fast-forward,
-merge or push, and adds no public command. Later advancement must revalidate;
-local bare-remote fixtures are not hosted-transport integration evidence.
-
-Internal `MigrationFastForward` consumes that preview, rechecks the actual format,
-local enrollment, remote identity/tip and ancestry, and returns a fresh preflight.
-Equal/ahead keep HEAD and drafts unchanged. Behind requires a clean tracked and
-untracked checkout; dirty files stop without stash/reset/discard. Git advances
-only to the pinned commit using fast-forward-only behavior, with hooks, branch
-merge defaults, autostash, recursive submodule updates and automatic line-ending
-conversion disabled per command. Ignored-file collisions stop too. Configured
-external clean/smudge/process filters are suppressed for Git commands in the
-public migration flow without changing user settings. If a file selects a
-configured filter, Git fails rather than silently bypassing its conversion.
-Enabled/custom fsmonitor is refused. Managed instruction inputs must not be Git
-LFS pointers. Migration refuses repositories containing submodules, including
-submodules introduced by the incoming commit. Git's built-in attribute-based
-text and line-ending conversions still apply to files updated by fast-forward.
-Afterward the exact HEAD/branch, data format and local
-enrollment must still validate. A failure retains retrieved history for inspection
-without automatic rollback, backup or apply. This helper adds no public command,
-push, new commit or runtime write. The scaffold writer acts on reviewed
-dirty-section choices.
-
-Internal `MigrationPreparation.Run` now composes format/enrollment and dirty-section
-review with remote preflight, object-only fetch and the clean-checkout advancement
-helper. Cancellation already requested returns no result without inspection;
-EOF/cancellation at the prompt stops before remote access. Between bounded remote
-operations and just before advancing HEAD, cancellation stops further work;
-already received objects may remain. In-flight Git operations use their existing
-deadlines, not immediate cancellation. Successful advancement is never hidden by
-a cancelled/null result afterward. Recheck HEAD, enrollment, dirty paths, exact
-working bytes and staged entries after the prompt. Equal/ahead retain drafts;
-behind plus dirty stops even after Overwrite. The returned context/choice is
-advisory, not permission for a later writer to use stale inputs. No capture,
-scaffolding, commit, deployment, public route or migration completion is added.
-
-Internal `MigrationLegacyCapturePreview` uses the original pre-fetch commit now
-retained by preparation. It validates original commit ancestry, bounded regular
-historical blobs, current committed/index/working provenance and selected local
-legacy bindings before returning any proposal. If canonical instructions did not
-change, runtime drift may be proposed for capture. If canonical changed, identical
-runtime needs no capture; differing runtime stops for reconciliation, never an
-automatic merge or overwrite. Instructions use exact bytes. Codex personality
-uses managed enum values, so retrieved comments/spacing survive and unrelated
-runtime TOML never becomes canonical. Missing/invalid personality stops without
-inserting defaults. Portable generated runtimes are refused by this legacy-only
-preview; portable previews and the single-provider handoff below avoid whole-file
-capture. The combined portable capture coordinator handles compatible portable providers.
-Canonical legacy paths may name
-another machine, but runtime must bind to the selected checkout. No write, commit,
-network operation, scaffolding or deployment is added; later writers must freshly
-revalidate all proposed inputs.
-
-Internal `MigrationLegacyCaptureWriter` recreates and compares that preview before
-writing, including its symbolic branch and exact canonical/runtime/proposed bytes.
-It replaces only changed selected legacy canonical files using the existing
-guarded atomic-file helper. No-op returns no paths. HEAD, branch, raw index, absent
-format marker, enrollment and selected bytes are checked around each replacement;
-completed files must match proposed bytes, not their intentionally replaced originals.
-Fresh proposals—not caller-held byte buffers—supply the writes. Authored drafts,
-runtime and unselected provider files remain untouched. Replacement is atomic per
-file, not a batch transaction: a failure reports completed paths and any attempted
-path that may have changed, then stops without rollback, staging or commit.
-Inspect partial working-file changes before retrying; rerunning preflight may
-refuse intentionally dirty canonical files until they are explicitly resolved.
-No public migration route, network, scaffolding, render or apply is added.
-
-Internal `MigrationLegacyCaptureCommitter.WriteAndCommit` coordinates that writer
-and an exact-path commit. It requires an empty staged diff before writing and
-staging, retains privately derived proposals, and validates staged object bytes,
-file modes and exact paths before the guarded branch update. Unstaged authored
-drafts remain outside the commit. A validated no-op creates no commit. On failure,
-working changes, staging or a new commit may remain: inspect HEAD/index/files;
-no automatic rollback or push occurs. This internal operation does not expose
-public migration orchestration or perform scaffolding or deployment.
-
-Internal `MigrationPortableCapturePreview` handles already-portable runtimes in
-an incomplete migration using existing Codex/Copilot section-aware backup previews.
-Legacy or absent providers yield no portable preview; unchanged portable providers
-retain a non-null preview with no changes. Require the prepared HEAD, original
-ancestry, local binding, valid committed sources/target and matching last-applied
-digest. Dirty relevant sources stop even with a `Preserve` choice. Stop if pulled
-canonical personality conflicts with runtime, attribution is ambiguous, or the
-two harnesses propose different content for the same source. Identical proposals
-are allowed, not automatically written or merged. Runtime/config/context/target
-inputs are rechecked before return. No writes, commits, network, scaffolding,
-render/apply or public migration route are added by the preview.
-
-Internal `MigrationPortableCaptureWriter.WriteAndCommit` implements the bounded
-single-provider writing handoff. Refuse preexisting staging, recreate/compare the
-reviewed inputs, then use fresh proposals with the existing provider backup writer.
-No changed providers means no commit. Two changed providers stop before writes,
-even for identical shared proposals. The public flow uses the combined portable
-capture coordinator when both providers are portable.
-Existing backup writers regenerate and commit only the affected enrolled targets
-and source/config paths. Verify the returned commit's single reviewed parent and
-unchanged branch, absent completion marker, enrollment and runtime bytes afterward.
-Runtime digests remain unchanged until separately approved apply; do not rerun
-the migration preview as post-commit validation. Failures retain inspectable files,
-staging or a commit without rollback. No push, runtime deployment, scaffolding or
-public command is added.
-
-Internal `MigrationPortableSourceWriter.Write` supplies the combined authored-file
-boundary only. Reuse the fresh-preview/input checks, deduplicate agreeing edits,
-and replace only changed authored shared/platform/provider sections and managed
-Codex config. Freeze relevant unchanged sources/targets and selected runtime files;
-check HEAD, branch, raw index, absent marker, enrollment and file bytes around each
-guarded atomic replacement. Refuse staging; no-op changes nothing. On failure,
-report completed and potentially changed attempted paths without rollback.
-Rendered targets, index/HEAD and runtime stay untouched. Targets therefore remain
-at their old committed version; this is not completed migration or permission to
-apply. The single-provider handoff still refuses two changed providers.
-
-Internal `MigrationPortableTargetWriter.Prepare(reviewed)` must run before that
-authored-file stage. It retains a fresh private in-memory plan, validates committed
-target baselines and composes all affected enrollments across platforms together.
-After source writing, `Write(writtenSourcePaths)` requires the exact completed
-proposal paths **and bytes**, then changes only their affected existing targets.
-Shared/platform/provider scope is preserved; config-only/no-op capture changes no
-targets. Rechecks preserve authored files, raw index/HEAD, local bindings and all
-selected runtime state. Failure reports completed and possibly changed attempted
-targets without rollback. See the [architecture flow and classes](architecture.md#internal-combined-portable-target-only-writer).
-This is internal target-only code, not public migration, runtime deployment or a
-saved continuation.
-
-Internal `MigrationPortableCaptureCommitter.WriteAndCommit(reviewed)` joins those
-stages through one fresh private plan, then stages and commits exactly their changed
-authored/config/affected-target union. Verify staged object bytes and regular-file
-modes against private proposals, retain the existing signed/pinned-tree/guarded
-branch update, then verify the single reviewed parent and exact committed paths,
-blobs, modes and unchanged runtime/bindings. No-op validates but makes no commit.
-Source/target-only stages still preserve the raw index and original HEAD; the
-explicit commit boundary alone accepts its own staging and new HEAD. Failure
-retains partial files/index/possibly a local commit for inspection without rollback,
-push or apply. See the [coordinator diagrams](architecture.md#internal-combined-portable-capture-coordinator).
-The earlier single-provider adapter still refuses two changed providers; public
-migration uses the combined capture coordinator.
-
-Internal `MigrationScaffoldPreview.Read(preparation)` inventories only shared,
-current-platform and confirmed local provider sources after refreshing capture's
-HEAD. It rechecks enrollment, reviewed dirty paths, raw index and observed bytes;
-it creates no files or directories and grants no later write permission.
-
-| Source state | Preview action |
-| --- | --- |
-| Absent from commit, index and working tree; not ignored | Propose an empty Markdown seed |
-| Clean existing file | Preserve exact bytes, regardless of choice |
-| Dirty file + Preserve | Preserve working bytes; staged changes block later writing |
-| Deleted file + Preserve | Preserve deletion; required source remains unresolved |
-| Dirty file without a choice | Require an explicit choice; no content proposal |
-| Dirty file/deletion + Overwrite, unstaged | Propose zero-byte reset for user refilling; do not execute it |
-| Staged or mixed staged/unstaged changes | Block; expose no proposal bytes, including with Overwrite |
-
-Only the separately validated internal writer executes resets; staged changes are
-never implicitly unstaged. Discarded uncommitted content may not be recoverable
-from Git history. Legacy instructions remain untouched; the user, not AEC,
-classifies their content. This choice handles drafts present when an incomplete
-migration restarts. Section existence alone does not prove format 2.0; the format
-preflight rejects already completed migrations before this choice. Expected dirty
-edits made while waiting for `DONE` are validated/committed, never reset using
-the earlier Overwrite choice.
-See the [scaffold preview diagrams](architecture.md#internal-migration-scaffold-preview).
-Internal `MigrationScaffoldWriter.Write(reviewed)` freshly validates that inventory
-and rejects every staged or unresolved source before creating any directory.
-It creates missing parents and zero-byte files using non-overwriting `CreateNew`,
-or resets reviewed unstaged sources after explicit Overwrite using snapshot-checked
-replacement. Clean files and Preserve drafts stay byte-exact. Already-empty resets
-perform no replacement and report no changed path. Existing Unix permissions stay
-exact; recreated deleted sections use owner-only `0600`, even if Git recorded an
-executable bit. Sections are instruction data, not programs. Genuinely missing
-seeds retain normal creation defaults; Windows uses native permissions.
-Rechecks preserve HEAD, branch, raw index, legacy files and current runtime bytes,
-allowing only this call's own new dirty source paths. A completed reset may become
-Git-clean when it restores committed empty bytes; no other dirty path may disappear.
-The full preview validates
-history and committed blobs once. Focused checks inspect mutable state initially
-and around each file write, retaining dirty-path restrictions and missing-path
-ignore checks without rebuilding the preview. Directory creation uses local path
-guards. Failure reports retained
-files/directories and a possibly changed attempted path; no automatic rollback,
-staging, commit or deployment. A retry requires a fresh preview. See the
-[writer flow](architecture.md#internal-scaffold-creation-and-reset-writer).
-The public command hands the completed scaffold to the DONE gate.
-
-Internal `MigrationDoneGate.Wait(input, output, cancellationToken)` now implements
-only confirmation: exact `DONE` returns `Done`; other/blank input keeps waiting,
-and EOF/cancellation returns `Cancelled`. No trimming, case folding or saved
-continuation. Pre-cancellation performs no input/output. Like the existing choice
-prompt, a blocked synchronous read observes cancellation only when it returns;
-`DONE` read during cancellation is discarded. Confirmation requests later source
-validation, not migration success. No files/Git/runtime change or source validation
-occurs in this gate; the public command invokes the completion coordinator after DONE.
-See the [gate diagrams](architecture.md#internal-done-confirmation-gate).
-
-Internal `MigrationSourceValidationPreview.Read(preparation)` validates the current
-required shared/platform/provider sources without replaying pre-start Overwrite
-or requiring the old dirty-path list. Accept empty/whitespace sections and preserve
-exact bytes. Reject missing/deleted, staged, ignored, unsafe or unrelated inputs;
-check strict UTF-8, section markers and combined size using in-memory rendering.
-Return committed baselines, working snapshots and changed paths, including new
-zero-byte files and hidden working edits. Recheck context/index/protected bytes
-within the read; these snapshots do not cover the earlier user-editing wait.
-No writes or completion wiring; later commit code must freshly validate again.
-See the [source-validation diagrams](architecture.md#internal-post-done-source-validation).
-
-Internal `MigrationSourceCommitter.Commit(reviewed)` freshly validates the reviewed
-sources, requires a local branch/empty staged diff, and commits exact changed-source
-paths through the existing signing-aware pinned-tree helper. New required empty
-files are included; no commit is made only when every required source is already
-tracked and unchanged. Preserve existing committed modes; new files require Git
-mode `100644`. Verify staged object bytes/modes, one parent and exact committed
-paths, while retaining source, target and runtime working bytes. Refuse Git
-transformations or hidden-index omissions; never clear flags or chmod files.
-Failure retains inspectable staged state or a new commit, without rollback.
-No render, deployment, push, completion marker or public command is added.
-See the [source-commit diagrams](architecture.md#internal-source-only-migration-commit).
-
-Internal `MigrationTargetPreview.Read(preparation, provider)` previews one confirmed
-local harness on the current platform after required sources are committed and
-byte-clean. Return selected source snapshots, the target's committed/working
-baseline, desired bytes and Create/Unchanged/Regenerate action. A clean older
-target is a valid regeneration proposal; dirty, staged, deleted, linked or
-untracked targets refuse. Missing targets must also be absent from the index and
-not ignored. Recheck mutable inputs before returning advisory observations.
-No target files, Git state, runtime or public command change.
-See the [target-preview diagrams](architecture.md#internal-single-harness-migration-target-preview).
-
-Internal `MigrationTargetWriter.Write(reviewed)` freshly validates the review and
-writes only the selected repository target, returning its relative path or null
-for a validated no-op. New targets use CreateNew and Unix `0600`; replacements
-retain existing Unix permission bits; Windows ACL behavior is not verified by
-these local tests. Preserve raw index, HEAD/branch, required sources,
-other targets and protected runtime/config bytes. Post-write guards admit only
-the selected target's exact intended change. Failure reports retained created
-directories and the attempted path, without rollback. No staging, commit, apply,
-completion marker or public command is added.
-See the [target-writer diagrams](architecture.md#internal-single-harness-migration-target-writer).
-
-Internal `MigrationTargetCommitter.WriteAndCommit(reviewed)` prepares a private
-writer before writing, stages only its changed target, and creates one local
-commit through the existing signing-aware helper. Validate staged object bytes,
-mode and exact path; verify one parent, committed tree, clean index and protected
-working state. A validated no-op creates no commit. New Git targets require
-`100644`; preserve existing regular Git modes and Unix working permissions.
-Independently dirty targets are refused, not adopted. Failure retains working,
-staged or committed state for inspection; no rollback, push, runtime deployment,
-completion marker or public command is added. The write-only wrapper is unchanged.
-See the [coordinator diagrams](architecture.md#internal-single-harness-target-write-and-commit).
-
-Internal `MigrationApplyPreview.Read(preparation, provider)` wraps the existing
-portable apply proposal in committed migration context for one confirmed local
-harness. Include desired instructions and Codex managed-config changes; missing
-runtime config/personality may be proposed for insertion, never written here.
-Require clean committed sources/target, matching local binding/platform, one HEAD
-and entry runtime/config bytes. Check actual bounded Git objects without
-replacement views and recheck mutable state before returning. No deployment,
-staging/commit, marker, public command or remote operation is added.
-Shared committed-file provenance checks use a staged diff, read-only `diff-files`
-mode inspection (honouring `core.filemode`), and an exact raw-content hash.
-Stat-only changes do not count as dirty content. Worktree porcelain diffs are
-avoided because they can refresh the index; global Git settings are unchanged
-and raw-index immutability checks remain strict.
-See the [apply-preview diagrams](architecture.md#internal-single-harness-migration-apply-preview).
-
-Internal `MigrationCopilotApplyWriter.Apply(preview)` consumes one reviewed
-Copilot migration proposal. Refresh migration validation, compare reviewed
-inputs, then reuse the existing instruction writer. Before/after guards retain
-the branch, HEAD, raw index, required sources and protected file expectations;
-only the selected Copilot runtime may be replaced. An unchanged runtime is a
-no-op. A post-write failure may leave runtime updated and never rolls back.
-This adds no data commit, Codex deployment, completion marker or public command.
-See the [writer diagrams](architecture.md#internal-copilot-migration-apply-writer).
-
-Internal `MigrationCodexApplyWriter.Apply(preview)` reuses config-first ordinary
-Codex apply. Shared named checks compare reviewed/fresh inputs, including managed
-config. Separate production guards check migration state before each actual
-replacement and afterward; test hooks do not provide authorization. Preserve
-unmanaged config and existing partial-failure/no-rollback reporting. Missing
-config follows ordinary private-permission creation; no-op still gets final
-validation. No data-repository writes, Copilot deployment, completion marker or
-public command is added.
-See the [Codex writer diagrams](architecture.md#internal-codex-migration-apply-writer).
-
-Internal `MigrationApplyCoordinator.Apply(reviews)` requires exactly one reviewed
-preview for every enrolled provider. Refresh all reviews before writing, then
-reuse the Codex and Copilot writers in that order, skipping absent providers.
-Equivalent independently read preparation contexts are accepted; missing,
-duplicate, unsupported or mismatched reviews stop before runtime writes.
-Shared guards admit only successful expected writes and check enrolled runtimes,
-selected targets, required sources, protected legacy inputs, index, HEAD and
-branch between steps. No-op providers still get checked. Initial validation
-failures stop before writing. A provider-writer or post-write guard failure
-stops later providers and reports returned results plus runtime paths to inspect,
-without rolling back prior writes.
-This adds no repository write, completion marker, status verification or public
-command. See the [coordinator diagrams](architecture.md#internal-enrolled-provider-migration-apply-coordinator).
-
-Internal `MigrationStatusGate.Verify(preparation)` checks the refreshed
-post-target-commit context and every reviewed enrolled provider without writing.
-It reuses ordinary portable status, including only managed Codex config values.
-All reports must be in sync; missing enrollment, invalid inputs, drift or changed
-phase-wide state stops migration. Unrelated config values are not versioned or
-repaired. This is not a completion marker, automatic repair or public command.
-
-Internal `MigrationCompletionPreview.Read(preparation)` freshly verifies status
-and returns advisory context plus the proposed `.aec-version` content `2.0`
-followed by a newline, with ordinary non-executable Git mode `100644`. It checks
-for persistent changes across the preview and writes nothing. Caller-owned
-buffers do not authorize completion.
-
-Internal `MigrationCompletionWriter.Write(preview)` refreshes and compares the
-review, then creates only an absent `.aec-version` with exact reviewed bytes
-and owner-only non-executable Unix permissions. Post-write checks permit only
-that exact marker as dirt while retaining the reviewed index, HEAD, sources and
-runtime. A failure may leave the marker for inspection; no automatic rollback.
-An existing/competing marker is never overwritten. An uncommitted marker stops
-ordinary migration preflight; inspect and resolve it explicitly rather than
-expecting automatic continuation.
-
-Internal `MigrationCompletionCommitter.WriteAndCommit(preview)` owns creation
-and publication in one fresh private context. It stages only the marker, respects
-configured signing, proves exact bytes/path/mode and a single-parent commit,
-then checks the new HEAD, clean index and unchanged protected inputs. It never
-adopts an independently existing marker. A failure may leave the marker, staged
-changes or a commit; inspect before retrying, with no automatic rollback.
-No public migration command, push or runtime deployment is added.
-
-Internal `MigrationPostDoneCoordinator.Complete(preparation)` composes source
-commit, fresh per-provider target commits, all-provider reviewed apply, fresh
-status and the completion-marker commit last. Its caller must already have
-confirmed `DONE`. Each commit handoff preserves original provenance and accepts
-only the verified returned HEAD; no-ops retain the prior HEAD. Failures stop
-later work and report retained state without rollback/retry. The result separates
-source/target commits from the final marker commit and includes provider results.
-No preparation, prompt, public command, push or personal migration is performed.
+See the [interactive migration command](migration.md#interactive-migration-command).
 
 ### Existing manual migration — implemented and rehearsed
 
-```mermaid
-flowchart TD
-    Baseline["Clean, committed 1.x repository<br/>and matching local runtime"] --> Split["Review every instruction's destination:<br/>shared, current platform, or provider"]
-    Split --> Sources["Create and separately commit authored sources"]
-    Sources --> Enroll["Enroll one installed provider"]
-    Enroll --> Target["Review and separately commit its target"]
-    Target --> More{"Another installed provider?"}
-    More -->|"Yes"| Enroll
-    More -->|"No"| Apply["Approved apply for each provider"]
-    Apply --> Status["Status: in_sync<br/>Review unchanged legacy files and backups"]
-```
-
-This is the supported **2.0 development-branch data migration** using the current
-command syntax. Installing the executable or upgrading a skill does not migrate
-the data. Instruction classification is manual in both migration flows.
-Meet the [migration operating precondition](#migration-operating-precondition)
-before starting this sequence; current individual commands do not print the
-top-level migration warning.
-The example below covers Codex and Copilot used on the same machine; omit the
-Copilot source, enrollment, and deployment when that harness is not used.
-
-1. Before replacing the 1.x executable, use its `status` to inspect runtime drift.
-   Resolve any drift with a separately approved 1.x capture or deployment. Start
-   from a clean, committed data repository; retain its commit ID and the old
-   executable. Pending manual ChatGPT backups require their own review and commit.
-   The 2.0 `status`, `backup`, and `apply` require committed targets, so they cannot
-   reconcile a legacy-only repository before enrollment. If already upgraded,
-   pause for that baseline review rather than trying 2.0 backup as a bootstrap.
-2. Install the 2.0 development executable and upgrade the Codex skill separately
-   with `aec skill upgrade`. Confirm each selected local home belongs to this
-   checkout. If attaching a different checkout path, use ordinary provider `init`
-   and obtain approval before `--force-path-change`, as described below. Keep
-   both local harnesses on the same checkout.
-3. Review a complete split of the **existing committed** instruction bodies,
-   excluding only AEC-generated control blocks. Account for every paragraph,
-   code example, and unclassified instruction before applying. Put common rules
-   in shared once, OS/path rules in the current platform, and harness mechanics
-   in its overlay. Resolve conflicting rules explicitly; AEC cannot prove the
-   semantic completeness of an arbitrary split. Create only the sources in use:
-
-   | Authored source | Review scope |
-   |---|---|
-   | `environment/shared/instructions.md` | Rules for all enrolled harnesses |
-   | `environment/platforms/<platform>/policy.md` | This platform's approved rules |
-   | `environment/providers/codex/overlay.md` | Codex mechanics |
-   | `environment/providers/copilot/overlay.md` | Copilot mechanics, if used |
-
-   Preserve the existing provider instruction files, canonical Codex `config.toml`,
-   and `environment/providers/chatgpt/`. Review the new files, stage their exact
-   paths, inspect the staged diff, and separately approve their source commit.
-4. Enroll **one provider at a time**, then review and separately commit its exact
-   target before enrolling another. Enrollment writes no runtime or Git commit:
-
-   ```text
-   aec init --repo ABSOLUTE_PATH --enroll-shared
-   # Review and commit environment/targets/<platform>/codex/AGENTS.md
-
-   aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared
-   # Review and commit environment/targets/<platform>/copilot/copilot-instructions.md
-   ```
-
-   `<platform>` is `macos-arm64`, `windows-x64`, or `linux-arm64` for the current
-   machine. Use the selected `--codex-home`/`--copilot-home` consistently if custom
-   homes are required. Attempting the second enrollment while the first target
-   is uncommitted stops with `changes outside the selected enrollment target`.
-5. After reviewing and committing the targets, separately approve deployment:
-
-   ```text
-   aec apply --repo ABSOLUTE_PATH
-   aec status --repo ABSOLUTE_PATH
-   aec apply --repo ABSOLUTE_PATH --provider=copilot
-   aec status --repo ABSOLUTE_PATH --provider=copilot
-   ```
-
-   Require `in_sync` for instructions and Codex config. Before the first apply,
-   legacy control blocks may report instruction drift; that is expected. Verify
-   the managed personality and unrelated runtime settings are retained. Legacy
-   provider files, manual backups, and Git history stay available for review.
-   Partial apply failures require inspection of both Codex runtime files before
-   retrying; no automatic rollback is performed.
-
-With no further edits, repeating enrollment, render, and apply reports
-`unchanged`; `status` remains `in_sync`. Repeating ordinary init preserves an
-already-bound portable runtime. An explicitly authorized backup of that unchanged
-runtime reports `unchanged` without a commit. These reruns do not authorize a
-new instruction split, overwrite a dirty target, or replace manual ChatGPT data.
-These currently implemented commands perform no remote operations; use the
-separately approved Git workflow for publication and retrieval.
-
-`LegacyMigrationTests` rehearses the manual sequence through public commands with a
-disposable 1.x-format repository, both local homes, a supplied lossless split,
-non-default personality, unrelated runtime settings, and manual ChatGPT backup
-bytes. It checks preservation, per-provider commit boundaries, usable 2.0
-status/apply/backup, and safe reruns. This is local managed-code evidence, not
-execution of a historical binary, Native AOT smoke, or real-harness verification.
-Separate `MigrationCommandTests` cover public command confirmation, EOF and
-fresh-start recovery on disposable fixtures.
+See the [manual migration procedure](migration.md#existing-manual-migration--implemented-and-rehearsed).
 
 ## Sharing migrated instructions between machines
 
@@ -758,14 +220,15 @@ commit**. It does not prove remote freshness. After fast-forwarding to a changed
 target, status reports drift until apply. Neither status nor apply silently
 fetches, pushes, merges, or changes the checkout's Git HEAD.
 
-`GitRoundTripTests` runs the same sequence separately for Codex and Copilot with
-two different paths and a local bare remote named `shared`: real push/clone,
-a later push, read-only tip inspection, explicit fetch/fast-forward, and
-apply/status. It checks equal portable targets, distinct runtime bindings,
-retained history/config, and no unused provider target or other harness home
-on B. Copilot's `config.json` remains byte-identical; only Codex manages root
-personality. This is managed-code Git integration on one host/platform, not
-two real machines, a network service, Native AOT, or real-harness verification.
+<details>
+<summary>Test coverage for sharing between machines</summary>
+
+`GitRoundTripTests` checks Codex and Copilot using two checkout paths and a local
+Git remote. It covers publication, retrieval, apply/status, separate local
+bindings, and preservation of history and unrelated settings. These are tests
+on one host, not verification on two machines or with actual harness applications.
+
+</details>
 
 ## Shared-instruction rendering (2.0 development)
 
@@ -823,13 +286,20 @@ below.
 | Claude | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 | Gemini | ⚠ Not verified | ⚠ Not verified | ⚠ Not verified |
 
-✓ means AEC has been exercised with the actual local harness on that platform.
-⚠ means it has not. The passing Windows build and isolated installer CI test do
-not verify AEC against a real Windows Codex harness.
+✓ records an actual local harness checkpoint; ⚠ means no real-harness
+verification is recorded. Isolated CI covers the Copilot AEC lifecycle on all
+three platforms and the Windows x64 build and installer; it does not establish
+real-harness verification.
 
-Copilot's three platform entries mean its isolated AEC lifecycle is covered on
-those platforms. They are not evidence that Copilot CLI itself has been installed
-or exercised on any platform.
+Historical manually dispatched workflows ran focused composition, section,
+`render`, and enrollment tests, plus Native AOT smoke flows with isolated
+fixtures on [macOS ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570129),
+[Linux ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36786570825),
+and [Windows x64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36789513384).
+After a fixture cleanup fix, the Windows rerun passed 41/41 focused tests,
+the Native AOT build and isolated smoke checks. Each Native AOT smoke invokes
+`aec render` in an isolated fixture. See the [implementation checklist](../IMPLEMENTATION_CHECKLIST.md)
+for later migration and platform evidence.
 
 ## version
 
@@ -923,14 +393,11 @@ committed <repo>/environment/providers/codex/config.toml personality
   -> <codex-home>/config.toml personality
 ```
 
-The repository must be the exact root of a non-bare Git working tree with a
-committed `HEAD`. Detached HEAD is accepted because `apply` does not create a commit.
-The enrolled target, its three authored sources, and canonical config must match
-their committed bytes. An existing runtime `AGENTS.md` must carry a supported
-binding to the selected repository and platform; a missing runtime file or path
-mismatch stops and directs the caller to ordinary `aec init`. Malformed or
-unsupported markers also fail closed. `apply` never accepts
-`--force-path-change`. Unrelated repository changes are ignored and untouched.
+Use the data repository's root path. Its target, source files and managed config
+must be committed and unchanged. The local tool must already be bound to that
+repository and platform; use `aec init` if it is missing or bound elsewhere.
+`apply` does not accept `--force-path-change`. Unrelated repository edits stay
+untouched.
 
 The managed configuration decision is intentionally non-interactive:
 
@@ -959,26 +426,25 @@ flowchart TD
     Changed -->|"No"| Unchanged["Write unchanged and return 0"]
 ```
 
-An existing managed value is normalized only when its meaning differs; comments,
-line endings, unrelated root settings, tables, and other bytes remain intact. A
-missing value produces a warning on standard error, then the same invocation inserts
-the committed value at the top or creates the missing runtime file. Invoking `apply`
-is already the authorization, so there is no second confirmation prompt.
+AEC changes only the managed personality value and instructions. Other settings
+and comments stay intact. A missing personality is added with a warning, without
+another prompt.
 
-On Unix, an existing runtime config retains its permission bits and a newly created
-config is restricted to the current user. A planned result over 1 MiB is rejected
-before either runtime file changes.
+If interrupted, one file may have changed while the other has not. Inspect
+`status` before running `apply` again. The result is `applied` or `unchanged`;
+both mean success. This command does not commit or push.
 
-Both runtime plans are validated before mutation. Each changed file is written
-through its own flushed sibling temporary file, compare-before-replace check, and
-post-write verification. Two separate files cannot form one portable atomic
-transaction; interruption between them is safe to detect and resume with `status`
-and another `apply`. A runtime target inside the data repository is rejected.
+<details>
+<summary>Apply limits and file protection</summary>
 
-The command writes `applied` when either runtime file changes or `unchanged` when
-neither needs a write; both return exit code 0.
+The repository must be a non-bare Git working tree with a committed HEAD;
+detached HEAD is allowed. Runtime files cannot be inside the data repository.
+Existing Unix permissions are retained; a new config is private to the user.
+Results over 1 MiB are rejected. Both changes are checked before writing;
+each file uses a temporary file and checks before and after replacement.
+The two files are not updated as one transaction.
 
-There is no separate backup, receipt, Git mutation, commit, or push.
+</details>
 
 ## backup
 
@@ -1097,6 +563,9 @@ Later commits and committed provider files are allowed.
 
 The AEC-managed instruction block is delimited and versioned explicitly:
 
+<details>
+<summary>Generated instruction block example</summary>
+
 ```markdown
 <!-- AEC:BEGIN version=5 -->
 ## AI Environment as Code
@@ -1113,6 +582,8 @@ Use `aec backup` only for an explicitly authorized runtime-to-repository capture
 If AEC is unavailable or validation fails, stop without changing managed runtime state.
 <!-- AEC:END -->
 ```
+
+</details>
 
 When no block exists, `init` inserts it at the logical top of the canonical copy,
 after an optional UTF-8 byte-order mark, followed by one blank separator line and
@@ -1287,6 +758,9 @@ commit the canonical `AGENTS.md` before `apply`, so Git history remains the
 source of truth. This is the path used to upgrade provider-aware v4 instructions
 to v6.
 
+<details>
+<summary>Generated instruction block example</summary>
+
 ```markdown
 <!-- AEC:BEGIN version=6 -->
 ## AI Environment as Code
@@ -1307,6 +781,8 @@ If you detect uncommitted changes there, say that a manual backup is pending and
 Never automatically capture from or deploy to ChatGPT, and never claim account-side runtime verification.
 <!-- AEC:END -->
 ```
+
+</details>
 
 Instructions outside that block are preserved. Provider mode never reads or writes
 `CODEX_HOME`, even when the environment variable is set, and combining it with
@@ -1530,354 +1006,33 @@ after both initialization commits succeed.
 
 ### Why `MEMORY.md` is not managed
 
-AEC intentionally does not capture Codex's `MEMORY.md` or its memory directory.
-Codex creates and maintains memory as derived runtime state from prior work; it is
-not stable, user-authored environment configuration. Memory may also contain
-summarized project history or other sensitive context, so committing it would
-increase its retention and distribution.
-
-The memory format and lifecycle belong to Codex and may change between application
-versions or machines. Restoring an old snapshot could therefore reintroduce stale
-context or conflict with Codex's current memory. AEC instead versions user-owned
-inputs: `AGENTS.md` and explicitly selected stable `config.toml` settings. Durable
-guidance should be recorded in those canonical instructions or in project
-documentation, not copied from Codex's generated memory.
+AEC does not copy Codex memory into Git. Memory is generated working context,
+may contain sensitive history, and can become stale. Put lasting rules in your
+managed instructions or project documentation instead.
 
 ## Build, test, and run
 
-The production project uses only the .NET 10 Base Class Library. The test project
-uses xUnit and has no coverage dependency.
+See the [build and test guide](development.md) for test strategy, platform builds, and troubleshooting.
 
 ### Test strategy and expected duration
 
-```mermaid
-flowchart LR
-    Change["Every change"] --> Unit["Fast unit scope"]
-    Unit --> Focused["Affected command scope"]
-    Focused --> Push["Before push"]
-    Push --> Full["Full Debug regression"]
-    Full --> Release["Full Release regression<br/>before release"]
-```
-
-The complete suite currently contains unit, Git integration, and filesystem-safety
-tests in one xUnit project. The latest full Debug run executed 639 tests in about
-16 minutes on an ARM64 Mac; pass/fail details are in `IMPLEMENTATION_CHECKLIST.md`.
-This is an observed duration, not a performance guarantee. VSTest may print
-nothing during most of that time; wait for its final summary rather than treating
-a quiet console as a hang.
-
-| Cost | What happens |
-|---|---|
-| Process-state isolation | Command suites run sequentially because they safely change environment variables and the current directory. |
-| Real Git integration | Tests repeatedly create repositories and start `git` for inspection, hashing, staging, commits, and verification. |
-| Filesystem safety | Each case creates isolated paths and exercises links, FIFOs, permissions, atomic replacement, and durable flushes. |
-
-During development, run the smallest relevant scope. These filters work today:
-
-```bash
-# Fast instruction-block unit tests
-dotnet test tests/Aec.Tests/Aec.Tests.csproj \
-  --filter "FullyQualifiedName~AecInstructionBlockTests"
-
-# One affected command suite; replace BackupTests as needed
-dotnet test tests/Aec.Tests/Aec.Tests.csproj \
-  --filter "FullyQualifiedName~BackupTests"
-
-# Migration and two-checkout rehearsals; process-backed Git integration
-dotnet test tests/Aec.Tests/Aec.Tests.csproj -c Release \
-  --filter "FullyQualifiedName~LegacyMigrationTests|FullyQualifiedName~GitRoundTripTests"
-```
-
-Run the complete regression suite before pushing and again in Release configuration
-before publishing a release. Use a bounded two-minute hang guard for the full
-suite because Git-heavy rehearsals have exceeded 30 seconds. Smaller focused
-workflow scopes retain their 30-second guard. The guard identifies and terminates
-an individual test that exceeds the selected bound:
-
-```bash
-# Before push
-dotnet test tests/Aec.Tests/Aec.Tests.csproj \
-  --blame-hang \
-  --blame-hang-timeout 2m \
-  --blame-hang-dump-type none
-
-# Before release
-dotnet test tests/Aec.Tests/Aec.Tests.csproj \
-  --configuration Release \
-  --blame-hang \
-  --blame-hang-timeout 2m \
-  --blame-hang-dump-type none
-```
-
-The roadmap is to classify stable test scopes explicitly. Until that work is
-complete, class-name filters are the supported focused workflow; the full suite
-remains the regression gate rather than the default command after every edit.
-
-```bash
-dotnet build src/Aec/Aec.csproj
-dotnet run --project src/Aec/Aec.csproj -- version
-dotnet run --project src/Aec/Aec.csproj -- help
-dotnet run --project src/Aec/Aec.csproj -- \
-  skill upgrade \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  uninstall \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  init \
-  --repo /absolute/path/to/new-data-repository \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  init \
-  --repo /absolute/path/to/data-repository \
-  --provider=chatgpt
-dotnet run --project src/Aec/Aec.csproj -- \
-  status \
-  --repo /absolute/path/to/data-repository \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  backup \
-  --repo /absolute/path/to/data-repository \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  apply \
-  --repo /absolute/path/to/data-repository \
-  --codex-home /absolute/path/to/codex-home
-```
+See the [test strategy](development.md#test-strategy-and-expected-duration).
 
 ### Experimental Native AOT build on Windows x64
 
-The build and `version`/`help` smoke checks passed on a
-[GitHub-hosted Windows x64 runner](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35171142521),
-but this path has not been validated with Windows Codex. On x64 Windows,
-install the .NET 10 SDK and Visual Studio 2022 or later with
-the Desktop development with C++ workload, then run in PowerShell:
-
-```powershell
-./scripts/build-win-x64.ps1
-```
-
-The script works from any caller directory and writes the ignored
-`artifacts/aec-win-x64/aec.exe`. The manual-only
-`.github/workflows/windows-smoke.yml` workflow builds it on a Windows x64
-runner, checks `aec.exe version` and `aec.exe help`, and tests the isolated
-installer/uninstaller plus both providers' portable lifecycle. The 2.0 script
-uses reviewed sources, separate provider enrollment/target commits, directional
-backup/apply/status checks, and shared rendering of both enrolled targets.
-Uninstall preserves the applied authored sections, data files, and Copilot's
-runtime/config/skill. See [the lifecycle diagram](architecture.md#platform-lifecycle-verification-boundary).
-
-The updated Windows 2.0 sequence passed in
-[run 40201089188](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40201089188)
-at `8878d04`: lifecycle tests 110/110, migration rehearsal 1/1, Native AOT build,
-version/help, and the complete isolated installer lifecycle. Neither test scope
-skipped tests. This is Windows runner/native proof, not real-harness verification.
-The [earlier run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40141526871)
-failed two clone-attachment tests; preserving committed bytes before clone checkout
-resolved them without weakening production checks. Detailed evidence is indexed
-in `IMPLEMENTATION_CHECKLIST.md`.
-The workflow keeps the Git-heavy migration
-rehearsal separate with a two-minute hang guard; smaller tests retain 30 seconds.
-
-The installer consumes that artifact and installs per-user by default at
-`$env:LOCALAPPDATA\Programs\AEC\aec.exe`:
-
-```powershell
-.\scripts\install-win-x64.ps1
-```
-
-To choose another location, pass an absolute local-drive `-InstallDir`:
-
-```powershell
-.\scripts\install-win-x64.ps1 -InstallDir 'C:\Users\me\Tools\AEC'
-```
-
-Installation is idempotent, does not modify `PATH` or PowerShell execution
-policy, and generates `scripts/uninstall-aec-win-x64.ps1` beside the installer.
-If you change install directories, the old binary stays in place; the helper
-tracks only the latest installation, so remove an unused older copy yourself.
-If the selected directory is not already effective for Codex, expose it to
-Codex yourself and restart Codex before it tries to discover `aec.exe`.
-
-Run the generated helper by its explicit path:
-
-```powershell
-.\scripts\uninstall-aec-win-x64.ps1
-.\scripts\uninstall-aec-win-x64.ps1 -CodexHome 'C:\Users\me\.codex'
-```
-
-It uses the exact installed binary to run `aec uninstall` before removing the
-binary and helper script. The runtime cleanup preserves the AEC data repository
-and `config.toml`. The isolated Windows install/reinstall/managed-init/uninstall
-test [passed on a Windows runner before this 2.0 update](https://github.com/ferrywlto/ai-env-as-code/actions/runs/35282576084);
-real Windows Codex harness validation remains unverified.
+See the [Windows build guide](development.md#experimental-native-aot-build-on-windows-x64).
 
 ### Experimental Native AOT build on Ubuntu Linux ARM64
 
-On an ARM64 Ubuntu 24.04 machine, install Git, the .NET 10 SDK, `clang`, and
-`zlib1g-dev`. Ubuntu installs the native build prerequisites with
-`sudo apt-get install clang zlib1g-dev`. Then run from any directory:
-
-```sh
-/absolute/path/to/ai-env-as-code/scripts/build-linux-arm64.sh
-```
-
-The script publishes the ignored `artifacts/aec-linux-arm64/aec` executable.
-The manual-only `.github/workflows/linux-arm64-smoke.yml` workflow builds on an
-Ubuntu 24.04 ARM64 runner, checks `aec version` and `aec help`, and exercises the
-isolated installer plus both providers' portable 2.0 lifecycle. The sequence is
-shown in the [lifecycle diagram](architecture.md#platform-lifecycle-verification-boundary):
-reviewed sources, separate enrollment/target commits, apply/status, exact-path
-single-section backup, digest refresh, and both-target repository-only render.
-Uninstall preserves the last-applied authored sections, all data files (including
-unapplied render changes), and the other provider's runtime/config/skill.
-
-The workflow runs focused lifecycle tests and a separate, two-minute-bounded
-legacy migration rehearsal before the native build. The updated 2.0 sequence
-[passed on Linux ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40218058322)
-at `85fbd19`: lifecycle 110/110, migration 1/1, Native AOT build, version/help,
-and the complete isolated installer lifecycle. Neither test scope skipped tests.
-This is Linux ARM64 runner/native proof; local macOS checks alone would not be.
-The [historical runner pass](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284376)
-covers the older single-file Copilot flow, not this update. Neither is proof of
-actual Codex/Copilot harness integration.
-
-After building, install the executable for the current user:
-
-```sh
-./scripts/install-linux-arm64.sh
-```
-
-The default target is `$HOME/.local/bin/aec`. To use another absolute directory:
-
-```sh
-./scripts/install-linux-arm64.sh --install-dir /absolute/path/to/bin
-```
-
-Installation is idempotent and does not change `PATH` or shell profiles. A
-custom directory produces a warning because the `$aec` skill finds `aec`
-through the `PATH` inherited by Codex. The installer generates
-`scripts/uninstall-aec-linux-arm64.sh` beside itself; run that exact path to
-remove AEC runtime integration before deleting the installed binary and helper:
-
-```sh
-./scripts/uninstall-aec-linux-arm64.sh
-./scripts/uninstall-aec-linux-arm64.sh --codex-home /absolute/path/to/.codex
-```
-
-The helper verifies its own generated path and the installed executable digest.
-It preserves the AEC data repository and `config.toml`, and stops without
-deleting installation files if AEC runtime cleanup fails. A real Linux Codex
-harness remains unverified, so the matrix entry stays ⚠.
+See the [Linux build guide](development.md#experimental-native-aot-build-on-ubuntu-linux-arm64).
 
 ### Native AOT on Apple-silicon macOS
 
-The initial installed and harness-verified workflow supports only ARM64 macOS.
-Git is required at runtime because AEC repositories use Git history as their
-source of truth. Building requires the .NET 10 SDK and Xcode Command Line Tools:
-
-```bash
-./scripts/build-osx-arm64.sh
-```
-
-The manual-only `.github/workflows/macos-arm64-smoke.yml` workflow uses a
-macOS 15 ARM64 runner to build the Native AOT executable, check `aec version`
-and `aec help`, and exercise the isolated installer/uninstaller plus both
-providers' portable lifecycle. The script commits the reviewed sources, enrolls
-and commits one target at a time, then checks apply/status, single-section
-backup, digest refresh, idempotence, and repository-only rendering. Legacy
-canonical files and unrelated Codex/Copilot configuration remain intact.
-
-The [earlier macOS run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36283284718)
-passed the previous lifecycle; it is not verification of this updated 2.0 sequence.
-The updated sequence passed locally through the freshly built Native AOT artifact
-on 2026-10-24. After an approved retry with local socket permission, the separated
-managed scopes also passed: 110 focused lifecycle tests and one legacy migration
-rehearsal. Current verification details are in `IMPLEMENTATION_CHECKLIST.md`.
-See [the verification boundary](architecture.md#platform-lifecycle-verification-boundary).
-The Git-heavy migration rehearsal runs separately with a two-minute hang guard;
-smaller focused tests retain 30 seconds. A watchdog abort is not a passing run
-or proof of a product deadlock.
-The workflow never reads the personal AEC data repository. Codex on macOS is
-marked ✓ because it has also been exercised with the real local harness, not
-merely because CI exists.
-
-These examples assume the repository root as the working directory. Once invoked
-through a valid relative or absolute path, each script resolves the repository from
-its own location rather than the caller's working directory. The build publishes
-the self-contained executable to:
-
-```text
-artifacts/aec-osx-arm64/aec
-```
-
-After a successful build, install it for the current user:
-
-```bash
-./scripts/install-osx-arm64.sh
-```
-
-The default target is `$HOME/.local/bin/aec`. An explicit absolute directory can
-be selected instead:
-
-```bash
-./scripts/install-osx-arm64.sh --install-dir /absolute/path/to/bin
-```
-
-When the selected directory differs from `$HOME/.local/bin`, installation continues
-but prints a warning because the `$aec` skill invokes `aec` through Codex's `PATH`.
-Make the directory available to Codex, restart Codex, and verify `aec help`.
-
-The installer never uses `sudo` or changes shell profiles or `PATH`. If
-`$HOME/.local/bin` is not already on `PATH`, configure the shell yourself, for
-example:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
+See the [macOS build guide](development.md#native-aot-on-apple-silicon-macos).
 
 ### Codex cannot find a newly installed `aec`
 
-Codex inherits its `PATH` when the app starts. Therefore, if `aec` was installed
-or its directory was added to `PATH` while Codex was already running, Codex can
-report that `aec` is unavailable even though a new terminal can execute it. Fully
-quit and restart Codex, then run `aec help` again. Starting a new task is not
-enough because it stays in the existing app process.
-
-This restart is only for executable discovery. After `aec skill upgrade` replaces
-`SKILL.md`, no restart or new task is required.
-
-After building, validate both the default and custom installation behavior with:
-
-```bash
-./tests/install-osx-arm64.sh
-```
-
-The installed Native AOT executable does not require .NET. To upgrade, update the
-source checkout, rerun the build and installer scripts, then run
-`aec skill upgrade`. Reinstalling identical executable bytes reports
-`unchanged`; upgrading already-current skill guidance also reports `unchanged`.
-
-The macOS ARM64 installer generates `scripts/uninstall-aec.sh` in the same folder
-as `scripts/install-osx-arm64.sh`. Run it by its explicit path, so it can safely
-remove itself after the runtime cleanup succeeds:
-
-```bash
-./scripts/uninstall-aec.sh
-```
-
-For a non-default Codex home, pass its absolute path:
-
-```bash
-./scripts/uninstall-aec.sh --codex-home /absolute/path/to/.codex
-```
-
-The script calls the exact binary selected by the latest installation; it does not
-depend on `PATH`. It first runs `aec uninstall`, then removes that binary and the
-generated script only on success. It preserves every AEC data repository and all
-runtime `config.toml` bytes. Reinstalling at a new directory updates this generated
-script to that latest binary; an earlier binary remains untouched and can be removed
-manually if no longer wanted.
+See [installation troubleshooting](development.md#codex-cannot-find-a-newly-installed-aec).
 
 ## Current boundaries
 
