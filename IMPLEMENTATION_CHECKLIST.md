@@ -15,8 +15,18 @@ covers the decision and exact authored path. The
 [Copilot](tests/Aec.Tests/PortableCopilotBackupCommandTests.cs) CLI suites retain
 real-Git coverage for reading the committed target, writing the source, rendering
 affected targets, and exact commits and refusals. Backup preview and CLI tests
-remain in place. Ferry accepted the backup slice on 18 November 2026.
-Next, cover apply and status decisions.
+remain in place. Ferry accepted the backup slice on 18 November 2026
+(`7c24e34`).
+
+The apply/status slice adds 17 in-memory cases for exact, different, and
+missing instruction bytes, Codex personality updates, and the combined status.
+[PortableApplyStatusDecisionTests](tests/Aec.Tests/PortableApplyStatusDecisionTests.cs)
+covers those decisions. The four portable apply and status CLI suites verify
+real reads and writes, status output and exit codes, and Codex validation when
+instructions are missing. All 40 focused CLI cases passed in 43.07 seconds.
+The fast suite passed all 158 tests in 4.31 seconds wall time on macOS ARM64
+with zero Git calls. Ferry accepted the apply/status slice on 18 November 2026.
+Next, cover migration reviewed-state checks.
 
 ## Completed increment — fast unit test command
 
