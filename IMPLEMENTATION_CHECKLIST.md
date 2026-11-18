@@ -1,8 +1,8 @@
 # Implementation Checklist
 
-## Current increment — in-memory regression coverage
+## Completed increment — in-memory regression coverage
 
-[Ticket #14](https://github.com/ferrywlto/ai-env-as-code/issues/14) is Active under
+[Ticket #14](https://github.com/ferrywlto/ai-env-as-code/issues/14) was accepted under
 [test suite refactoring #9](https://github.com/ferrywlto/ai-env-as-code/issues/9).
 The backup attribution slice adds 14 in-memory cases across Codex and Copilot
 for unchanged runtime, single-section edits, multiple-section edits, stale
@@ -25,8 +25,22 @@ covers those decisions. The four portable apply and status CLI suites verify
 real reads and writes, status output and exit codes, and Codex validation when
 instructions are missing. All 40 focused CLI cases passed in 43.07 seconds.
 The fast suite passed all 158 tests in 4.31 seconds wall time on macOS ARM64
-with zero Git calls. Ferry accepted the apply/status slice on 18 November 2026.
-Next, cover migration reviewed-state checks.
+with zero Git calls. Ferry accepted the apply/status slice on 18 November 2026
+(`137875f`).
+
+The migration slice adds 22 in-memory cases in
+[MigrationApplyReviewTests](tests/Aec.Tests/MigrationApplyReviewTests.cs).
+It covers matching reviews, changes to branch, commit, harness and sources,
+instruction and config bytes, and planned write flags.
+[MigrationApplyCoordinatorTests](tests/Aec.Tests/MigrationApplyCoordinatorTests.cs)
+and the [Codex](tests/Aec.Tests/MigrationCodexApplyWriterTests.cs) and
+[Copilot](tests/Aec.Tests/MigrationCopilotApplyWriterTests.cs) writers retain
+real-Git coverage for provider order, stale inputs before the first write,
+tampered buffers, and partial failures. Five focused coordinator and writer
+cases passed in 87.91 seconds with disposable fixtures inside the workspace.
+The fast suite passed all 180 tests in 4.71 seconds wall time on macOS ARM64
+with zero Git calls. Ferry accepted the migration slice and coverage map on
+18 November 2026. Next, publish the reviewed branch.
 
 ## Completed increment — fast unit test command
 
