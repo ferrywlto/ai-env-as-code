@@ -49,21 +49,20 @@ dotnet test tests/Aec.Tests/Aec.Tests.csproj -c Release \
   --filter "FullyQualifiedName~LegacyMigrationTests|FullyQualifiedName~GitRoundTripTests"
 ```
 
-#### Focused migration review
+#### Focused real-Git review
 
-Run this group when changing migration capture, Git filters, signing, staging
-guards, or scaffold retry behavior. It covers exact capture commits, filter
-suppression, retained staging on signing failure, refusal after concurrent
-runtime drift, and idempotent scaffold retry. The full suite also covers
-public-command recovery after an interrupted migration.
+Choose `PortableReview` for ordinary Codex and Copilot backup, apply, and
+status. Choose `MigrationReview` for exact migration commits, filter suppression,
+signing failure, concurrent runtime drift, and scaffold retry.
 
 ```bash
 (
   set -e
-  fixture_dir="$(mktemp -d "$PWD/.aec-migration-review.XXXXXX")"
+  review_category=PortableReview # Change to MigrationReview for migration.
+  fixture_dir="$(mktemp -d "$(pwd -P)/.aec-review.XXXXXX")"
   trap 'rm -rf -- "$fixture_dir"' EXIT
   TMPDIR="$fixture_dir/" AEC_TEST_TEMP_ROOT="$fixture_dir" \
-    dotnet test tests/Aec.Tests/Aec.Tests.csproj --filter "Category=MigrationReview" \
+    dotnet test tests/Aec.Tests/Aec.Tests.csproj --filter "Category=$review_category" \
     --logger "console;verbosity=normal" \
     --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
 )
@@ -71,9 +70,14 @@ public-command recovery after an interrupted migration.
 
 Prepend `/usr/bin/time -p` to the `dotnet test` invocation on macOS to measure
 wall time. Add `--logger trx` to save per-test timings in the test results
-directory. The inactivity guard aborts an unresponsive run.
+directory. The inactivity guard aborts an unresponsive run. See the
+[coverage map](../IMPLEMENTATION_CHECKLIST.md#focused-real-git-regression-checks)
+for the selected checks and measured times.
 
 #### Full regression
+
+The full suite also exercises broader provider and platform scenarios,
+including public-command recovery after an interrupted migration.
 
 ```bash
 # Before push

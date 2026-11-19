@@ -4,6 +4,7 @@ namespace Aec.Tests;
 public sealed class PortableCopilotBackupCommandTests
 {
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void OneSectionDriftCommitsSourceAndAffectedTargetWithoutChangingRuntime()
     {
         using var layout = NewLayout();
@@ -141,6 +142,7 @@ public sealed class PortableCopilotBackupCommandTests
     }
 
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void ExistingStagedWorkStopsBeforeCanonicalWrite()
     {
         using var layout = NewLayout();

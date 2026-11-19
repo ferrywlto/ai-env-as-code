@@ -1,10 +1,10 @@
 # Implementation Checklist
 
-## Current increment — focused real-Git regression checks
+## Focused real-Git regression checks
 
-[Ticket #15](https://github.com/ferrywlto/ai-env-as-code/issues/15) is Active under
+[Ticket #15](https://github.com/ferrywlto/ai-env-as-code/issues/15) was accepted under
 [test suite refactoring #9](https://github.com/ferrywlto/ai-env-as-code/issues/9).
-The [migration review command](docs/development.md#focused-migration-review)
+The [migration review command](docs/development.md#focused-real-git-review)
 passed all five cases in 78.56 seconds on macOS ARM64, including build and test
 startup. Repository fixtures and isolated Git config stayed inside the checkout.
 
@@ -18,7 +18,23 @@ startup. Repository fixtures and isolated Git config stayed inside the checkout.
 
 Public-command recovery after a partial migration remains covered by
 `RegressionFollowupTests` in the full suite. Ferry accepted the migration slice
-on 19 November 2026. Next, add focused portable backup, apply, and status checks.
+on 19 November 2026 (`896ba77`).
+
+The [portable review command](docs/development.md#focused-real-git-review)
+passed all 12 cases in 34.81 seconds on macOS ARM64. Both focused groups honor
+the workspace fixture location. The fast suite also passed all 180 tests in
+1.21 seconds with build and restore already up to date and zero Git calls.
+
+| Portable review cases | Contract exercised | TRX duration |
+| --- | --- | ---: |
+| Codex backup combined drift and Copilot backup single-section drift | Exact commit parent and paths with runtime preserved | 5.54 s and 5.24 s |
+| Codex stale target and Copilot unrelated staged work | Refuse backup before changing sources or config | 0.78 s and 1.35 s |
+| Codex apply (three drift combinations) and Copilot apply | Write only managed files and preserve unrelated config and repository state | 3.16–4.17 s each for Codex, 2.59 s for Copilot |
+| Codex apply after HEAD moves | Report partial update and preserve instruction bytes | 1.98 s |
+| Codex invalid config, Codex legacy instruction drift, and Copilot instruction drift | Validate config with missing instructions, report drift, and preserve files | 0.70 s, 0.71 s, and 0.67 s |
+
+Ferry accepted the portable selection and coverage map on 19 November 2026.
+Next, publish the reviewed branch.
 
 ## Completed increment — in-memory regression coverage
 
