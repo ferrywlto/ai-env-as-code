@@ -35,6 +35,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     }
 
     [Fact]
+    [Trait("Category", "MigrationReview")]
     public void SeparateOverlaysAndManagedConfigShareOneCommit()
     {
         using var layout = new Layout("codex", "copilot");
@@ -157,6 +158,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     }
 
     [Fact]
+    [Trait("Category", "MigrationReview")]
     public void SigningFailureRetainsExactCombinedStagingWithoutRollback()
     {
         using var layout = new Layout("codex", "copilot");

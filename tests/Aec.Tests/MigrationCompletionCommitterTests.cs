@@ -78,6 +78,7 @@ public sealed class MigrationCompletionCommitterTests
     }
 
     [Fact]
+    [Trait("Category", "MigrationReview")]
     public void PostWriteDriftRefusesBeforeStagingAndRetainsState()
     {
         using var layout = new Layout("codex", "copilot");

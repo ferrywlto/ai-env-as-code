@@ -30,6 +30,7 @@ public sealed class MigrationScaffoldWriterTests
     }
 
     [Fact]
+    [Trait("Category", "MigrationReview")]
     public void MissingSourcesBecomeEmptyFilesAndFreshRetryIsANoop()
     {
         using var layout = new Layout();

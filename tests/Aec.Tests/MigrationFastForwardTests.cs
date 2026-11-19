@@ -266,6 +266,7 @@ public sealed class MigrationFastForwardTests
     }
 
     [Fact]
+    [Trait("Category", "MigrationReview")]
     public void SelectedFilterFailsWithoutRunningItsCommand()
     {
         using var layout = new MigrationRepositoryFixture();

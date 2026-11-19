@@ -1,5 +1,25 @@
 # Implementation Checklist
 
+## Current increment — focused real-Git regression checks
+
+[Ticket #15](https://github.com/ferrywlto/ai-env-as-code/issues/15) is Active under
+[test suite refactoring #9](https://github.com/ferrywlto/ai-env-as-code/issues/9).
+The [migration review command](docs/development.md#focused-migration-review)
+passed all five cases in 78.56 seconds on macOS ARM64, including build and test
+startup. Repository fixtures and isolated Git config stayed inside the checkout.
+
+| Migration review check | Contract exercised | TRX duration |
+| --- | --- | ---: |
+| `SeparateOverlaysAndManagedConfigShareOneCommit` | Exact parent, paths, committed bytes and modes, and clean index | 19.07 s |
+| `SelectedFilterFailsWithoutRunningItsCommand` | External Git filter suppression | 3.47 s |
+| `SigningFailureRetainsExactCombinedStagingWithoutRollback` | Signing failure preserves HEAD and staged proposal bytes | 17.78 s |
+| `PostWriteDriftRefusesBeforeStagingAndRetainsState` | Concurrent runtime drift stops completion and preserves the marker, index, and HEAD | 16.33 s |
+| `MissingSourcesBecomeEmptyFilesAndFreshRetryIsANoop` | Scaffold retry preserves existing artifacts | 18.38 s |
+
+Public-command recovery after a partial migration remains covered by
+`RegressionFollowupTests` in the full suite. Ferry accepted the migration slice
+on 19 November 2026. Next, add focused portable backup, apply, and status checks.
+
 ## Completed increment — in-memory regression coverage
 
 [Ticket #14](https://github.com/ferrywlto/ai-env-as-code/issues/14) was accepted under
@@ -40,7 +60,8 @@ tampered buffers, and partial failures. Five focused coordinator and writer
 cases passed in 87.91 seconds with disposable fixtures inside the workspace.
 The fast suite passed all 180 tests in 4.71 seconds wall time on macOS ARM64
 with zero Git calls. Ferry accepted the migration slice and coverage map on
-18 November 2026. Next, publish the reviewed branch.
+18 November 2026. [PR #17](https://github.com/ferrywlto/ai-env-as-code/pull/17)
+merged to `main` and #14 closed after the approved fast and focused checks.
 
 ## Completed increment — fast unit test command
 

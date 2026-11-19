@@ -22,16 +22,15 @@ dotnet test tests/Aec.Tests/Aec.Tests.csproj --filter "Category=Unit"
 ```
 
 Run the affected integration tests before review and all tests before pushing.
-Run all tests in Release mode before publishing a release. Full runs can take
-around 16 minutes and may stay quiet until the final summary.
+Run all tests in Release mode before publishing a release. Full run times vary,
+and the default console logger may stay quiet until the final summary.
 
 <details>
 <summary>Why full tests take longer</summary>
 
-Tests use real Git repositories and check filesystem safety. Some groups run
-sequentially because they change process-wide settings. The recorded full Debug
-run contained 639 tests; see `IMPLEMENTATION_CHECKLIST.md` for evidence. Timing
-is an observation, not a guarantee.
+Integration tests use real Git repositories and check filesystem safety. Some
+groups run sequentially because they change process-wide settings. See
+`IMPLEMENTATION_CHECKLIST.md` for recorded regression runs.
 
 The production project uses only the .NET Base Class Library; tests use xUnit
 without a coverage dependency.
@@ -45,13 +44,36 @@ To run a focused integration group, filter by test class.
 dotnet test tests/Aec.Tests/Aec.Tests.csproj \
   --filter "FullyQualifiedName~PortableCodexBackupCommandTests"
 
-# Migration and two-checkout rehearsals; process-backed Git integration
+# Broader migration and two-checkout rehearsals
 dotnet test tests/Aec.Tests/Aec.Tests.csproj -c Release \
   --filter "FullyQualifiedName~LegacyMigrationTests|FullyQualifiedName~GitRoundTripTests"
 ```
 
-For full runs, these commands stop any individual test that exceeds two minutes.
-Smaller focused workflow runs use a 30-second limit.
+#### Focused migration review
+
+Run this group when changing migration capture, Git filters, signing, staging
+guards, or scaffold retry behavior. It covers exact capture commits, filter
+suppression, retained staging on signing failure, refusal after concurrent
+runtime drift, and idempotent scaffold retry. The full suite also covers
+public-command recovery after an interrupted migration.
+
+```bash
+(
+  set -e
+  fixture_dir="$(mktemp -d "$PWD/.aec-migration-review.XXXXXX")"
+  trap 'rm -rf -- "$fixture_dir"' EXIT
+  TMPDIR="$fixture_dir/" AEC_TEST_TEMP_ROOT="$fixture_dir" \
+    dotnet test tests/Aec.Tests/Aec.Tests.csproj --filter "Category=MigrationReview" \
+    --logger "console;verbosity=normal" \
+    --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
+)
+```
+
+Prepend `/usr/bin/time -p` to the `dotnet test` invocation on macOS to measure
+wall time. Add `--logger trx` to save per-test timings in the test results
+directory. The inactivity guard aborts an unresponsive run.
+
+#### Full regression
 
 ```bash
 # Before push
