@@ -364,12 +364,6 @@ public sealed class PortableCodexBackupCommandTests
         var layout = new SharedTargetStatusTests.StatusLayout("codex");
         layout.WriteRuntime(portableBlock: true);
         File.WriteAllText(RuntimeConfigPath(layout), "personality = \"none\"\n");
-        GitProcess.RunRequired(layout.Repository, "Could not set fixture author",
-            "config", "--local", "user.name", "AEC Test");
-        GitProcess.RunRequired(layout.Repository, "Could not set fixture email",
-            "config", "--local", "user.email", "aec-test@example.invalid");
-        GitProcess.RunRequired(layout.Repository, "Could not disable fixture signing",
-            "config", "--local", "commit.gpgsign", "false");
         return layout;
     }
 

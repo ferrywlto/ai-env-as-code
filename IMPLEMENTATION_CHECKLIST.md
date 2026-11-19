@@ -28,7 +28,26 @@ cases with matching names ran slower in the second measurement, so this pair
 shows less Git work and leaves wall-clock savings unverified. Separately, all
 180 unit tests and all six retained shared attribution cases passed together.
 Ferry accepted the Copilot cleanup and timing evidence on 19 November 2026.
-Next, audit portable tests that use fixtures only to supply file content.
+
+The next slice removes three repeated local Git config commands from each of
+the Codex and Copilot backup command and writer fixtures. The shared
+`GitTestEnvironment` already supplies an isolated author and signing default.
+The same four real-Git commit cases passed before and after. Trace2 counted
+835 process starts before and 823 after, including 12 redundant config calls
+removed. Wall time was 19.28 seconds before and 21.28 seconds after. A
+separate verification passed all 37 affected backup cases and all 180 unit
+tests in 52.70 seconds. Ferry accepted the Git setup slice on 19 November 2026.
+
+### File I/O observations for later cleanup
+
+| Candidate | Why it is a candidate | Coverage to preserve |
+| --- | --- | --- |
+| `SharedTargetStatusTests.ApplyPreviewReportsRuntimeEditsWithoutWriting` | The edited bytes drive the preview decision already covered by the apply/status unit suite | Retain a real no-write preview and CLI cases that apply drift |
+| `PortableEnvironmentStatusTests.InstructionDriftIsDifferent` and `UnmanagedCodexConfigValuesDoNotCountAsDrift` | These cases vary instruction bytes or an unmanaged TOML value | Retain CLI drift output, status exit codes, and file preservation assertions |
+| `StatusTests` TOML parsing cases starting at `AcceptsAQuotedManagedKey` | Seven cases set up equivalent instructions and vary only TOML syntax or decoded values | Preserve the parser assertions with direct byte inputs and keep representative CLI validation and filesystem cases |
+
+Accumulate these observations while reviewing the fixtures. Review a batch
+before moving content-only cases into memory or retiring overlapping cases.
 
 ## Focused real-Git regression checks
 

@@ -149,12 +149,6 @@ public sealed class PortableCopilotBackupWriterTests
     {
         var layout = new SharedTargetStatusTests.StatusLayout("copilot");
         layout.WriteRuntime(portableBlock: true);
-        GitProcess.RunRequired(layout.Repository, "Could not set fixture Git author",
-            "config", "--local", "user.name", "AEC Test");
-        GitProcess.RunRequired(layout.Repository, "Could not set fixture Git email",
-            "config", "--local", "user.email", "aec-test@example.invalid");
-        GitProcess.RunRequired(layout.Repository, "Could not disable fixture signing",
-            "config", "--local", "commit.gpgsign", "false");
         return layout;
     }
 
