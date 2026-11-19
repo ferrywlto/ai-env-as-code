@@ -33,28 +33,6 @@ public sealed class PortableEnvironmentStatusTests
     }
 
     [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void InstructionDriftIsDifferent(string provider)
-    {
-        using var layout = new SharedTargetStatusTests.StatusLayout(provider);
-        layout.WriteRuntime(portableBlock: true);
-        if (provider == "codex")
-        {
-            File.WriteAllText(Path.Combine(layout.ProviderHome, "config.toml"),
-                "personality = \"none\"\n");
-        }
-
-        File.AppendAllText(layout.RuntimePath, "Unreviewed instruction edit.\n");
-        var edited = File.ReadAllBytes(layout.RuntimePath);
-
-        Assert.Equal("different", PortableEnvironmentStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome).Instructions);
-        Assert.Equal(edited, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
     [InlineData(null, "missing")]
     [InlineData("model = \"keep-me\"\n", "missing")]
     [InlineData("personality = \"friendly\"\nmodel = \"keep-me\"\n", "different")]
@@ -79,21 +57,6 @@ public sealed class PortableEnvironmentStatusTests
             Assert.Equal(runtimeConfig, File.ReadAllText(configPath));
         }
 
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
-    public void UnmanagedCodexConfigValuesDoNotCountAsDrift()
-    {
-        using var layout = new SharedTargetStatusTests.StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
-        var config = "personality = \"none\"\nmodel = \"different-machine-model\"\n";
-        File.WriteAllText(configPath, config);
-
-        Assert.True(PortableEnvironmentStatus.Inspect(
-            layout.Repository, "codex", layout.ProviderHome).InSync);
-        Assert.Equal(config, File.ReadAllText(configPath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 

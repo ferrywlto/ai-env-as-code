@@ -2,7 +2,8 @@
 
 ## Portable integration test cleanup
 
-[Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) is Active.
+[Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
+by Ferry on 19 November 2026.
 The first slice removes five redundant Copilot backup preview cases and keeps
 the real-Git refusal for a Copilot v1 runtime without a target digest.
 
@@ -38,16 +39,30 @@ removed. Wall time was 19.28 seconds before and 21.28 seconds after. A
 separate verification passed all 37 affected backup cases and all 180 unit
 tests in 52.70 seconds. Ferry accepted the Git setup slice on 19 November 2026.
 
-### File I/O observations for later cleanup
+### Apply and status file I/O cleanup
 
-| Candidate | Why it is a candidate | Coverage to preserve |
+| Original cases | Change | Retained coverage |
 | --- | --- | --- |
-| `SharedTargetStatusTests.ApplyPreviewReportsRuntimeEditsWithoutWriting` | The edited bytes drive the preview decision already covered by the apply/status unit suite | Retain a real no-write preview and CLI cases that apply drift |
-| `PortableEnvironmentStatusTests.InstructionDriftIsDifferent` and `UnmanagedCodexConfigValuesDoNotCountAsDrift` | These cases vary instruction bytes or an unmanaged TOML value | Retain CLI drift output, status exit codes, and file preservation assertions |
-| `StatusTests` TOML parsing cases starting at `AcceptsAQuotedManagedKey` | Seven cases set up equivalent instructions and vary only TOML syntax or decoded values | Preserve the parser assertions with direct byte inputs and keep representative CLI validation and filesystem cases |
+| `SharedTargetStatusTests.ApplyPreviewReportsRuntimeEditsWithoutWriting` | Retired one overlapping case | `PortableApplyStatusDecisionTests.ApplyAndStatusCompareExactInstructionBytes` checks the replacement decision and exact desired bytes. `ApplyPreviewWouldUpgradeOnlyTheLocalBlock` checks a changed preview leaves runtime and checkout intact. |
+| `PortableEnvironmentStatusTests.InstructionDriftIsDifferent` | Retired two overlapping cases | The apply/status unit suite checks drift for both providers. `StatusTests.ReportsDifferentForDifferentFiles`, `StatusDoesNotChangeSourceOrTargetContent`, and `PortableCopilotStatusCommandTests.ReportsRuntimeDriftWithoutWrites` cover both CLI paths, exit codes, and file preservation. |
+| `PortableEnvironmentStatusTests.UnmanagedCodexConfigValuesDoNotCountAsDrift` | Retired one overlapping case | `PortableEnvironmentStatusTests.MatchingManagedRuntimeIsInSyncWithoutWrites` exercises unmanaged model settings, exact config bytes, and unchanged HEAD. |
+| Seven `StatusTests` cases from `AcceptsAQuotedManagedKey` through `IgnoresAnUnrelatedLiteralKeyContainingABackslash` | Moved seven cases to `CodexRuntimeConfigParsingTests` with direct TOML bytes | Includes both key escape forms, multiline string and nested array handling, decoded values, ambiguous multiline values, and literal keys. `StatusTests.ReportsInSyncForEqualFiles` and `FailsWhenRuntimeConfigDeclaresPersonalityTwice` retain the representative CLI success and refusal. |
 
-Accumulate these observations while reviewing the fixtures. Review a batch
-before moving content-only cases into memory or retiring overlapping cases.
+Measured the same case filter before and after on macOS ARM64 with a prior
+Debug build, `--no-build --no-restore`, TRX, Git Trace2, and identical workspace
+fixture settings. The status fixture uses the existing `AEC_TEST_TEMP_ROOT`
+override in both measurements.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Real-Git cases | 24 | 13 |
+| In-memory cases in the selected group | 0 | 7 |
+| Git process starts | 1,265 | 916 |
+| Git init / add / commit commands | 24 / 24 / 24 | 13 / 13 / 13 |
+| Wall time | 24.63 s | 22.18 s |
+
+The fast suite passed all 187 tests with zero Git calls. All 12
+`PortableReview` real-Git checks passed. Next, publish the reviewed branch.
 
 ## Focused real-Git regression checks
 

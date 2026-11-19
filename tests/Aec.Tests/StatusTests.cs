@@ -546,120 +546,6 @@ public sealed class StatusTests
     }
 
     [Fact]
-    public void AcceptsAQuotedManagedKey()
-    {
-        using var layout = new TemporaryLayout(
-            "same\n",
-            "same\n",
-            DefaultCanonicalConfig,
-            "\"personality\" = \"none\"\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
-        Assert.Empty(result.Error);
-    }
-
-    [Fact]
-    public void IgnoresManagedTextInsideAnUnrelatedMultilineString()
-    {
-        using var layout = new TemporaryLayout(
-            "same\n",
-            "same\n",
-            DefaultCanonicalConfig,
-            "instructions = \"\"\"\npersonality = \"friendly\"\n\"\"\"\n" +
-            "personality = \"none\"\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
-        Assert.Empty(result.Error);
-    }
-
-    [Fact]
-    public void ReadsPersonalityAfterAnUnrelatedNestedMultilineArray()
-    {
-        using var layout = new TemporaryLayout(
-            "same\n",
-            "same\n",
-            DefaultCanonicalConfig,
-            "matrix = [\n  [1, 2],\n  [3, 4],\n]\n" +
-            "personality = \"none\"\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
-        Assert.Empty(result.Error);
-    }
-
-    [Fact]
-    public void AcceptsAnEscapedManagedKey()
-    {
-        using var layout = new TemporaryLayout(
-            "same\n",
-            "same\n",
-            DefaultCanonicalConfig,
-            "\"personal\\u0069ty\" = \"none\"\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
-        Assert.Empty(result.Error);
-    }
-
-    [Fact]
-    public void ComparesTheDecodedManagedValue()
-    {
-        using var layout = new TemporaryLayout(
-            "same\n",
-            "same\n",
-            "personality = \"friendly\"\n",
-            "personality = \"frien\\u0064ly\"\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
-        Assert.Empty(result.Error);
-    }
-
-    [Fact]
-    public void FailsClosedForAMultilineManagedValue()
-    {
-        using var layout = new TemporaryLayout(
-            "same\n",
-            "same\n",
-            DefaultCanonicalConfig,
-            "personality = \"\"\"none\"\"\"\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("ambiguous personality declaration", result.Error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void IgnoresAnUnrelatedLiteralKeyContainingABackslash()
-    {
-        using var layout = new TemporaryLayout(
-            "same\n",
-            "same\n",
-            DefaultCanonicalConfig,
-            "'machine\\path' = \"local\"\npersonality = \"none\"\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(StatusOutput("in_sync", "in_sync"), result.Output);
-        Assert.Empty(result.Error);
-    }
-
-    [Fact]
     public void RejectsNonTomlWhitespaceInCanonicalConfig()
     {
         using var layout = new TemporaryLayout(
@@ -881,7 +767,8 @@ public sealed class StatusTests
 
         private static string RealTemporaryDirectory()
         {
-            return OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath();
+            return Environment.GetEnvironmentVariable("AEC_TEST_TEMP_ROOT")
+                ?? (OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath());
         }
     }
 }

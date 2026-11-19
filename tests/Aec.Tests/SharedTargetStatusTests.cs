@@ -478,23 +478,6 @@ public sealed class SharedTargetStatusTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
-    [Fact]
-    public void ApplyPreviewReportsRuntimeEditsWithoutWriting()
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        File.AppendAllText(layout.RuntimePath, "Unreviewed runtime edit.");
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-
-        var preview = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
-
-        Assert.True(preview.WouldReplace);
-        Assert.DoesNotContain("Unreviewed runtime edit.",
-            Encoding.UTF8.GetString(preview.DesiredRuntime), StringComparison.Ordinal);
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-    }
-
     [Theory]
     [InlineData("codex")]
     [InlineData("copilot")]
