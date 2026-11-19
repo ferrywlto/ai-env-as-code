@@ -128,14 +128,20 @@ public sealed class PortableCopilotBackupWriterTests
     public void NoChangeDoesNotCreateAnEmptyCommit()
     {
         using var layout = NewLayout();
+        var oldHead = layout.Head();
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
         var preview = PortableCopilotBackupPreview.Create(
             layout.Repository, layout.ProviderHome);
-        var oldHead = layout.Head();
 
+        Assert.Equal(AecIdentifiers.Copilot, preview.Snapshot.Provider);
+        Assert.Equal(oldHead, preview.Snapshot.Commit);
+        Assert.Null(preview.Instructions.Section);
+        Assert.Null(preview.Instructions.SourceRelativePath);
         Assert.Throws<InvalidOperationException>(() =>
             PortableCopilotBackupWriter.WriteAndCommit(preview));
 
         Assert.Equal(oldHead, layout.Head());
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 

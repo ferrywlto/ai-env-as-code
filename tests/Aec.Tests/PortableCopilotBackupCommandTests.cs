@@ -82,6 +82,7 @@ public sealed class PortableCopilotBackupCommandTests
         File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
             .Replace("Shared approval.", "Shared revision.", StringComparison.Ordinal)
             .Replace("Local paths.", "Local revision.", StringComparison.Ordinal));
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
         var head = layout.Head();
 
         var result = Run(layout);
@@ -91,6 +92,7 @@ public sealed class PortableCopilotBackupCommandTests
         Assert.Contains("multiple authored instruction sections", result.Error,
             StringComparison.Ordinal);
         Assert.Equal(head, layout.Head());
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 

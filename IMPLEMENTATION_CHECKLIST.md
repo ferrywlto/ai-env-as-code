@@ -1,5 +1,35 @@
 # Implementation Checklist
 
+## Portable integration test cleanup
+
+[Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) is Active.
+The first slice removes five redundant Copilot backup preview cases and keeps
+the real-Git refusal for a Copilot v1 runtime without a target digest.
+
+| Removed preview cases | Retained coverage |
+| --- | --- |
+| Unchanged runtime | `PortableBackupAttributionTests.UnchangedRuntimeProducesNoProposal` and `PortableCopilotBackupWriterTests.NoChangeDoesNotCreateAnEmptyCommit`, which now also checks the reviewed provider, HEAD, no proposal, and unchanged runtime bytes |
+| Shared, platform, and provider edits | `PortableBackupAttributionTests.OneEditedSectionProposesItsAuthoredSource` and `SharedTargetStatusTests.BackupAttributionPreviewIdentifiesOneAuthoredSection` retain the three paths, proposed bytes, and proof the preview leaves the checkout and runtime unchanged |
+| Multiple section edits | `PortableBackupAttributionTests.EditsToMultipleSectionsAreRejected` and `PortableCopilotBackupCommandTests.MultipleEditedSectionsStopWithoutCommit`, which now also checks unchanged runtime bytes |
+
+Measured the same `FullyQualifiedName~PortableCopilotBackup` filter before
+and after on macOS ARM64. Both runs used a prior Debug build, `--no-build
+--no-restore`, isolated workspace fixtures, TRX, and Git Trace2.
+
+| Measurement | Before (`3941f5b`) | After |
+| --- | ---: | ---: |
+| Passing real-Git cases | 20 | 15 |
+| Git process starts | 1,231 | 1,077 |
+| Git init / add / commit commands | 20 / 26 / 23 | 15 / 21 / 18 |
+| Wall time | 111.36 s | 132.74 s |
+
+The five retired cases took 13.45 seconds in the baseline. All 14 retained
+cases with matching names ran slower in the second measurement, so this pair
+shows less Git work and leaves wall-clock savings unverified. Separately, all
+180 unit tests and all six retained shared attribution cases passed together.
+Ferry accepted the Copilot cleanup and timing evidence on 19 November 2026.
+Next, audit portable tests that use fixtures only to supply file content.
+
 ## Focused real-Git regression checks
 
 [Ticket #15](https://github.com/ferrywlto/ai-env-as-code/issues/15) was accepted under
