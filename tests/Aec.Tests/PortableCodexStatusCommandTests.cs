@@ -63,6 +63,7 @@ public sealed class PortableCodexStatusCommandTests
     }
 
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void InvalidConfigStopsEvenWhenRuntimeInstructionsAreMissing()
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("codex");
@@ -81,6 +82,7 @@ public sealed class PortableCodexStatusCommandTests
     }
 
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void LegacyRuntimeBlockReportsDriftWithoutReplacingIt()
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("codex");

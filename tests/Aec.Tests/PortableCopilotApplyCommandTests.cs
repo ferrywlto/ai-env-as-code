@@ -25,6 +25,7 @@ public sealed class PortableCopilotApplyCommandTests
     }
 
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void AppliesCommittedRenderedTargetWithoutChangingRepositoryOrConfig()
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("copilot");

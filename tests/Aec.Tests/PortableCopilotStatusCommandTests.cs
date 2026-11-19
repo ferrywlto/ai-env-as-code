@@ -22,6 +22,7 @@ public sealed class PortableCopilotStatusCommandTests
     }
 
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void ReportsRuntimeDriftWithoutWrites()
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("copilot");

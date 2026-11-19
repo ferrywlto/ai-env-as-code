@@ -26,6 +26,7 @@ public sealed class PortableCodexApplyCommandTests
     }
 
     [Theory]
+    [Trait("Category", "PortableReview")]
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]

@@ -48,6 +48,7 @@ public sealed class PortableCodexBackupCommandTests
     }
 
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void InstructionAndPersonalityDriftProduceOneCommit()
     {
         using var layout = NewLayout();
@@ -137,6 +138,7 @@ public sealed class PortableCodexBackupCommandTests
     }
 
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void StaleLastAppliedTargetStopsBeforeConfigCapture()
     {
         using var layout = NewLayout();

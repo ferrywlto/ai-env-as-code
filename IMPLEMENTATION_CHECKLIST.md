@@ -1,5 +1,41 @@
 # Implementation Checklist
 
+## Focused real-Git regression checks
+
+[Ticket #15](https://github.com/ferrywlto/ai-env-as-code/issues/15) was accepted under
+[test suite refactoring #9](https://github.com/ferrywlto/ai-env-as-code/issues/9).
+The [migration review command](docs/development.md#focused-real-git-review)
+passed all five cases in 78.56 seconds on macOS ARM64, including build and test
+startup. Repository fixtures and isolated Git config stayed inside the checkout.
+
+| Migration review check | Contract exercised | TRX duration |
+| --- | --- | ---: |
+| `SeparateOverlaysAndManagedConfigShareOneCommit` | Exact parent, paths, committed bytes and modes, and clean index | 19.07 s |
+| `SelectedFilterFailsWithoutRunningItsCommand` | External Git filter suppression | 3.47 s |
+| `SigningFailureRetainsExactCombinedStagingWithoutRollback` | Signing failure preserves HEAD and staged proposal bytes | 17.78 s |
+| `PostWriteDriftRefusesBeforeStagingAndRetainsState` | Concurrent runtime drift stops completion and preserves the marker, index, and HEAD | 16.33 s |
+| `MissingSourcesBecomeEmptyFilesAndFreshRetryIsANoop` | Scaffold retry preserves existing artifacts | 18.38 s |
+
+Public-command recovery after a partial migration remains covered by
+`RegressionFollowupTests` in the full suite. Ferry accepted the migration slice
+on 19 November 2026 (`896ba77`).
+
+The [portable review command](docs/development.md#focused-real-git-review)
+passed all 12 cases in 34.81 seconds on macOS ARM64. Both focused groups honor
+the workspace fixture location. The fast suite also passed all 180 tests in
+1.21 seconds with build and restore already up to date and zero Git calls.
+
+| Portable review cases | Contract exercised | TRX duration |
+| --- | --- | ---: |
+| Codex backup combined drift and Copilot backup single-section drift | Exact commit parent and paths with runtime preserved | 5.54 s and 5.24 s |
+| Codex stale target and Copilot unrelated staged work | Refuse backup before changing sources or config | 0.78 s and 1.35 s |
+| Codex apply (three drift combinations) and Copilot apply | Write only managed files and preserve unrelated config and repository state | 3.16–4.17 s each for Codex, 2.59 s for Copilot |
+| Codex apply after HEAD moves | Report partial update and preserve instruction bytes | 1.98 s |
+| Codex invalid config, Codex legacy instruction drift, and Copilot instruction drift | Validate config with missing instructions, report drift, and preserve files | 0.70 s, 0.71 s, and 0.67 s |
+
+Ferry accepted the portable selection and coverage map on 19 November 2026.
+Next, publish the reviewed branch.
+
 ## Completed increment — in-memory regression coverage
 
 [Ticket #14](https://github.com/ferrywlto/ai-env-as-code/issues/14) was accepted under
@@ -40,7 +76,8 @@ tampered buffers, and partial failures. Five focused coordinator and writer
 cases passed in 87.91 seconds with disposable fixtures inside the workspace.
 The fast suite passed all 180 tests in 4.71 seconds wall time on macOS ARM64
 with zero Git calls. Ferry accepted the migration slice and coverage map on
-18 November 2026. Next, publish the reviewed branch.
+18 November 2026. [PR #17](https://github.com/ferrywlto/ai-env-as-code/pull/17)
+merged to `main` and #14 closed after the approved fast and focused checks.
 
 ## Completed increment — fast unit test command
 

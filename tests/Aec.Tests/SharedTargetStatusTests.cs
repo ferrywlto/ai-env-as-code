@@ -848,6 +848,7 @@ public sealed class SharedTargetStatusTests
     }
 
     [Fact]
+    [Trait("Category", "PortableReview")]
     public void CodexCombinedWriterReportsPartialUpdateWhenHeadChangesAfterConfig()
     {
         using var layout = new StatusLayout("codex");
@@ -1082,7 +1083,9 @@ public sealed class SharedTargetStatusTests
     {
         public StatusLayout(string provider)
         {
-            Root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            var temporaryRoot = Environment.GetEnvironmentVariable("AEC_TEST_TEMP_ROOT")
+                ?? (OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath());
+            Root = Path.Combine(temporaryRoot,
                 "aec-shared-status-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
             ProviderHome = Path.Combine(Root, "provider-home");
