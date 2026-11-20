@@ -306,6 +306,40 @@ All nine retained preview and marker guard cases passed in 49.24 s. All
 the boundary coverage cleanup on 20 November 2026. Full-suite verification
 remains pending for #19.
 
+### Scaffold writer stale-state coverage
+
+- Ten Git-free tests check equivalent inventories, branch and membership,
+  and changes to individual file identity, bytes, and actions. One
+  real-Git forged-path test proves the writer rejects the inventory
+  before changes.
+- Removed five writer cases that reached the same fresh-preview guards
+  already exercised by the changed HEAD, enrollment, dirty-path, marker,
+  and ignored-source preview cases. Retained real branch, draft-byte, and
+  index changes that reach the inventory comparison.
+- Consolidated three between-write legacy-file cases into one fixture.
+  Git status hides each edit, so the test now reaches the protected-byte
+  guard and checks its specific rejection. The unrelated-dirt case still
+  exercises the dirty-path guard.
+
+Both runs used Debug builds, workspace fixtures, TRX, Git Trace2,
+and the same hang limits. The revised filter includes the replacement
+legacy-input case.
+
+| Scaffold writer measurement | Before | After |
+| --- | ---: | ---: |
+| Passing real-Git cases | 28 | 18 |
+| Git process starts | 6,365 | 3,978 |
+| Observed wall time | 123.30 s | 97.87 s |
+
+The 16 cases common to both runs took 66.41 s before and 83.78 s after,
+summed from their TRX durations. Git starts measure the reduced fixture
+work directly.
+
+All nine focused preview and writer checks passed in 29.40 s. All
+219 unit tests passed in 1.24 s with zero Git starts. Ferry accepted
+the scaffold writer cleanup on 20 November 2026. Full-suite verification
+remains pending for #19.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
