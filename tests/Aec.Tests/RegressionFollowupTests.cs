@@ -34,17 +34,13 @@ public sealed class RegressionFollowupTests
         MigrationLegacyCaptureCommitterTests.StaleOrTamperedReviewStopsBeforeWriteStageOrCommit(change);
 
     [Theory]
-    [InlineData("dirty-target")]
-    [InlineData("dirty-source")]
-    [InlineData("missing-target")]
-    [InlineData("inconsistent-target")]
-    [InlineData("invalid-enrollment")]
-    [InlineData("invalid-provider")]
-    [InlineData("invalid-filename")]
-    [InlineData("invalid-structure")]
-    [InlineData("oversize-render")]
-    public void OtherPlatformProblemsAreRejectedDuringPreparation(string kind) =>
-        MigrationPortableTargetWriterTests.OtherPlatformProblemsAreRejectedDuringPreparation(kind);
+    [InlineData("dirty-target", "Dirty path is outside the selected migration sections")]
+    [InlineData("dirty-source", "Dirty path is outside the selected migration sections")]
+    [InlineData("missing-target", "Dirty path is outside the selected migration sections")]
+    [InlineData("inconsistent-target", "Committed target does not match its authored sources")]
+    [InlineData("oversize-render", "Rendered target exceeds 1 MiB")]
+    public void OtherPlatformProblemsAreRejectedDuringPreparation(string kind, string expectedDiagnostic) =>
+        MigrationPortableTargetWriterTests.OtherPlatformProblemsAreRejectedDuringPreparation(kind, expectedDiagnostic);
 
     [Theory]
     [InlineData("head")]

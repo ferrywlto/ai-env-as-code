@@ -141,11 +141,9 @@ public sealed class MigrationPortableTargetWriterTests
     internal static void StaleInputsStopBeforeAnyTargetReplacement(string kind)
     {
         using var layout = new Layout("codex", "copilot");
-        var targets = EnrollOtherPlatforms(layout, "codex", "copilot");
+        var (otherPlatform, otherTarget) = EnrollOtherCodexTarget(layout);
         layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
         var (plan, sources) = PrepareSources(Preview(layout));
-        var otherTarget = targets.First(path => !path.Contains($"/{layout.Platform}/", StringComparison.Ordinal));
-        var otherPlatform = otherTarget.Split('/')[2];
         switch (kind)
         {
             case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
@@ -173,53 +171,53 @@ public sealed class MigrationPortableTargetWriterTests
         });
     }
 
-    internal static void OtherPlatformProblemsAreRejectedDuringPreparation(string kind)
+    internal static void OtherPlatformProblemsAreRejectedDuringPreparation(string kind, string expectedDiagnostic)
     {
-        using var layout = new Layout("codex", "copilot");
-        var targets = EnrollOtherPlatforms(layout, "codex", "copilot");
-        var otherTarget = targets.First(path => !path.Contains($"/{layout.Platform}/", StringComparison.Ordinal));
-        var policy = $"environment/platforms/{otherTarget.Split('/')[2]}/policy.md";
+        using var layout = new Layout("codex");
+        var (otherPlatform, otherTarget) = EnrollOtherCodexTarget(layout);
+        var policy = $"environment/platforms/{otherPlatform}/policy.md";
         layout.EditRuntime("codex", "Shared approval.", kind == "oversize-render" ? new string('y', 500) : "Shared revision.");
-        var reviewed = Preview(layout);
+        // Worktree drift follows review. New commits belong to the reviewed HEAD.
+        var reviewed = kind is "dirty-target" or "dirty-source" or "missing-target" ? Preview(layout) : null;
         switch (kind)
         {
             case "dirty-target": layout.Files.Write(otherTarget, "Keep target draft.\n"); break;
             case "dirty-source": layout.Files.Write(policy, "Keep policy draft.\n"); break;
             case "missing-target": File.Delete(Path.Combine(layout.Repository, otherTarget)); break;
             case "inconsistent-target": layout.Files.Write(otherTarget, "Inconsistent committed target.\n"); layout.Commit(otherTarget); break;
-            case "invalid-enrollment":
-            case "invalid-provider":
-            case "invalid-filename":
-            case "invalid-structure":
-                var invalidTarget = kind switch
-                {
-                    "invalid-enrollment" => "environment/targets/unknown/codex/AGENTS.md",
-                    "invalid-provider" => $"environment/targets/{layout.Platform}/unknown/AGENTS.md",
-                    "invalid-filename" => $"environment/targets/{layout.Platform}/codex/wrong.md",
-                    _ => $"environment/targets/{layout.Platform}/wrong.md"
-                };
-                layout.Files.Write(invalidTarget, "Unknown target.\n");
-                layout.Commit(invalidTarget);
-                break;
-            default:
+            case "oversize-render":
                 var large = new string('x', AecApplication.MaximumTextBytes - 300);
                 layout.Files.Write(policy, large);
-                foreach (var target in targets.Where(path => path.Split('/')[2] == otherTarget.Split('/')[2]))
-                    layout.Files.Write(target, InstructionSections.Render("Shared approval.\n", large, "Provider mechanics.\n"));
-                layout.Commit([policy, .. targets.Where(path => path.Split('/')[2] == otherTarget.Split('/')[2])]);
+                layout.Files.Write(otherTarget, InstructionSections.Render("Shared approval.\n", large, "Provider mechanics.\n"));
+                layout.Commit(policy, otherTarget);
                 break;
-        }
-        if (kind is "inconsistent-target" or "invalid-enrollment" or "invalid-provider" or
-            "invalid-filename" or "invalid-structure" or "oversize-render")
-        {
-            reviewed = Preview(layout);
+            default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
 
+        reviewed ??= Preview(layout);
         layout.Files.AssertNoChanges(() =>
         {
             var error = Record.Exception(() => MigrationPortableTargetWriter.Prepare(reviewed));
             Assert.NotNull(error);
             Assert.True(error is InvalidOperationException or InvalidDataException, error.ToString());
+            Assert.StartsWith(expectedDiagnostic, error.Message, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void InvalidCommittedTargetIsRejectedDuringPreparation()
+    {
+        using var layout = new Layout("codex");
+        const string invalidTarget = "environment/targets/unknown/codex/AGENTS.md";
+        layout.Files.Write(invalidTarget, "Unknown target.\n");
+        layout.Commit(invalidTarget);
+        layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
+        var reviewed = Preview(layout);
+
+        layout.Files.AssertNoChanges(() =>
+        {
+            var error = Assert.Throws<InvalidDataException>(() => MigrationPortableTargetWriter.Prepare(reviewed));
+            Assert.Equal($"Unsupported committed target platform: {invalidTarget}", error.Message);
         });
     }
 
@@ -273,9 +271,21 @@ public sealed class MigrationPortableTargetWriterTests
     // local harnesses. Only deterministic target composition is cross-platform.
     internal static string[] EnrollOtherPlatforms(Layout layout, params string[] providers)
     {
+        var enrollments = EnrollPlatforms(layout, Platforms.Where(platform => platform != layout.Platform), providers);
+        return providers.Select(layout.Target).Concat(enrollments).Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private static (string Platform, string Target) EnrollOtherCodexTarget(Layout layout)
+    {
+        var platform = Platforms.First(value => value != layout.Platform);
+        return (platform, EnrollPlatforms(layout, [platform], ["codex"]).Single());
+    }
+
+    private static List<string> EnrollPlatforms(Layout layout, IEnumerable<string> platforms, string[] providers)
+    {
         var committed = new List<string>();
-        var targets = providers.Select(layout.Target).ToList();
-        foreach (var platform in Platforms.Where(value => value != layout.Platform))
+        var targets = new List<string>();
+        foreach (var platform in platforms)
         {
             var policy = $"environment/platforms/{platform}/policy.md";
             var content = $"Policy for {platform}.\n";
@@ -290,6 +300,6 @@ public sealed class MigrationPortableTargetWriterTests
             }
         }
         layout.Commit([.. committed]);
-        return targets.Order(StringComparer.Ordinal).ToArray();
+        return targets;
     }
 }

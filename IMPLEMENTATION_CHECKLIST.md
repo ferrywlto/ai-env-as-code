@@ -180,6 +180,40 @@ in 1.01 s wall time with zero Git process starts. Ferry accepted the
 scaffold preview cleanup on 20 November 2026. Full-suite verification
 remains pending for #19.
 
+### Portable target writer rejection coverage
+
+- Moved four malformed target path variants to Git-free enrollment tests.
+  One real-Git preparation test still verifies the rejection and exact
+  diagnostic for an invalid committed target.
+- The stale-input and non-local preparation fixtures seed one non-local
+  Codex enrollment. Stale-input tests still enroll both local providers.
+  Consumer-selection and commit tests still seed the full platform matrix.
+- Preparation tests build the review once, on the side of the mutation
+  needed for each guard. They check the specific rejection diagnostic and
+  preserve the entire fixture.
+
+Both timed runs used a prior Debug build, identical repository-local
+fixture settings, TRX, and Git Trace2 on macOS ARM64.
+
+| Rejection benchmark | Before | After |
+| --- | ---: | ---: |
+| Real-Git cases executed | 22 | 19 |
+| Git process starts | 14,274 | 10,182 |
+| Observed wall time | 508.90 s | 365.28 s |
+
+Three revised timing cases initially asserted the writer's baseline
+diagnostic. The earlier migration dirty-path guard rejects those changes.
+The assertions were corrected to match that guard. The 16 cases that
+passed in both timing runs took 385.70 s before and 335.32 s after,
+summed from their TRX case durations.
+
+The follow-up passed all 24 cases in 469.25 s, including all five
+non-local preparation cases, the remaining target-writer suite, and
+three cross-platform commit checks. Together the two runs passed all 38
+distinct real-Git checks in scope. All 200 unit tests passed in 1.30 s
+wall time with zero Git starts. Ferry accepted the cleanup on
+20 November 2026. Full-suite verification remains pending for #19.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
