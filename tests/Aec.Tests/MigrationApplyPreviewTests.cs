@@ -97,14 +97,6 @@ public sealed class MigrationApplyPreviewTests
     }
 
     [Fact]
-    public void UnsupportedProviderIsRejectedWithoutChanges()
-    {
-        using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");
-        var context = layout.Context();
-        layout.Files.AssertNoChanges(() => Assert.Throws<ArgumentException>(() => MigrationApplyPreview.Read(context, "other")));
-    }
-
-    [Fact]
     public void ProviderAbsentFromConfirmedHarnessesIsRejected()
     {
         using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");

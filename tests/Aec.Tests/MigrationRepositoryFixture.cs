@@ -6,7 +6,8 @@ internal sealed class MigrationRepositoryFixture : IDisposable
 {
     private readonly string? previousCodex = Environment.GetEnvironmentVariable("CODEX_HOME");
     private readonly string? previousCopilot = Environment.GetEnvironmentVariable("COPILOT_HOME");
-    private readonly string writer;
+    private readonly string remote;
+    private string? writer;
 
     public MigrationRepositoryFixture(bool includeCopilotCanonical = false)
     {
@@ -16,14 +17,9 @@ internal sealed class MigrationRepositoryFixture : IDisposable
         Repository = Path.Combine(Root, "data");
         var codex = Path.Combine(Root, "codex-home");
         var copilot = Path.Combine(Root, "copilot-home");
-        Environment.SetEnvironmentVariable("CODEX_HOME", codex);
-        Environment.SetEnvironmentVariable("COPILOT_HOME", copilot);
         Directory.CreateDirectory(codex);
         Directory.CreateDirectory(copilot);
-        File.WriteAllText(Path.Combine(codex, "AGENTS.md"), "Personal instructions.\n");
-        File.WriteAllText(Path.Combine(codex, "config.toml"), "personality = \"friendly\"\n");
-        var initialized = TestApplication.Run("init", "--repo", Repository, "--codex-home", codex);
-        Assert.True(initialized.ExitCode == 0, initialized.Error);
+        SeedInitializedCodexRepository(codex);
         // Empty Git templates intentionally omit info; cases below create
         // local attributes/ignore rules there without assuming Git made it.
         Directory.CreateDirectory(Path.Combine(Repository, ".git", "info"));
@@ -40,12 +36,12 @@ internal sealed class MigrationRepositoryFixture : IDisposable
             Git("add", "--", AecApplication.CopilotSourceRelativePath);
             Git("commit", "--quiet", "-m", "Fixture legacy Copilot enrollment");
         }
-        var remote = Path.Combine(Root, "shared remote.git");
+        remote = Path.Combine(Root, "shared remote.git");
         Git("init", "--bare", "--quiet", "--template=", "--initial-branch=main", remote);
         Git("remote", "add", "shared", remote);
         Git("push", "--quiet", "--set-upstream", "shared", "main");
-        writer = Path.Combine(Root, "remote-writer");
-        Git("clone", "--no-local", "--quiet", "--origin", "shared", "--config", "core.autocrlf=false", remote, writer);
+        Environment.SetEnvironmentVariable("CODEX_HOME", codex);
+        Environment.SetEnvironmentVariable("COPILOT_HOME", copilot);
     }
 
     public string Root { get; }
@@ -56,11 +52,40 @@ internal sealed class MigrationRepositoryFixture : IDisposable
 
     public void AdvanceRemote(Action<string>? edit = null)
     {
+        if (writer is null)
+        {
+            var checkout = Path.Combine(Root, "remote-writer");
+            Git("clone", "--no-local", "--quiet", "--origin", "shared",
+                "--config", "core.autocrlf=false", remote, checkout);
+            writer = checkout;
+        }
+
         if (edit is not null) edit(writer);
         else File.AppendAllText(Path.Combine(writer, "notes.md"), "Remote revision.\n");
         _ = GitProcess.RunRequired(writer, "Writer staging failed", "add", "--all");
         _ = GitProcess.RunRequired(writer, "Writer commit failed", "commit", "--quiet", "-m", "Remote revision");
         _ = GitProcess.RunRequired(writer, "Writer push failed", "push", "--quiet", "shared");
+    }
+
+    private void SeedInitializedCodexRepository(string codexHome)
+    {
+        const string instructions = "Personal instructions.\n";
+        const string config = "personality = \"friendly\"\n";
+        Directory.CreateDirectory(Repository);
+        Git("init", "--quiet", "--template=", "--initial-branch=main");
+        Git("config", "--local", "core.autocrlf", "false");
+        Write(AecApplication.SourceRelativePath, instructions);
+        Write(AecApplication.ConfigSourceRelativePath, config);
+        Git("add", "--", AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath);
+        Git("commit", "--quiet", "-m", "Backup Codex environment");
+
+        // The second commit changes only the managed block. Migration verifies
+        // this history independently when it reads the repository.
+        var initialized = AecInstructionBlock.Merge(Encoding.UTF8.GetBytes(instructions), Repository);
+        File.WriteAllBytes(Path.Combine(Repository, AecApplication.SourceRelativePath), initialized);
+        Git("commit", "--quiet", "-m", "Initialize AEC instructions", "--", AecApplication.SourceRelativePath);
+        File.WriteAllBytes(Path.Combine(codexHome, "AGENTS.md"), initialized);
+        File.WriteAllText(Path.Combine(codexHome, "config.toml"), config);
     }
 
     public (MigrationPreflight Preflight, MigrationFetchPreparation Fetched, IReadOnlyList<MigrationHarness> Harnesses) Prepare()

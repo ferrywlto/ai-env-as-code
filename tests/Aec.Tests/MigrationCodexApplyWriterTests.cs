@@ -90,27 +90,6 @@ public sealed class MigrationCodexApplyWriterTests
             Assert.Throws<InvalidOperationException>(() => MigrationCodexApplyWriter.Apply(preview)));
     }
 
-    [Fact]
-    public void RejectsCopilotPreviewWithoutChanges()
-    {
-        using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");
-        var preview = MigrationApplyPreview.Read(layout.Context(), "copilot");
-
-        layout.Files.AssertNoChanges(() =>
-            Assert.Throws<ArgumentException>(() => MigrationCodexApplyWriter.Apply(preview)));
-    }
-
-    [Fact]
-    public void RejectsPreviewMissingCodexConfigWithoutChanges()
-    {
-        using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");
-        var preview = MigrationApplyPreview.Read(layout.Context(), "codex");
-        preview = preview with { Apply = preview.Apply with { CodexConfig = null } };
-
-        layout.Files.AssertNoChanges(() =>
-            Assert.Throws<ArgumentException>(() => MigrationCodexApplyWriter.Apply(preview)));
-    }
-
     [Theory]
     [InlineData("branch")]
     [InlineData("source")]

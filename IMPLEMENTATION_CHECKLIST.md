@@ -119,7 +119,40 @@ settings, and Git Trace2 on macOS ARM64.
 | Wall time | 459.67 s | 321.68 s |
 
 All seven retained source-only cases and 187 unit cases passed separately
-in 125.28 s. Ferry accepted the source-writer cleanup on 20 November 2026.
+in 125.28 s. Ferry accepted the source-writer cleanup on 20 November 2026
+(`1b8b88b`).
+
+### Migration apply argument checks and shared history fixture
+
+- Moved eight argument-rejection cases from Git fixtures to in-memory
+  reviews: four invalid coordinator review sets, three incompatible writer
+  reviews, and one unsupported preview provider. The empty review case
+  joins them in the unit group. The unit tests assert the specific rejection
+  reasons. Real-Git tests retain missing enrollment, stale inputs, both
+  provider writes, write ordering, and partial failure.
+- The shared migration fixture seeds the recognized two-commit Codex
+  history directly, preserving the root tree, initialized instruction
+  bytes, unchanged config, notes, optional Copilot commit, and initial
+  remote refs. Tests that actually advance the remote get one writer
+  checkout on demand. Dedicated initialization tests still exercise skill
+  installation and the complete `aec init` workflow.
+- Matched 19 cases across apply rejection, local capture preview, and real
+  remote advancement on macOS ARM64. The unsupported preview provider
+  moved separately and is covered by the full fast suite. Both
+  measurements used a prior Debug build, TRX, workspace fixtures, and
+  Git Trace2.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 19 | 19 |
+| Git process starts | 6,512 | 2,109 |
+| Writer checkout clones | 18 | 6 |
+| Wall time | 85.55 s | 39.74 s |
+
+All 196 unit tests passed with zero Git calls. All seven real-Git checks
+passed in 216.93 s, including the focused migration group, two-provider
+apply, and public retry. Ferry accepted the argument and fixture changes
+and their focused push gate on 20 November 2026.
 
 ## Portable integration test cleanup
 

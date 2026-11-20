@@ -73,33 +73,6 @@ public sealed class MigrationApplyCoordinatorTests
     }
 
     [Fact]
-    public void EmptyReviewSetIsRejected() =>
-        Assert.Throws<ArgumentException>(() => MigrationApplyCoordinator.Apply([]));
-
-    [Theory]
-    [InlineData("missing")]
-    [InlineData("duplicate")]
-    [InlineData("preparation")]
-    [InlineData("unsupported")]
-    public void InvalidReviewSetIsRejectedWithoutChanges(string kind)
-    {
-        using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");
-        var context = layout.Context();
-        var codex = MigrationApplyPreview.Read(context, "codex");
-        var copilot = MigrationApplyPreview.Read(context, "copilot");
-        MigrationApplyPreview[] reviews = kind switch
-        {
-            "missing" => [codex],
-            "duplicate" => [codex, codex],
-            "preparation" => [codex, copilot with { Preparation = context with { OriginalCommit = "different" } }],
-            _ => [codex, copilot with { Harness = copilot.Harness with { Provider = "other" } }]
-        };
-
-        layout.Files.AssertNoChanges(() =>
-            Assert.Throws<ArgumentException>(() => MigrationApplyCoordinator.Apply(reviews)));
-    }
-
-    [Fact]
     public void StaleSecondProviderStopsBeforeFirstWrite()
     {
         using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");

@@ -3,6 +3,68 @@ namespace Aec.Tests;
 [Trait("Category", "Unit")]
 public sealed class MigrationApplyReviewTests
 {
+    [Fact]
+    public void EmptyReviewSetIsRejected()
+    {
+        var error = Assert.Throws<ArgumentException>(() => MigrationApplyCoordinator.Apply([]));
+        Assert.Contains("requires reviewed enrolled providers", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("missing", "Review every enrolled provider")]
+    [InlineData("duplicate", "Duplicate migration apply provider")]
+    [InlineData("preparation", "different original commits")]
+    [InlineData("unsupported", "Unsupported migration apply provider")]
+    public void InvalidReviewSetIsRejected(string kind, string diagnostic)
+    {
+        var codex = CreateReview(AecIdentifiers.Codex);
+        var copilot = CreateReview(AecIdentifiers.Copilot);
+        var preparation = codex.Preparation with { Harnesses = [codex.Harness, copilot.Harness] };
+        codex = codex with { Preparation = preparation };
+        copilot = copilot with { Preparation = preparation };
+        MigrationApplyPreview[] reviews = kind switch
+        {
+            "missing" => [codex],
+            "duplicate" => [codex, codex],
+            "preparation" => [codex, copilot with { Preparation = preparation with { OriginalCommit = "different" } }],
+            "unsupported" => [codex, copilot with { Harness = copilot.Harness with { Provider = "other" } }],
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+
+        var error = Assert.Throws<ArgumentException>(() => MigrationApplyCoordinator.Apply(reviews));
+        Assert.Contains(diagnostic, error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CodexWriterRejectsAnInvalidReview(bool missingConfig)
+    {
+        var review = CreateReview(missingConfig ? AecIdentifiers.Codex : AecIdentifiers.Copilot);
+        if (missingConfig)
+            review = review with { Apply = review.Apply with { CodexConfig = null } };
+
+        var error = Assert.Throws<ArgumentException>(() => MigrationCodexApplyWriter.Apply(review));
+        Assert.Contains("reviewed Codex migration apply preview is required", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CopilotWriterRejectsACodexReview()
+    {
+        var review = CreateReview(AecIdentifiers.Codex);
+        var error = Assert.Throws<InvalidOperationException>(() => MigrationCopilotApplyWriter.Apply(review));
+        Assert.Equal("A reviewed Copilot migration apply preview is required.", error.Message);
+    }
+
+    [Fact]
+    public void UnsupportedPreviewProviderIsRejected()
+    {
+        var review = CreateReview(AecIdentifiers.Codex);
+        var error = Assert.Throws<ArgumentException>(() =>
+            MigrationApplyPreview.Read(review.Preparation, "other"));
+        Assert.Contains("Unsupported migration apply provider: other", error.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(AecIdentifiers.Codex)]
     [InlineData(AecIdentifiers.Copilot)]

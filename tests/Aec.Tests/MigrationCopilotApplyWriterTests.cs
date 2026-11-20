@@ -74,16 +74,6 @@ public sealed class MigrationCopilotApplyWriterTests
             Assert.Throws<InvalidOperationException>(() => MigrationCopilotApplyWriter.Apply(preview)));
     }
 
-    [Fact]
-    public void RejectsCodexPreviewWithoutChanges()
-    {
-        using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");
-        var preview = MigrationApplyPreview.Read(layout.Context(), "codex");
-
-        layout.Files.AssertNoChanges(() =>
-            Assert.Throws<InvalidOperationException>(() => MigrationCopilotApplyWriter.Apply(preview)));
-    }
-
     [Theory]
     [InlineData("desired")]
     [InlineData("source")]
