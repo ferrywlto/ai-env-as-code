@@ -214,6 +214,37 @@ distinct real-Git checks in scope. All 200 unit tests passed in 1.30 s
 wall time with zero Git starts. Ferry accepted the cleanup on
 20 November 2026. Full-suite verification remains pending for #19.
 
+### Portable capture preview rejection coverage
+
+- Removed three Git fixture runs. Legacy capture preview tests exercise
+  the shared original-commit ID and ancestry guard. The in-memory
+  attribution suite checks edits to multiple sections for both providers.
+- The seven retained rejection tests use one portable Codex provider.
+  They assert the rejection reason and preserve the whole fixture.
+  Separate tests still exercise two portable providers and conflicting
+  shared proposals.
+- Missing-target, old-digest, and dirty-draft tests create their review
+  once. The old-digest test keeps the original commit pinned and updates
+  only the committed shared source and Codex target.
+
+Both preview runs used a prior Debug build, repository-local fixtures,
+TRX, and Git Trace2 on macOS ARM64.
+
+| Preview measurement | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 18 | 15 |
+| Git process starts | 3,231 | 2,711 |
+| Observed wall time | 74.41 s | 36.37 s |
+
+The eight untouched cases also ran faster, falling from 41.35 s to
+23.72 s in summed TRX durations. The reduction of 520 Git starts
+measures the fixture savings directly.
+
+All four legacy preview history checks and all 200 unit tests passed.
+The unit run took 0.78 s with zero Git starts. Ferry accepted the preview
+cleanup on 20 November 2026. Full-suite verification remains pending for
+#19.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted

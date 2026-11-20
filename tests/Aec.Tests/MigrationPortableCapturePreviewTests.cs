@@ -108,62 +108,52 @@ public sealed class MigrationPortableCapturePreviewTests
     }
 
     [Theory]
-    [InlineData("head")]
-    [InlineData("binding")]
-    [InlineData("original-id")]
-    [InlineData("original-ancestry")]
-    [InlineData("missing-target")]
-    [InlineData("old-digest")]
-    [InlineData("dirty-draft")]
-    [InlineData("multiple-sections")]
-    [InlineData("control-block")]
-    [InlineData("missing-personality")]
-    public void UnclearOrStaleInputsStopWithoutChangingTheEntireFixture(string kind)
+    [InlineData("head", "Migration context changed")]
+    [InlineData("binding", "bound to a different AEC data repository")]
+    [InlineData("missing-target", "Committed target does not exist")]
+    [InlineData("old-digest", "last applied from an older target")]
+    [InlineData("dirty-draft", "Authored shared instructions has unstaged changes")]
+    [InlineData("control-block", "supported initialized AEC block")]
+    [InlineData("missing-personality", "runtime config does not declare root")]
+    public void UnclearOrStaleInputsStopWithoutChangingTheEntireFixture(string kind, string expectedDiagnostic)
     {
-        using var layout = new Layout("codex", "copilot");
-        var context = layout.Context();
+        using var layout = new Layout("codex");
+        // Stale review cases pin the context before the change. The remaining
+        // cases review the updated checkout and let preview validate its inputs.
+        var context = kind is "head" or "binding" or "control-block" ? layout.Context() : null;
         switch (kind)
         {
             case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
             case "binding": File.WriteAllBytes(layout.Runtime("codex"), AecInstructionBlock.MergeForPortableTarget(
                 Encoding.UTF8.GetBytes("Other runtime.\n"), Path.Combine(layout.Files.Root, "other-data"), layout.Platform, false)); break;
-            case "original-id": context = context with { OriginalCommit = "HEAD~1" }; break;
-            case "original-ancestry":
-                var tree = layout.Files.Git("rev-parse", "HEAD^{tree}").Trim();
-                context = context with { OriginalCommit = layout.Files.Git("commit-tree", tree, "-m", "Unrelated root").Trim() };
-                break;
             case "missing-target":
                 layout.Files.Git("rm", "--", layout.Target("codex"));
                 layout.Files.Git("commit", "--quiet", "-m", "Missing target checkpoint");
-                context = layout.Context();
                 break;
             case "old-digest":
+                var original = layout.Files.Head();
                 layout.Files.Write("environment/shared/instructions.md", "New committed shared instructions.\n");
                 layout.WriteTarget("codex", "New committed shared instructions.\n");
-                layout.WriteTarget("copilot", "New committed shared instructions.\n");
-                layout.Commit("environment/shared/instructions.md", layout.Target("codex"), layout.Target("copilot"));
-                context = layout.Context(context.OriginalCommit);
+                layout.Commit("environment/shared/instructions.md", layout.Target("codex"));
+                context = layout.Context(original);
                 break;
-            case "dirty-draft":
-                layout.Files.Write("environment/shared/instructions.md", "Preserve this draft.\n");
-                context = layout.Context();
-                Assert.Equal(MigrationSectionChoice.Preserve, context.SectionChoice);
-                break;
-            case "multiple-sections":
-                layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
-                layout.EditRuntime("codex", "Local paths.", "Local revision.");
-                break;
+            case "dirty-draft": layout.Files.Write("environment/shared/instructions.md", "Preserve this draft.\n"); break;
             case "control-block": layout.EditRuntime("codex", "## AI Environment as Code", "## Edited control block"); break;
-            default: File.WriteAllText(layout.ConfigRuntime, "model = 'unmanaged'\n"); break;
+            case "missing-personality": File.WriteAllText(layout.ConfigRuntime, "model = 'unmanaged'\n"); break;
+            default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
+
+        context ??= layout.Context();
+        if (kind == "dirty-draft") Assert.Equal(MigrationSectionChoice.Preserve, context.SectionChoice);
 
         layout.Files.AssertNoChanges(() =>
         {
             var error = Record.Exception(() => MigrationPortableCapturePreview.Read(context));
-            if (kind is "original-id" or "multiple-sections" or "control-block") Assert.IsType<InvalidDataException>(error);
+            if (kind == "control-block") Assert.IsType<InvalidDataException>(error);
             else if (kind == "missing-personality") Assert.IsType<MissingRuntimePersonalityException>(error);
             else if (kind == "missing-target") Assert.IsType<FileNotFoundException>(error);
             else Assert.IsType<InvalidOperationException>(error);
+            Assert.Contains(expectedDiagnostic, error!.Message, StringComparison.Ordinal);
         });
     }
 
