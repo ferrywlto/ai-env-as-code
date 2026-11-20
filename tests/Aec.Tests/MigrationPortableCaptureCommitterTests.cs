@@ -139,7 +139,6 @@ public sealed class MigrationPortableCaptureCommitterTests
     [Theory]
     [InlineData("head")]
     [InlineData("branch")]
-    [InlineData("runtime")]
     [InlineData("config")]
     [InlineData("target")]
     [InlineData("marker")]
@@ -148,19 +147,17 @@ public sealed class MigrationPortableCaptureCommitterTests
     [InlineData("codex-runtime")]
     [InlineData("authored-draft")]
     [InlineData("provider-presence")]
-    [InlineData("target-buffer")]
     public void StaleInputsStopBeforeFilesStagingOrCommit(string kind)
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = kind is "other-runtime" or "provider-presence"
+            ? new Layout("codex", "copilot")
+            : new Layout("codex");
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
-        if (kind is not ("other-runtime" or "codex-runtime" or "authored-draft"))
-            layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
         var reviewed = Preview(layout);
         switch (kind)
         {
             case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
             case "branch": layout.Files.Git("switch", "-c", "other-branch"); break;
-            case "runtime": layout.EditRuntime("copilot", "Copilot revision.", "Later revision."); break;
             case "config": File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\n"); break;
             case "target": layout.Files.Write(layout.Target("codex"), "Keep target draft.\n"); break;
             case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
@@ -169,16 +166,14 @@ public sealed class MigrationPortableCaptureCommitterTests
             case "codex-runtime": layout.EditRuntime("codex", "Codex revision.", "Later revision."); break;
             case "authored-draft": layout.Files.Write("environment/shared/instructions.md", "Keep this authored draft.\n"); break;
             case "provider-presence": reviewed = reviewed with { Copilot = null }; break;
-            case "target-buffer":
-                var codex = reviewed.Codex!;
-                reviewed = reviewed with
-                {
-                    Codex = codex with { Snapshot = codex.Snapshot with { Target = "Unreviewed target.\n"u8.ToArray() } }
-                };
-                break;
             default: throw new ArgumentOutOfRangeException(nameof(kind));
         }
-        layout.Files.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() => MigrationPortableCaptureCommitter.WriteAndCommit(reviewed)));
+        layout.Files.AssertNoChanges(() =>
+        {
+            var error = Assert.Throws<InvalidOperationException>(() => MigrationPortableCaptureCommitter.WriteAndCommit(reviewed));
+            if (kind is "other-runtime" or "provider-presence")
+                Assert.Contains("capture inputs changed after review", error.Message, StringComparison.Ordinal);
+        });
     }
 
     [Fact]

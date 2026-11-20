@@ -245,6 +245,43 @@ The unit run took 0.78 s with zero Git starts. Ferry accepted the preview
 cleanup on 20 November 2026. Full-suite verification remains pending for
 #19.
 
+### Portable capture committer diagnostic
+
+- All 12 stale-input cases passed in 169.00 s using the existing Debug
+  build, workspace-local fixtures, the two-minute per-test hang guard,
+  and a ten-minute run cap. Git Trace2 recorded 5,487 process starts.
+- Git launched 1,446 `rev-parse`, 859 `ls-tree`, and 840
+  `cat-file` commands. Together they accounted for 57% of starts.
+  An initial review and a fresh review repeat the Git reads before the
+  committer compares the two typed reviews.
+- The duplicate peer-runtime case and two caller-review mutation cases
+  each started 534 Git processes.
+
+### Portable capture stale-input coverage
+
+- Extracted the existing typed review comparison from the fresh-preview
+  workflow. Nine in-memory cases exercise matching reviews and changes to
+  branch, provider presence, target bytes, runtime bytes, and config.
+- Kept real checkout drift checks and a representative forged review
+  that the committer must reject before writing. Removed the duplicate
+  peer-runtime row and moved forged target bytes to the unit suite.
+  Eight retained Git cases now seed one portable provider.
+
+Both runs used the same stale-input test filter, Debug build settings,
+workspace fixtures, Git Trace2, and hang limits.
+
+| Stale-input measurement | Before | After |
+| --- | ---: | ---: |
+| Passing real-Git cases | 12 | 10 |
+| Git process starts | 5,487 | 3,792 |
+| Wall time | 169.00 s | 121.95 s |
+
+All 209 unit tests passed in 1.54 s with zero Git starts. Both focused
+committer cases passed in 47.15 s, covering recomputed proposals and
+staging preservation on signing failure. Ferry accepted the stale-input
+cleanup on 20 November 2026. Full-suite verification remains pending for
+#19.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
