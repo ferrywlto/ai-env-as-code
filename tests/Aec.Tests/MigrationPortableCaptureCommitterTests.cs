@@ -137,41 +137,35 @@ public sealed class MigrationPortableCaptureCommitterTests
     }
 
     [Theory]
-    [InlineData("head")]
     [InlineData("branch")]
     [InlineData("config")]
     [InlineData("target")]
-    [InlineData("marker")]
     [InlineData("enrollment")]
     [InlineData("other-runtime")]
     [InlineData("codex-runtime")]
     [InlineData("authored-draft")]
-    [InlineData("provider-presence")]
     public void StaleInputsStopBeforeFilesStagingOrCommit(string kind)
     {
-        using var layout = kind is "other-runtime" or "provider-presence"
+        using var layout = kind == "other-runtime"
             ? new Layout("codex", "copilot")
             : new Layout("codex");
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
         var reviewed = Preview(layout);
         switch (kind)
         {
-            case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
             case "branch": layout.Files.Git("switch", "-c", "other-branch"); break;
             case "config": File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\n"); break;
             case "target": layout.Files.Write(layout.Target("codex"), "Keep target draft.\n"); break;
-            case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
             case "enrollment": File.Delete(layout.Runtime("copilot")); break;
             case "other-runtime": layout.EditRuntime("copilot", "Provider mechanics.", "Later revision."); break;
             case "codex-runtime": layout.EditRuntime("codex", "Codex revision.", "Later revision."); break;
             case "authored-draft": layout.Files.Write("environment/shared/instructions.md", "Keep this authored draft.\n"); break;
-            case "provider-presence": reviewed = reviewed with { Copilot = null }; break;
             default: throw new ArgumentOutOfRangeException(nameof(kind));
         }
         layout.Files.AssertNoChanges(() =>
         {
             var error = Assert.Throws<InvalidOperationException>(() => MigrationPortableCaptureCommitter.WriteAndCommit(reviewed));
-            if (kind is "other-runtime" or "provider-presence")
+            if (kind == "other-runtime")
                 Assert.Contains("capture inputs changed after review", error.Message, StringComparison.Ordinal);
         });
     }

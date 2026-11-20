@@ -282,6 +282,30 @@ staging preservation on signing failure. Ferry accepted the stale-input
 cleanup on 20 November 2026. Full-suite verification remains pending for
 #19.
 
+### Consolidate stale-input boundary coverage
+
+Removed three committer fixture runs with coverage at the same guards.
+
+| Removed committer case | Retained coverage |
+| --- | --- |
+| Changed HEAD | Portable capture preview checks the same preflight comparison and verifies the fixture is unchanged. |
+| Uncommitted marker | Migration preflight checks unstaged and staged markers and verifies no changes. The public recovery case covers refusal and a successful retry. |
+| Forged provider presence | The in-memory review comparison checks the forged provider. The committer's peer-runtime case exercises that comparison and verifies the fixture is unchanged. |
+
+The same Debug filter, workspace fixtures, Git Trace2, and hang limits
+were used for all three runs.
+
+| Committer stale-input measurement | Original | Before this cleanup | After |
+| --- | ---: | ---: | ---: |
+| Passing real-Git cases | 12 | 10 | 7 |
+| Git process starts | 5,487 | 3,792 | 2,686 |
+| Wall time | 169.00 s | 121.95 s | 84.35 s |
+
+All nine retained preview and marker guard cases passed in 49.24 s. All
+209 unit tests passed in 1.86 s with zero Git starts. Ferry accepted
+the boundary coverage cleanup on 20 November 2026. Full-suite verification
+remains pending for #19.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
