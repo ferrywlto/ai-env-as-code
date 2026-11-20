@@ -678,7 +678,7 @@ public sealed class StatusTests
             string? canonicalConfig = DefaultCanonicalConfig,
             string? runtimeConfig = DefaultRuntimeConfig)
         {
-            Root = Path.Combine(RealTemporaryDirectory(), "aec-tests", Guid.NewGuid().ToString("N"));
+            Root = Path.Combine(TestTemporaryDirectory.Root, "aec-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
             CodexHome = Path.Combine(Root, "codex-home");
             Source = Path.Combine(Repository, "environment", "shared", "instructions.md");
@@ -763,12 +763,6 @@ public sealed class StatusTests
             {
                 Directory.Delete(Root, true);
             }
-        }
-
-        private static string RealTemporaryDirectory()
-        {
-            return Environment.GetEnvironmentVariable("AEC_TEST_TEMP_ROOT")
-                ?? (OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath());
         }
     }
 }

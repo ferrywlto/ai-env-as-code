@@ -1,5 +1,62 @@
 # Implementation Checklist
 
+## Whole-suite regression baseline
+
+[Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was expanded
+and reactivated on 19 November 2026. The earlier portable cleanup remains
+accepted. The expanded work targets the cost and reliability of the complete
+test suite.
+
+- Shared the existing `AEC_TEST_TEMP_ROOT` override across 22 fixture files.
+  The default roots are preserved. Baseline runs use disposable provider homes
+  and Git configuration inside the approved Codex workspace.
+- The isolated migration recovery case was stopped by VSTest after 301.06 s.
+  Git Trace2 recorded 12,715 process starts, including 6,271 filter-config
+  probes. Git was still completing commands 299.96 s after the first start.
+  The largest gap between completed commands was 60 ms. This run shows the
+  watchdog interrupted continuing Git work.
+- The remaining Debug run excluded the isolated recovery case. It recorded
+  980 passes and zero reported failures over about two hours of console
+  output. The execution session was lost and the process was gone when
+  checked. The run produced no final summary or TRX, so this is a partial
+  baseline.
+- Of the completed cases, `RegressionFollowupTests` accounted for about
+  26.6 minutes. The portable migration capture committer, preview, and
+  superseded writer suites accounted for another 33.3 minutes. These totals
+  come from the console's rounded per-case durations.
+
+### Migration recovery and capture cleanup
+
+- The recovery test now starts from committed, applied targets and an
+  uncommitted marker. It still verifies the CLI refuses the marker before
+  prompting and preserves the checkout. After the marker is cleared, one
+  public retry must commit only the marker, keep the previous HEAD as its
+  parent, leave runtime bytes intact, and finish with a clean checkout.
+  `MigrationCompletionWriterTests.IgnoredMarkerStopsWithCreatedFileRetained`
+  exercises the real ignored-marker write failure used to reach that state.
+- With the same Trace2 settings and five-minute watchdog, the revised
+  recovery test passed in 183.88 s. Git starts fell from 12,715 at the
+  previous abort to 6,597 at successful completion. Filter probes fell from
+  6,271 to 3,211. The old figures are lower bounds for the original test.
+- Retired 20 real-Git fixture cases across the superseded capture writer and
+  capture preview suites. Those cases accounted for about 527 s of rounded
+  test time on the interrupted baseline. Eight distinct old-writer cases
+  moved to the live committer without increasing the total retained count.
+
+| Retired or transferred capture cases | Retained coverage |
+| --- | --- |
+| Superseded writer no-op and mixed-format tests | Live committer verifies exact unchanged fixture bytes and preservation of mixed-format runtime and drafts |
+| Superseded writer rejected combined provider edits | Live committer verifies combined same-source proposals and an exact single commit for distinct overlays and managed config |
+| Superseded writer single-provider paths, config, and stale review cases | Live committer covers both providers' local and shared source paths, one provider plus config, peer drift, missing reviewed provider, and altered reviewed target bytes |
+| Superseded writer staged drafts, signing, and altered proposals | Live committer checks exact staging preservation and its diagnostic, signing failure and unchanged HEAD, and fresh proposal derivation |
+| Capture preview path and managed config variants | Attribution unit suite verifies exact proposals. Live committer verifies exact committed paths and config. The preview retains conflict and whole-fixture no-write checks. |
+
+The focused run passed all 220 cases in 620.54 s. It included 187 unit tests,
+the entire live capture committer suite, and the retained conflict and
+ignored-marker checks. The recovery case passed separately. Ferry accepted
+the migration cleanup on 20 November 2026. Next, reduce the repeated full
+migrations in the draft-recovery tests.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
@@ -62,7 +119,7 @@ override in both measurements.
 | Wall time | 24.63 s | 22.18 s |
 
 The fast suite passed all 187 tests with zero Git calls. All 12
-`PortableReview` real-Git checks passed. Next, publish the reviewed branch.
+`PortableReview` real-Git checks passed. Continue with the whole-suite baseline.
 
 ## Focused real-Git regression checks
 

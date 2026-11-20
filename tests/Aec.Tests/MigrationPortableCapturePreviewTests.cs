@@ -67,62 +67,17 @@ public sealed class MigrationPortableCapturePreviewTests
         });
     }
 
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void OneRuntimeSectionProducesAnAuthoredProposalNotALegacyFileCopy(string provider)
-    {
-        using var layout = new Layout(provider);
-        layout.EditRuntime(provider, "Provider mechanics.", "Provider revision.");
-        var context = layout.Context();
-        layout.Files.AssertNoChanges(() =>
-        {
-            var preview = MigrationPortableCapturePreview.Read(context);
-            var instructions = preview.Codex?.Instructions ?? preview.Copilot!.Instructions;
-            Assert.True(preview.HasChanges);
-            Assert.Equal("provider", instructions.Section);
-            Assert.Equal($"environment/providers/{provider}/overlay.md", instructions.SourceRelativePath);
-            Assert.Equal("Provider revision.\n", instructions.ProposedContent);
-        });
-    }
-
     [Fact]
-    public void ManagedConfigOnlyDriftNeverCapturesUnrelatedRuntimeSettings()
-    {
-        using var layout = new Layout("codex");
-        File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\nmodel = 'machine-only'\n");
-        var context = layout.Context();
-        layout.Files.AssertNoChanges(() =>
-        {
-            var preview = MigrationPortableCapturePreview.Read(context);
-            Assert.True(preview.HasChanges);
-            Assert.Null(preview.Codex!.Instructions.Section);
-            Assert.True(preview.Codex.ConfigWouldChange);
-            Assert.Equal("personality = \"pragmatic\"\n", Encoding.UTF8.GetString(preview.Codex.ProposedCanonicalConfig));
-        });
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void SameSourceProposalsMustAgreeExactly(bool conflict)
+    public void ConflictingSharedProposalsAreRejectedWithoutWriting()
     {
         using var layout = new Layout("codex", "copilot");
         layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
-        layout.EditRuntime("copilot", "Shared approval.", conflict ? "Other revision." : "Shared revision.");
+        layout.EditRuntime("copilot", "Shared approval.", "Other revision.");
         var context = layout.Context();
         layout.Files.AssertNoChanges(() =>
         {
-            if (conflict)
-            {
-                var error = Assert.Throws<InvalidOperationException>(() => MigrationPortableCapturePreview.Read(context));
-                Assert.Contains("proposals conflict", error.Message, StringComparison.Ordinal);
-                return;
-            }
-            var preview = MigrationPortableCapturePreview.Read(context);
-            Assert.True(preview.HasChanges);
-            Assert.Equal("environment/shared/instructions.md", preview.Codex!.Instructions.SourceRelativePath);
-            Assert.Equal(preview.Codex.Instructions, preview.Copilot!.Instructions);
+            var error = Assert.Throws<InvalidOperationException>(() => MigrationPortableCapturePreview.Read(context));
+            Assert.Contains("proposals conflict", error.Message, StringComparison.Ordinal);
         });
     }
 

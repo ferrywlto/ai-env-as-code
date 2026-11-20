@@ -692,7 +692,7 @@ public sealed class LegacyBackupCommandTests
             string runtimeContent,
             string? runtimeConfig = "personality = \"none\"\n")
         {
-            Root = Path.Combine(RealTemporaryDirectory(), "aec-backup-tests", Guid.NewGuid().ToString("N"));
+            Root = Path.Combine(TestTemporaryDirectory.Root, "aec-backup-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data repository");
             CodexHome = Path.Combine(Root, "codex home");
             Source = Path.Combine(Repository, SourceRelativePath);
@@ -757,11 +757,6 @@ public sealed class LegacyBackupCommandTests
             {
                 throw new InvalidOperationException(result.Error);
             }
-        }
-
-        private static string RealTemporaryDirectory()
-        {
-            return OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath();
         }
     }
 }

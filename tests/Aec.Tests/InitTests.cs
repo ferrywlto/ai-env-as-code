@@ -1864,7 +1864,7 @@ public sealed class InitTests
     {
         public InitLayout()
         {
-            Root = Path.Combine(RealTemporaryDirectory(), "aec-init-tests", Guid.NewGuid().ToString("N"));
+            Root = Path.Combine(TestTemporaryDirectory.Root, "aec-init-tests", Guid.NewGuid().ToString("N"));
             Target = Path.Combine(Root, "data repository");
             CodexHome = Path.Combine(Root, "codex home");
             Runtime = Path.Combine(CodexHome, "AGENTS.md");
@@ -1894,11 +1894,6 @@ public sealed class InitTests
             {
                 Directory.Delete(Root, true);
             }
-        }
-
-        private static string RealTemporaryDirectory()
-        {
-            return OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath();
         }
     }
 }
@@ -2353,9 +2348,7 @@ public sealed class InitProcessStateTests
     {
         public ProcessStateDirectory()
         {
-            var temporaryDirectory = OperatingSystem.IsMacOS()
-                ? "/private/tmp"
-                : System.IO.Path.GetTempPath();
+            var temporaryDirectory = TestTemporaryDirectory.Root;
             Root = System.IO.Path.Combine(
                 temporaryDirectory,
                 "aec-init-process-tests",

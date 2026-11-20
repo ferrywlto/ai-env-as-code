@@ -543,7 +543,7 @@ public sealed class ChatGptInitTests
         public ChatGptLayout()
         {
             Root = Path.Combine(
-                OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+                TestTemporaryDirectory.Root,
                 "aec-chatgpt-init-tests",
                 Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "repository");

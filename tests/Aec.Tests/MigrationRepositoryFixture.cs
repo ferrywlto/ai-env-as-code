@@ -10,8 +10,7 @@ internal sealed class MigrationRepositoryFixture : IDisposable
 
     public MigrationRepositoryFixture(bool includeCopilotCanonical = false)
     {
-        var temporaryRoot = Environment.GetEnvironmentVariable("AEC_TEST_TEMP_ROOT")
-            ?? (OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath());
+        var temporaryRoot = TestTemporaryDirectory.Root;
         Root = Path.Combine(temporaryRoot,
             "aec-migration-forward-tests", Guid.NewGuid().ToString("N"));
         Repository = Path.Combine(Root, "data");

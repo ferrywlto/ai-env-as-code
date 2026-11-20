@@ -99,21 +99,17 @@ public sealed class MigrationCommandTests
 
     internal static void FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery()
     {
-        using var layout = new Layout();
-        layout.Files.Write("environment/shared/instructions.md", "Reviewed shared instructions.\n");
+        // The fixture already has the committed targets and applied runtimes
+        // that exist immediately before a migration publishes its marker.
+        using var layout = new Layout("codex", "copilot");
+        var dataHead = layout.Files.Head();
+        var runtime = layout.Files.RuntimeBytes();
         var exclude = Path.Combine(layout.Repository, ".git", "info", "exclude");
         File.WriteAllText(exclude, "/.aec-version\n");
         var marker = Path.Combine(layout.Repository, ".aec-version");
+        File.WriteAllText(marker, "2.0\n");
         string[] args = ["migrate", "2.0", "--repo", layout.Repository];
-        using var firstInput = new StringReader("Preserve\nDONE\n");
-        using var firstError = new StringWriter();
-
-        Assert.Equal(1, AecApplication.Run(args, firstInput, TextWriter.Null, firstError));
-        Assert.Contains("during completion", firstError.ToString(), StringComparison.Ordinal);
-        Assert.Equal("2.0\n", File.ReadAllText(marker));
         Assert.Empty(layout.Files.Git("ls-tree", "HEAD", "--", ".aec-version"));
-        var dataHead = layout.Files.Head();
-        var runtime = layout.Files.RuntimeBytes();
         using var blockedInput = new StringReader("DONE\n");
         using var blockedError = new StringWriter();
 
@@ -131,6 +127,8 @@ public sealed class MigrationCommandTests
         Assert.True(retryExit == 0, retryError.ToString());
         Assert.Equal(dataHead, layout.Files.Git("rev-parse", "HEAD^").Trim());
         Assert.Equal("2.0\n", File.ReadAllText(marker));
+        Assert.Equal(".aec-version", layout.Files.Git(
+            "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").Trim());
         Assert.Empty(layout.Files.Git("status", "--porcelain"));
         layout.Files.AssertRuntime(runtime);
     }

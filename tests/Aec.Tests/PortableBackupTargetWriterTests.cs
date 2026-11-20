@@ -207,7 +207,7 @@ public sealed class PortableBackupTargetWriterTests
 
         public Layout(bool enrollRemoteCopilot = true, string localProvider = "codex")
         {
-            root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-backup-target-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(root, "data");
             CodexHome = Path.Combine(root, "codex-home");

@@ -284,7 +284,7 @@ public sealed class MigrationDirtySectionsTests
     private sealed class DirtyLayout : IDisposable
     {
         private readonly string root = Path.Combine(
-            OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            TestTemporaryDirectory.Root,
             "aec-migration-dirty-tests", Guid.NewGuid().ToString("N"));
         public string Repository { get; }
         private MigrationPreflight preflight;

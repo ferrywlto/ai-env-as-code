@@ -343,7 +343,7 @@ public sealed class ApplyTests
     public void DifferentRecordedRepositoryPathStopsAndDirectsTheUserToInit()
     {
         var recordedRepository = Path.Combine(
-            OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            TestTemporaryDirectory.Root,
             "recorded aec repository");
         var desired = AecInstructionBlock.Merge("desired\n"u8.ToArray(), recordedRepository);
         using var layout = new ApplyLayout(desired, "preserve runtime\n"u8.ToArray());
@@ -917,7 +917,7 @@ public sealed class ApplyTests
             byte[]? canonicalConfig = null,
             byte[]? runtimeConfig = null)
         {
-            Root = Path.Combine(RealTemporaryDirectory(), "aec-apply-tests", Guid.NewGuid().ToString("N"));
+            Root = Path.Combine(TestTemporaryDirectory.Root, "aec-apply-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data repository");
             CodexHome = Path.Combine(Root, "codex home");
             Source = Path.Combine(Repository, SourceRelativePath);
@@ -998,11 +998,6 @@ public sealed class ApplyTests
             {
                 throw new InvalidOperationException(result.Error);
             }
-        }
-
-        private static string RealTemporaryDirectory()
-        {
-            return OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath();
         }
     }
 }

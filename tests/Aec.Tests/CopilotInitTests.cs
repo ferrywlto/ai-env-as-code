@@ -500,7 +500,7 @@ public sealed class CopilotInitTests
         public CopilotLayout()
         {
             Root = Path.Combine(
-                OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+                TestTemporaryDirectory.Root,
                 "aec-copilot-init-tests",
                 Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "repository");

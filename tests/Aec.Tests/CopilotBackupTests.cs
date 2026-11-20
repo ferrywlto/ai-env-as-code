@@ -222,7 +222,7 @@ public sealed class LegacyCopilotBackupCommandTests
             bool commitCanonical = true)
         {
             Root = Path.Combine(
-                OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+                TestTemporaryDirectory.Root,
                 "aec-copilot-backup-tests",
                 Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "repository");

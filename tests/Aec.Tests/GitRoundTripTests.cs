@@ -132,7 +132,7 @@ public sealed class GitRoundTripTests
         public RoundTripLayout(string provider)
         {
             Provider = provider;
-            Root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            Root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-roundtrip-tests", Guid.NewGuid().ToString("N"));
             CheckoutA = Path.Combine(Root, "machine-a", "data");
             CheckoutB = Path.Combine(Root, "machine-b", "different data path");

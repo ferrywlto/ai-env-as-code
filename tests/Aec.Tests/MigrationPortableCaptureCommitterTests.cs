@@ -19,6 +19,38 @@ public sealed class MigrationPortableCaptureCommitterTests
     }
 
     [Theory]
+    [InlineData("codex", "provider", false)]
+    [InlineData("copilot", "provider", false)]
+    [InlineData("codex", "shared", false)]
+    [InlineData("copilot", "shared", false)]
+    [InlineData("codex", "provider", true)]
+    public void OneChangedProviderCommitsItsSourceAndConsumers(
+        string provider, string section, bool includeConfig)
+    {
+        using var layout = new Layout("codex", "copilot");
+        layout.EditRuntime(provider, section == "shared" ? "Shared approval." : "Provider mechanics.", "Approved revision.");
+        if (includeConfig)
+            File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\nmodel = 'machine-only'\n");
+        var source = section == "shared" ? "environment/shared/instructions.md" : $"environment/providers/{provider}/overlay.md";
+        var targets = section == "shared"
+            ? new[] { layout.Target("codex"), layout.Target("copilot") }
+            : [layout.Target(provider)];
+        var expectedPaths = targets.Append(source);
+        if (includeConfig)
+            expectedPaths = expectedPaths.Append(AecApplication.ConfigSourceRelativePath);
+
+        AssertCapture(layout, expectedPaths.ToArray());
+
+        Assert.Equal("Approved revision.\n", File.ReadAllText(Path.Combine(layout.Repository, source)));
+        foreach (var target in targets)
+            Assert.Contains("Approved revision.", File.ReadAllText(Path.Combine(layout.Repository, target)),
+                StringComparison.Ordinal);
+        if (includeConfig)
+            Assert.Equal("personality = \"pragmatic\"\n", File.ReadAllText(
+                Path.Combine(layout.Repository, AecApplication.ConfigSourceRelativePath)));
+    }
+
+    [Theory]
     [InlineData("shared")]
     [InlineData("platform")]
     public void MatchingProposalsProduceOneCommitWithExactlyTheirConsumers(string section)
@@ -68,6 +100,8 @@ public sealed class MigrationPortableCaptureCommitterTests
         using var layout = new Layout("codex", "copilot");
         File.WriteAllText(layout.ConfigRuntime, "personality = 'none'\nmodel = 'private'\n");
         AssertCapture(layout, ConfigOnlyPaths);
+        Assert.Equal("personality = \"none\"\n",
+            File.ReadAllText(Path.Combine(layout.Repository, AecApplication.ConfigSourceRelativePath)));
     }
 
     [Theory]
@@ -94,7 +128,12 @@ public sealed class MigrationPortableCaptureCommitterTests
         layout.Files.Write(draft, "Staged draft.\n");
         layout.Files.Git("add", "--", draft);
         layout.Files.Write(draft, "Staged plus unstaged draft.\n");
-        layout.Files.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() => MigrationPortableCaptureCommitter.WriteAndCommit(reviewed)));
+        layout.Files.AssertNoChanges(() =>
+        {
+            var error = Assert.Throws<InvalidOperationException>(() =>
+                MigrationPortableCaptureCommitter.WriteAndCommit(reviewed));
+            Assert.Contains("empty staged diff", error.Message, StringComparison.Ordinal);
+        });
     }
 
     [Theory]
@@ -105,11 +144,15 @@ public sealed class MigrationPortableCaptureCommitterTests
     [InlineData("target")]
     [InlineData("marker")]
     [InlineData("enrollment")]
+    [InlineData("other-runtime")]
+    [InlineData("provider-presence")]
+    [InlineData("target-buffer")]
     public void StaleInputsStopBeforeFilesStagingOrCommit(string kind)
     {
         using var layout = new Layout("codex", "copilot");
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
-        layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
+        if (kind != "other-runtime")
+            layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
         var reviewed = Preview(layout);
         switch (kind)
         {
@@ -119,7 +162,17 @@ public sealed class MigrationPortableCaptureCommitterTests
             case "config": File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\n"); break;
             case "target": layout.Files.Write(layout.Target("codex"), "Keep target draft.\n"); break;
             case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
-            default: File.Delete(layout.Runtime("copilot")); break;
+            case "enrollment": File.Delete(layout.Runtime("copilot")); break;
+            case "other-runtime": layout.EditRuntime("copilot", "Provider mechanics.", "Later revision."); break;
+            case "provider-presence": reviewed = reviewed with { Copilot = null }; break;
+            case "target-buffer":
+                var codex = reviewed.Codex!;
+                reviewed = reviewed with
+                {
+                    Codex = codex with { Snapshot = codex.Snapshot with { Target = "Unreviewed target.\n"u8.ToArray() } }
+                };
+                break;
+            default: throw new ArgumentOutOfRangeException(nameof(kind));
         }
         layout.Files.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() => MigrationPortableCaptureCommitter.WriteAndCommit(reviewed)));
     }
@@ -139,6 +192,8 @@ public sealed class MigrationPortableCaptureCommitterTests
         };
         AssertCapture(layout, ["environment/providers/codex/overlay.md", "environment/providers/copilot/overlay.md",
             layout.Target("codex"), layout.Target("copilot")], reviewed);
+        Assert.Equal("Codex revision.\n",
+            File.ReadAllText(Path.Combine(layout.Repository, "environment/providers/codex/overlay.md")));
     }
 
     [Fact]

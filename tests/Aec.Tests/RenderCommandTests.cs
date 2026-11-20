@@ -82,7 +82,7 @@ public sealed class RenderCommandTests
 
         public RenderLayout(bool enrollCopilot)
         {
-            root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-render-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(root, "data");
             var platform = OperatingSystem.IsMacOS() ? "macos-arm64" :

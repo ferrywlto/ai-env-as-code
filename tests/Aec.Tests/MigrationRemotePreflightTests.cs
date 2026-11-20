@@ -226,7 +226,7 @@ public sealed class MigrationRemotePreflightTests
     {
         public RemoteLayout()
         {
-            Root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            Root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-migration-remote-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
             Remote = Path.Combine(Root, "shared remote.git");

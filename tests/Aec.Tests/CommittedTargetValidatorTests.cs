@@ -98,7 +98,7 @@ public sealed class CommittedTargetValidatorTests
 
         public TargetLayout(string provider, bool commitTarget = true)
         {
-            root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-committed-target-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(root, "data");
             Platform = RenderCommand.CurrentPlatform();
