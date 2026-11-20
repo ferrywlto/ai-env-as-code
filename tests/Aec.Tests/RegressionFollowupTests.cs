@@ -16,12 +16,6 @@ public sealed class RegressionFollowupTests
     public void DriftAfterFirstProviderStopsSecondAndReportsPartialState(string mutation) =>
         MigrationApplyCoordinatorTests.DriftAfterFirstProviderStopsSecondAndReportsPartialState(mutation);
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void FreshInvocationPreservesDraftsAndCompletesAfterInterruption(bool invalidDraft) =>
-        MigrationCommandTests.FreshInvocationPreservesDraftsAndCompletesAfterInterruption(invalidDraft);
-
     [Fact]
     public void FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery() =>
         MigrationCommandTests.FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery();

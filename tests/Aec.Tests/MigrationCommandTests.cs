@@ -5,6 +5,8 @@ namespace Aec.Tests;
 [Collection(ProcessStateTestGroup.Name)]
 public sealed class MigrationCommandTests
 {
+    private const string SharedDraftPath = "environment/shared/instructions.md";
+
     [Fact]
     public void PublicMigrationCompletesWithUnusedGlobalLfsFilter()
     {
@@ -57,32 +59,13 @@ public sealed class MigrationCommandTests
             Assert.Equal(original, layout.Files.Head());
     }
 
-    internal static void FreshInvocationPreservesDraftsAndCompletesAfterInterruption(bool invalidDraft)
+    [Fact]
+    public void PublicRetryPreservesAnExistingScaffoldDraftAndCompletes()
     {
         using var layout = new Layout();
-        const string shared = "environment/shared/instructions.md";
-        const string validDraft = "Reviewed shared instructions.\n";
-        var draft = invalidDraft ? "<!-- AEC:SOURCE:SHARED:BEGIN -->\n" : validDraft;
-        layout.Files.Write(shared, draft);
-        var original = layout.Files.Head();
-        var runtime = layout.Files.RuntimeBytes();
+        const string draft = "Reviewed shared instructions.\n";
+        SeedScaffoldDraft(layout, draft);
         string[] args = ["migrate", "2.0", "--repo", layout.Repository];
-        using var firstInput = new StringReader(invalidDraft ? "Preserve\nDONE\n" : "Preserve\n");
-        using var firstOutput = new StringWriter();
-        using var firstError = new StringWriter();
-
-        Assert.Equal(1, AecApplication.Run(args, firstInput, firstOutput, firstError));
-        Assert.Contains("type exactly DONE", firstOutput.ToString(), StringComparison.Ordinal);
-        Assert.Contains(invalidDraft ? "sources" : "stopped before completion",
-            firstError.ToString(), StringComparison.Ordinal);
-        Assert.Equal(original, layout.Files.Head());
-        Assert.Empty(layout.Files.Git("diff", "--cached", "--name-only"));
-        Assert.False(File.Exists(Path.Combine(layout.Repository, ".aec-version")));
-        Assert.Equal(draft, File.ReadAllText(Path.Combine(layout.Repository, shared)));
-        Assert.True(File.Exists(Path.Combine(layout.Repository, "environment/providers/codex/overlay.md")));
-        layout.Files.AssertRuntime(runtime);
-
-        if (invalidDraft) layout.Files.Write(shared, validDraft);
         using var retryInput = new StringReader("Preserve\nDONE\n");
         using var retryOutput = new StringWriter();
         using var retryError = new StringWriter();
@@ -90,11 +73,41 @@ public sealed class MigrationCommandTests
         var retryExit = AecApplication.Run(args, retryInput, retryOutput, retryError);
 
         Assert.True(retryExit == 0, retryError.ToString());
+        Assert.Contains("type exactly DONE", retryOutput.ToString(), StringComparison.Ordinal);
         Assert.Contains("Migration completed at ", retryOutput.ToString(), StringComparison.Ordinal);
-        Assert.Equal(validDraft, File.ReadAllText(Path.Combine(layout.Repository, shared)));
+        Assert.Equal(draft, File.ReadAllText(Path.Combine(layout.Repository, SharedDraftPath)));
         Assert.Equal("2.0\n", File.ReadAllText(Path.Combine(layout.Repository, ".aec-version")));
         Assert.Equal(".aec-version", layout.Files.Git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").Trim());
         Assert.Empty(layout.Files.Git("status", "--porcelain"));
+    }
+
+    [Fact]
+    public void DoneRejectsAnInvalidUntrackedDraftWithoutChangingTheScaffold()
+    {
+        using var layout = new Layout();
+        SeedScaffoldDraft(layout, "<!-- AEC:SOURCE:SHARED:BEGIN -->\n");
+        var scaffold = new MigrationScaffoldResult(layout.Context(), []);
+        using var input = new StringReader("DONE\n");
+        using var output = new StringWriter();
+
+        layout.Files.AssertNoChanges(() =>
+        {
+            var error = Assert.Throws<InvalidOperationException>(() =>
+                MigrationPostDoneCoordinator.WaitAndComplete(scaffold, input, output));
+            Assert.Contains("during sources", error.Message, StringComparison.Ordinal);
+            var cause = Assert.IsType<InvalidDataException>(error.InnerException);
+            Assert.Contains("AEC section marker", cause.Message, StringComparison.Ordinal);
+        });
+        Assert.Contains("type exactly DONE", output.ToString(), StringComparison.Ordinal);
+    }
+
+    private static void SeedScaffoldDraft(Layout layout, string draft)
+    {
+        // Model an existing, uncommitted scaffold from an interrupted migration.
+        layout.Files.Write(SharedDraftPath, draft);
+        layout.Files.Write($"environment/platforms/{layout.Platform}/policy.md", string.Empty);
+        layout.Files.Write("environment/providers/codex/overlay.md", string.Empty);
+        layout.Files.Write("environment/providers/copilot/overlay.md", string.Empty);
     }
 
     internal static void FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery()

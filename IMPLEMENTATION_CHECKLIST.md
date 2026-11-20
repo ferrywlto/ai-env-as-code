@@ -54,8 +54,27 @@ test suite.
 The focused run passed all 220 cases in 620.54 s. It included 187 unit tests,
 the entire live capture committer suite, and the retained conflict and
 ignored-marker checks. The recovery case passed separately. Ferry accepted
-the migration cleanup on 20 November 2026. Next, reduce the repeated full
-migrations in the draft-recovery tests.
+the migration cleanup on 20 November 2026 (`9cc2a0e`).
+
+### Draft recovery cleanup
+
+- Replaced two public tests that each invoked migration twice with one
+  public retry from four seeded scaffold files and one focused post-DONE
+  refusal for an untracked reserved-marker draft. The retry preserves the
+  shared draft and commits only the completion marker in its final commit.
+  The focused refusal checks the exact source-phase failure and preserves
+  every byte of the fixture. The existing EOF/cancellation and scaffold
+  preservation cases retain their separate real-Git assertions.
+- The two retired cases took about 417 s in the earlier console baseline.
+  The replacement run passed in 143.83 s wall time with Trace2, including
+  137.94 s for the public retry and 4.65 s for the focused refusal. It
+  recorded 7,117 Git starts, including 3,342 filter probes. The earlier
+  baseline recorded rounded test durations and did not trace Git.
+- All 187 unit tests and six retained EOF, cancellation, and scaffold
+  preservation checks passed in 66.40 s. Ferry accepted the draft recovery
+  slice on 20 November 2026 and approved these focused results for pushing
+  this checkpoint. Next, remove repeated review preparation in the
+  migration target-writer tests.
 
 ## Portable integration test cleanup
 
