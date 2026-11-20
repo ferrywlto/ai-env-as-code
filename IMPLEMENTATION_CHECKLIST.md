@@ -154,6 +154,32 @@ passed in 216.93 s, including the focused migration group, two-provider
 apply, and public retry. Ferry accepted the argument and fixture changes
 and their focused push gate on 20 November 2026.
 
+### Scaffold preview coverage
+
+- Removed 11 repeated Git fixture runs. The in-memory scaffold policy
+  tests cover the full choice matrix and when staging blocks a proposal.
+- The preview suite keeps one real-Git case for each dirty state in the
+  former Preserve and Overwrite matrices, plus clean sources under
+  Overwrite. It still checks that preview leaves the working tree and index
+  untouched. The hidden-edit preview and the writer's no-choice case
+  cover the explicit-choice requirement.
+- The retained dirty cases compare against known fixture bytes and avoid
+  temporary writes unrelated to the Git state under test.
+
+Both preview runs used a prior Debug build, identical repository-local
+fixture settings, TRX, and Git Trace2 on macOS ARM64.
+
+| Preview measurement | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 34 | 23 |
+| Git process starts | 6,984 | 4,913 |
+| Wall time | 154.57 s | 105.17 s |
+
+All 49 scaffold writer tests passed in 307.41 s. All 196 unit tests passed
+in 1.01 s wall time with zero Git process starts. Ferry accepted the
+scaffold preview cleanup on 20 November 2026. Full-suite verification
+remains pending for #19.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
