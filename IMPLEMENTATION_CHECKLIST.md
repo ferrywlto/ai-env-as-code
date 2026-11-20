@@ -73,8 +73,27 @@ the migration cleanup on 20 November 2026 (`9cc2a0e`).
 - All 187 unit tests and six retained EOF, cancellation, and scaffold
   preservation checks passed in 66.40 s. Ferry accepted the draft recovery
   slice on 20 November 2026 and approved these focused results for pushing
-  this checkpoint. Next, remove repeated review preparation in the
-  migration target-writer tests.
+  this checkpoint (`71ddd66`).
+
+### Target-writer fixture preparation
+
+- The target-writer tests now prepare a single capture plan, prepare the
+  target writer from it, and write sources through that same plan. This
+  matches the live portable capture committer and removes one full Git
+  preparation from each of 28 cases. The existing assertions and timing
+  of injected stale inputs and write failures are preserved.
+- The same five cases passed before and after on macOS ARM64. Both runs
+  used a prior Debug build, workspace fixtures, TRX, and Git Trace2.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 5 | 5 |
+| Git process starts | 4,452 | 3,336 |
+| Wall time | 111.69 s | 74.24 s |
+
+The remaining 23 affected cases passed alongside all 187 unit cases in
+343.05 s. All 28 affected target-writer cases passed across both runs. Ferry
+accepted the fixture preparation change on 20 November 2026.
 
 ## Portable integration test cleanup
 

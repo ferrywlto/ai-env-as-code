@@ -16,8 +16,8 @@ public sealed class MigrationPortableTargetWriterTests
         var reviewed = Preview(layout);
         layout.Files.AssertNoChanges(() =>
         {
-            var plan = MigrationPortableTargetWriter.Prepare(reviewed);
-            Assert.Empty(plan.Write(MigrationPortableSourceWriter.Write(reviewed)));
+            var (plan, sources) = PrepareSources(reviewed);
+            Assert.Empty(plan.Write(sources));
         });
     }
 
@@ -31,7 +31,7 @@ public sealed class MigrationPortableTargetWriterTests
         var original = section == "shared" ? "Shared approval." : "Local paths.";
         layout.EditRuntime("codex", original, "Agreed revision.");
         layout.EditRuntime("copilot", original, "Agreed revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         var expected = targets.Where(path => section == "shared" || path.Contains($"/{layout.Platform}/", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal).ToArray();
 
@@ -52,7 +52,7 @@ public sealed class MigrationPortableTargetWriterTests
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
         File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\nmodel = 'private'\n");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         Assert.Contains(AecApplication.ConfigSourceRelativePath, sources);
 
         layout.Files.AssertOnlyChanges(targets, () => Assert.Equal(targets, plan.Write(sources)));
@@ -70,7 +70,7 @@ public sealed class MigrationPortableTargetWriterTests
         var targets = EnrollOtherPlatforms(layout, "codex", "copilot");
         layout.EditRuntime("codex", "Local paths.", "Platform revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Provider revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         var expected = targets.Where(path => path.Contains($"/{layout.Platform}/", StringComparison.Ordinal) ||
             path.Contains("/copilot/", StringComparison.Ordinal)).ToArray();
 
@@ -90,7 +90,7 @@ public sealed class MigrationPortableTargetWriterTests
         var legacy = provider == "codex" ? "copilot" : "codex";
         File.AppendAllText(layout.Runtime(legacy), "Pending legacy edit.\n");
         layout.EditRuntime(provider, "Shared approval.", "Shared revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
 
         layout.Files.AssertOnlyChanges(targets, () => Assert.Equal(targets, plan.Write(sources)));
         Assert.False(File.Exists(Path.Combine(layout.Repository, layout.Target(legacy))));
@@ -102,7 +102,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex", "copilot");
         _ = EnrollOtherPlatforms(layout, "codex", "copilot");
         File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\n");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         Assert.Equal(AecApplication.ConfigSourceRelativePath, Assert.Single(sources));
         layout.Files.AssertNoChanges(() => Assert.Empty(plan.Write(sources)));
     }
@@ -116,7 +116,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex", "copilot");
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         string[] reported = kind switch
         {
             "missing" => [sources[0]],
@@ -143,7 +143,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex", "copilot");
         var targets = EnrollOtherPlatforms(layout, "codex", "copilot");
         layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         var otherTarget = targets.First(path => !path.Contains($"/{layout.Platform}/", StringComparison.Ordinal));
         var otherPlatform = otherTarget.Split('/')[2];
         switch (kind)
@@ -229,8 +229,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex");
         layout.EditRuntime("codex", "Provider mechanics.", "Reviewed revision.");
         var reviewed = Preview(layout);
-        var plan = MigrationPortableTargetWriter.Prepare(reviewed);
-        var sources = MigrationPortableSourceWriter.Write(reviewed);
+        var (plan, sources) = PrepareSources(reviewed);
         Array.Fill(reviewed.Codex!.Snapshot.Target, (byte)'x');
         Array.Fill(reviewed.Codex.RuntimeConfig, (byte)'x');
 
@@ -245,7 +244,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex", "copilot");
         if (earlierWrite) layout.EditRuntime("codex", "Provider mechanics.", "First revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Blocked revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         var blocked = layout.Target("copilot");
         string[] changed = earlierWrite ? [layout.Target("codex")] : [];
 
@@ -260,11 +259,12 @@ public sealed class MigrationPortableTargetWriterTests
             }));
     }
 
-    private static (MigrationPortableTargetWriter Plan, IReadOnlyList<string> Sources) PrepareSources(Layout layout)
+    private static (MigrationPortableTargetWriter Plan, IReadOnlyList<string> Sources) PrepareSources(
+        MigrationPortableCapturePreview reviewed)
     {
-        var reviewed = Preview(layout);
-        var plan = MigrationPortableTargetWriter.Prepare(reviewed);
-        return (plan, MigrationPortableSourceWriter.Write(reviewed));
+        var capture = MigrationPortableCapturePlan.Prepare(reviewed);
+        var targetWriter = MigrationPortableTargetWriter.Prepare(capture);
+        return (targetWriter, capture.WriteSources());
     }
 
     private static MigrationPortableCapturePreview Preview(Layout layout) => MigrationPortableCapturePreview.Read(layout.Context());
