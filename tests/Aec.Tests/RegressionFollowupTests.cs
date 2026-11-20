@@ -34,17 +34,6 @@ public sealed class RegressionFollowupTests
         MigrationLegacyCaptureCommitterTests.StaleOrTamperedReviewStopsBeforeWriteStageOrCommit(change);
 
     [Theory]
-    [InlineData("head")]
-    [InlineData("branch")]
-    [InlineData("runtime")]
-    [InlineData("other-runtime")]
-    [InlineData("config")]
-    [InlineData("marker")]
-    [InlineData("canonical")]
-    public void StaleInputsStopBeforeAnyReplacement(string kind) =>
-        MigrationPortableSourceWriterTests.StaleInputsStopBeforeAnyReplacement(kind);
-
-    [Theory]
     [InlineData("dirty-target")]
     [InlineData("dirty-source")]
     [InlineData("missing-target")]

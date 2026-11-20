@@ -145,13 +145,15 @@ public sealed class MigrationPortableCaptureCommitterTests
     [InlineData("marker")]
     [InlineData("enrollment")]
     [InlineData("other-runtime")]
+    [InlineData("codex-runtime")]
+    [InlineData("authored-draft")]
     [InlineData("provider-presence")]
     [InlineData("target-buffer")]
     public void StaleInputsStopBeforeFilesStagingOrCommit(string kind)
     {
         using var layout = new Layout("codex", "copilot");
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
-        if (kind != "other-runtime")
+        if (kind is not ("other-runtime" or "codex-runtime" or "authored-draft"))
             layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
         var reviewed = Preview(layout);
         switch (kind)
@@ -164,6 +166,8 @@ public sealed class MigrationPortableCaptureCommitterTests
             case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
             case "enrollment": File.Delete(layout.Runtime("copilot")); break;
             case "other-runtime": layout.EditRuntime("copilot", "Provider mechanics.", "Later revision."); break;
+            case "codex-runtime": layout.EditRuntime("codex", "Codex revision.", "Later revision."); break;
+            case "authored-draft": layout.Files.Write("environment/shared/instructions.md", "Keep this authored draft.\n"); break;
             case "provider-presence": reviewed = reviewed with { Copilot = null }; break;
             case "target-buffer":
                 var codex = reviewed.Codex!;

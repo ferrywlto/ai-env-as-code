@@ -93,7 +93,33 @@ the migration cleanup on 20 November 2026 (`9cc2a0e`).
 
 The remaining 23 affected cases passed alongside all 187 unit cases in
 343.05 s. All 28 affected target-writer cases passed across both runs. Ferry
-accepted the fixture preparation change on 20 November 2026.
+accepted the fixture preparation change on 20 November 2026 (`d76ff21`).
+
+### Source-writer overlap cleanup
+
+Retired 13 source-wrapper cases and transferred two distinct stale-input
+cases to the live committer. The remaining seven source-only cases still
+check exact authored writes, preserved config and unmanaged bytes, conflict
+after review, and partial source-replacement reporting.
+
+| Removed source-wrapper cases | Retained real-Git coverage |
+| --- | --- |
+| Two no-op and two mixed-format cases | `ValidatedNoopPreservesEveryFixtureAndGitByte` and `MixedFormatsPreserveLegacyRuntimeAndUnconsumedAuthoredDraft` check exact fixture or committed paths and unchanged legacy contents |
+| Staged draft and caller-supplied proposal | `ExistingStagedAndUnstagedDraftStopBeforeCapture` preserves the fixture and exact refusal. `CallerDerivedProposalsCannotRedirectCombinedCapture` checks the recomputed source bytes and exact commit. |
+| Seven stale-input rows | `StaleInputsStopBeforeFilesStagingOrCommit` retains HEAD, branch, changed peer runtime, config, and marker cases. It now also checks a Codex runtime edit and an authored draft appearing after review. |
+
+Both measurements used the same case filter, Debug build, workspace fixture
+settings, and Git Trace2 on macOS ARM64.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Passing cases and disposable fixture setups | 29 | 18 |
+| Git process starts | 17,493 | 11,045 |
+| Git init commands | 87 | 54 |
+| Wall time | 459.67 s | 321.68 s |
+
+All seven retained source-only cases and 187 unit cases passed separately
+in 125.28 s. Ferry accepted the source-writer cleanup on 20 November 2026.
 
 ## Portable integration test cleanup
 
