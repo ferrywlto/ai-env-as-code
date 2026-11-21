@@ -137,8 +137,9 @@ public sealed class MigrationPostDoneCoordinatorTests
         Assert.Equal(result.Commit, layout.Files.Head());
     }
 
-    internal static void ComponentFailureStopsWithoutMarkerOrLaterWrites(string stop, int expectedCommits)
+    internal static void ComponentFailureStopsWithoutMarkerOrLaterWrites()
     {
+        const string stop = "target:codex";
         using var layout = new Layout("codex", "copilot");
         var original = layout.Files.Head();
         layout.Files.Write(Shared, "Changed approval.\n");
@@ -157,8 +158,7 @@ public sealed class MigrationPostDoneCoordinatorTests
         Assert.NotNull(atFailure);
         AssertSnapshot(layout, atFailure);
         Assert.Equal(head, layout.Files.Head());
-        Assert.Equal(expectedCommits.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            layout.Files.Git("rev-list", "--count", $"{original}..HEAD").Trim());
+        Assert.Equal("2", layout.Files.Git("rev-list", "--count", $"{original}..HEAD").Trim());
         Assert.False(File.Exists(Path.Combine(layout.Repository, Marker)));
         Assert.Equal(stop, seen[^1]);
         Assert.Contains("may remain", error.Message, StringComparison.Ordinal);

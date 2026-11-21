@@ -140,34 +140,59 @@ public sealed class MigrationPortableTargetWriterTests
 
     internal static void StaleInputsStopBeforeAnyTargetReplacement(string kind)
     {
-        using var layout = new Layout("codex", "copilot");
-        var (otherPlatform, otherTarget) = EnrollOtherCodexTarget(layout);
+        if (kind == "other-platform")
+        {
+            NonLocalSourceAndTargetDriftStopBeforeReplacement();
+            return;
+        }
+
+        using var layout = kind == "other-runtime" ? new Layout("codex", "copilot") : new Layout("codex");
         layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
         var (plan, sources) = PrepareSources(Preview(layout));
         switch (kind)
         {
             case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
             case "branch": layout.Files.Git("switch", "-c", "other-branch"); break;
-            case "runtime": layout.EditRuntime("codex", "Shared revision.", "Later revision."); break;
             case "other-runtime": layout.EditRuntime("copilot", "Provider mechanics.", "Other revision."); break;
-            case "runtime-config": File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\n"); break;
             case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
-            case "source": layout.Files.Write("environment/shared/instructions.md", "Later shared draft.\n"); break;
-            case "other-platform-source": layout.Files.Write($"environment/platforms/{otherPlatform}/policy.md", "Other policy draft.\n"); break;
-            case "canonical-config": layout.Files.Write(AecApplication.ConfigSourceRelativePath, "personality = 'none'\n"); break;
-            case "target": layout.Files.Write(layout.Target("codex"), "Unexpected target draft.\n"); break;
-            case "other-platform-target": layout.Files.Write(otherTarget, "Unexpected other target.\n"); break;
             case "staged": layout.Files.Git("add", "--", sources[0]); break;
-            default:
+            case "raw-index":
                 using (var index = new FileStream(Path.Combine(layout.Repository, ".git", "index"), FileMode.Append)) index.WriteByte(0);
                 break;
+            default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
 
+        AssertStaleTargetWriteRefused(layout, plan, sources);
+    }
+
+    private static void NonLocalSourceAndTargetDriftStopBeforeReplacement()
+    {
+        using var layout = new Layout("codex");
+        var (platform, target) = EnrollOtherCodexTarget(layout);
+        layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
+        var (plan, sources) = PrepareSources(Preview(layout));
+
+        string[] paths = [$"environment/platforms/{platform}/policy.md", target];
+        foreach (var relativePath in paths)
+        {
+            var path = Path.Combine(layout.Repository, relativePath);
+            var original = File.ReadAllBytes(path);
+            layout.Files.Write(relativePath, "Unexpected non-local draft.\n");
+            AssertStaleTargetWriteRefused(layout, plan, sources, $"Portable canonical input changed: {relativePath}");
+            File.WriteAllBytes(path, original);
+        }
+    }
+
+    private static void AssertStaleTargetWriteRefused(Layout layout, MigrationPortableTargetWriter plan,
+        IReadOnlyList<string> sources, string? diagnostic = null)
+    {
         layout.Files.AssertNoChanges(() =>
         {
             var error = Assert.Throws<MigrationPortableTargetWriteException>(() => plan.Write(sources));
             Assert.Empty(error.WrittenPaths);
             Assert.Null(error.AttemptedPath);
+            if (diagnostic is not null)
+                Assert.Contains(diagnostic, error.InnerException!.Message, StringComparison.Ordinal);
         });
     }
 

@@ -45,15 +45,9 @@ public sealed class RegressionFollowupTests
     [Theory]
     [InlineData("head")]
     [InlineData("branch")]
-    [InlineData("runtime")]
     [InlineData("other-runtime")]
-    [InlineData("runtime-config")]
     [InlineData("marker")]
-    [InlineData("source")]
-    [InlineData("other-platform-source")]
-    [InlineData("canonical-config")]
-    [InlineData("target")]
-    [InlineData("other-platform-target")]
+    [InlineData("other-platform")]
     [InlineData("staged")]
     [InlineData("raw-index")]
     public void StaleInputsStopBeforeAnyTargetReplacement(string kind) =>
@@ -65,14 +59,9 @@ public sealed class RegressionFollowupTests
     public void CommitsSourcesTargetsThenMarkerAndAppliesEnrolledProviders(string selected, int count) =>
         MigrationPostDoneCoordinatorTests.CommitsSourcesTargetsThenMarkerAndAppliesEnrolledProviders(selected, count);
 
-    [Theory]
-    [InlineData("sources", 1)]
-    [InlineData("target:codex", 2)]
-    [InlineData("target:copilot", 3)]
-    [InlineData("apply", 3)]
-    [InlineData("status", 3)]
-    public void ComponentFailureStopsWithoutMarkerOrLaterWrites(string stop, int expectedCommits) =>
-        MigrationPostDoneCoordinatorTests.ComponentFailureStopsWithoutMarkerOrLaterWrites(stop, expectedCommits);
+    [Fact]
+    public void ComponentFailureStopsWithoutMarkerOrLaterWrites() =>
+        MigrationPostDoneCoordinatorTests.ComponentFailureStopsWithoutMarkerOrLaterWrites();
 
     [Theory]
     [InlineData("head")]

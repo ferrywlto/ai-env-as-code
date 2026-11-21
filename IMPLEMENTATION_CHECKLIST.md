@@ -25,6 +25,29 @@ test suite.
   superseded writer suites accounted for another 33.3 minutes. These totals
   come from the console's rounded per-case durations.
 
+### Full-suite diagnostic on 21 November 2026
+
+- Ran the unfiltered Debug suite at `020f1bd` on macOS ARM64. The build
+  passed with zero warnings or errors. The run used workspace-local
+  fixtures, Git Trace2, and a five-minute diagnostic hang guard. The
+  documented pre-push command uses a two-minute guard.
+- Stopped at Ferry's cutoff after 34m 52s. The console logged 570 passes,
+  zero failures, and zero skips. The cancellation produced no TRX or
+  final suite result. The test process tree exited and its console and
+  trace are under `artifacts/full-regression.6bEZPE`.
+- The previously interrupted public recovery case passed in 3m 45s.
+  The original case reached the five-minute watchdog while Git was still
+  active. The current case still exceeds the documented two-minute guard.
+- Git Trace2 logged 52,660 starts, including 14,176 `rev-parse`,
+  7,420 `ls-tree`, and 5,518 `cat-file`. Regression follow-up cases
+  accounted for 24m 14s of rounded test durations. The 13 target-drift
+  cases took 5m 08s, and the five injected post-DONE failure cases took
+  3m 59s.
+- The 529 exact test display names in both interrupted runs took
+  20m 24s before and 28m 07s in this run, summing rounded console case
+  durations. This shared subset ran slower. Neither run completed, so
+  the full-suite runtime and percentage improvement remain unverified.
+
 ### Migration recovery and capture cleanup
 
 - The recovery test now starts from committed, applied targets and an
@@ -371,6 +394,37 @@ and public retry. That run used a five-minute per-test hang guard for the
 public retry, which took 3m 18s. All 219 unit tests passed in 1.64 s with
 zero Git starts. Ferry accepted the fixture cleanup on 21 November 2026.
 Full-suite verification remains pending for #19.
+
+### Regression follow-up Git process reduction
+
+- Portable target drift tests exercise the existing runtime and
+  canonical byte guards with typed in-memory inputs. Seven real-Git
+  cases retain HEAD, branch, staged and raw index, marker, peer runtime,
+  and non-local source and target observation. The two non-local
+  variations share one prepared fixture and check separate diagnostics.
+- Five in-memory post-DONE cases exercise phase order, failure cutoff,
+  and the pinned HEAD diagnostic through the coordinator. One real-Git
+  failure case verifies that the two prior commits and the fixture stay
+  intact and the completion marker is absent.
+
+Both runs used the same two-method Debug filter, repository-local
+fixtures, TRX, Git Trace2, and the two-minute per-test hang guard.
+
+| Regression follow-up measurement | Before | After |
+| --- | ---: | ---: |
+| Passing real-Git cases | 18 | 8 |
+| Git process starts | 13,771 | 4,031 |
+| Wall time | 384.48 s | 126.97 s |
+
+The bounded workload removed 9,740 Git starts (70.7%). Starts within
+the target-drift case intervals fell from 7,808 to 3,435. Starts within
+the post-DONE failure case intervals fell from 5,962 to 595. The
+52,660-start interrupted full run remains the overall diagnostic baseline.
+
+All 236 unit tests passed in 1.58 s with zero Git starts. The first
+legacy migration and combined portable capture checks both passed in
+104.10 s with a three-minute per-test guard. Ferry accepted the cleanup
+on 21 November 2026. Full-suite verification remains pending for #19.
 
 ## Portable integration test cleanup
 
