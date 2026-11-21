@@ -3,6 +3,7 @@ using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationCommandTests
 {
     private const string SharedDraftPath = "environment/shared/instructions.md";
@@ -112,9 +113,10 @@ public sealed class MigrationCommandTests
 
     internal static void FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery()
     {
-        // The fixture already has the committed targets and applied runtimes
+        // The fixture already has the committed target and applied runtime
         // that exist immediately before a migration publishes its marker.
-        using var layout = Layout.WithRemote("codex", "copilot");
+        using var layout = Layout.WithRemote("codex");
+        File.Delete(layout.Runtime("copilot"));
         var dataHead = layout.Files.Head();
         var runtime = layout.Files.RuntimeBytes();
         var exclude = Path.Combine(layout.Repository, ".git", "info", "exclude");

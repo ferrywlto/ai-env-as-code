@@ -3,6 +3,7 @@ using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationPortableTargetWriterTests
 {
     private static readonly string[] Platforms = ["macos-arm64", "windows-x64", "linux-arm64"];

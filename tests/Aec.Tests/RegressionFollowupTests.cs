@@ -10,14 +10,17 @@ public sealed class RegressionFollowupTests
     [Theory]
     [InlineData("copilot")]
     [InlineData("source")]
+    [Trait("Category", "LegacyMigration")]
     public void DriftAfterFirstProviderStopsSecondAndReportsPartialState(string mutation) =>
         MigrationApplyCoordinatorTests.DriftAfterFirstProviderStopsSecondAndReportsPartialState(mutation);
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery() =>
         MigrationCommandTests.FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery();
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void StaleOrTamperedReviewStopsBeforeWriteStageOrCommit() =>
         MigrationLegacyCaptureCommitterTests.StaleOrTamperedReviewStopsBeforeWriteStageOrCommit();
 
@@ -27,6 +30,7 @@ public sealed class RegressionFollowupTests
     [InlineData("missing-target", "Dirty path is outside the selected migration sections")]
     [InlineData("inconsistent-target", "Committed target does not match its authored sources")]
     [InlineData("oversize-render", "Rendered target exceeds 1 MiB")]
+    [Trait("Category", "LegacyMigration")]
     public void OtherPlatformProblemsAreRejectedDuringPreparation(string kind, string expectedDiagnostic) =>
         MigrationPortableTargetWriterTests.OtherPlatformProblemsAreRejectedDuringPreparation(kind, expectedDiagnostic);
 
@@ -38,16 +42,19 @@ public sealed class RegressionFollowupTests
     [InlineData("other-platform")]
     [InlineData("staged")]
     [InlineData("raw-index")]
+    [Trait("Category", "LegacyMigration")]
     public void StaleInputsStopBeforeAnyTargetReplacement(string kind) =>
         MigrationPortableTargetWriterTests.StaleInputsStopBeforeAnyTargetReplacement(kind);
 
     [Theory]
     [InlineData("both", 3)]
     [InlineData("codex", 2)]
+    [Trait("Category", "LegacyMigration")]
     public void CommitsSourcesTargetsThenMarkerAndAppliesEnrolledProviders(string selected, int count) =>
         MigrationPostDoneCoordinatorTests.CommitsSourcesTargetsThenMarkerAndAppliesEnrolledProviders(selected, count);
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void ComponentFailureStopsWithoutMarkerOrLaterWrites() =>
         MigrationPostDoneCoordinatorTests.ComponentFailureStopsWithoutMarkerOrLaterWrites();
 
@@ -56,6 +63,7 @@ public sealed class RegressionFollowupTests
     [InlineData("path")]
     [InlineData("index")]
     [InlineData("other-overlay")]
+    [Trait("Category", "LegacyMigration")]
     public void StaleOrTamperedReviewIsRejectedWithoutWriterChanges(string state) =>
         MigrationTargetWriterTests.StaleOrTamperedReviewIsRejectedWithoutWriterChanges(state);
 }

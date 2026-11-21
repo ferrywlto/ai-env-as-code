@@ -4,6 +4,7 @@ namespace Aec.Tests;
 public sealed class MigrationRemotePreflightTests
 {
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void UsesConfiguredRemoteAndAdvertisedDefaultRatherThanOriginOrMain()
     {
         using var layout = new RemoteLayout();
@@ -20,6 +21,7 @@ public sealed class MigrationRemotePreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void AdvertisedTipDoesNotFetchOrTrustStaleLocalTrackingRefs()
     {
         using var layout = new RemoteLayout();
@@ -46,6 +48,7 @@ public sealed class MigrationRemotePreflightTests
     [InlineData("remote", true)]
     [InlineData("merge", true)]
     [InlineData("url", true)]
+    [Trait("Category", "LegacyMigration")]
     public void MissingOrAmbiguousConfigurationStops(string setting, bool duplicate)
     {
         using var layout = new RemoteLayout();
@@ -65,6 +68,7 @@ public sealed class MigrationRemotePreflightTests
     [InlineData(".")]
     [InlineData("-invalid")]
     [InlineData("not-configured")]
+    [Trait("Category", "LegacyMigration")]
     public void InvalidOrUndefinedRemoteCannotBeGuessedAsARepositoryPath(string remote)
     {
         using var layout = new RemoteLayout();
@@ -75,6 +79,7 @@ public sealed class MigrationRemotePreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void NonDefaultBranchWithItsOwnUpstreamStopsWithoutSwitching()
     {
         using var layout = new RemoteLayout();
@@ -90,6 +95,7 @@ public sealed class MigrationRemotePreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void LocalAliasOfTheDefaultBranchAlsoRequiresTheDefaultCheckout()
     {
         using var layout = new RemoteLayout();
@@ -107,6 +113,7 @@ public sealed class MigrationRemotePreflightTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    [Trait("Category", "LegacyMigration")]
     public void DetachedHeadOrChangedCommitStopsBeforeRemoteQuery(bool changedCommit)
     {
         using var layout = new RemoteLayout();
@@ -123,6 +130,7 @@ public sealed class MigrationRemotePreflightTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    [Trait("Category", "LegacyMigration")]
     public void UnresolvedOrDetachedRemoteHeadStops(bool detached)
     {
         using var layout = new RemoteLayout();
@@ -134,6 +142,7 @@ public sealed class MigrationRemotePreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void EmptyRemoteDoesNotInventADefaultTip()
     {
         using var layout = new RemoteLayout();
@@ -146,6 +155,7 @@ public sealed class MigrationRemotePreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void UnreachableRemoteStopsWithoutEchoingTransportSecrets()
     {
         using var layout = new RemoteLayout();
@@ -172,6 +182,7 @@ public sealed class MigrationRemotePreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void ExpiredQueryDeadlineStopsWithoutFetchingOrLeavingTheFixtureDirty()
     {
         using var layout = new RemoteLayout();

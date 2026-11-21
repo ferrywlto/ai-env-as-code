@@ -1,6 +1,7 @@
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationLegacyCaptureCommitterTests
 {
     [Fact]

@@ -6,6 +6,7 @@ public sealed class MigrationDirtySectionsTests
     private const string Shared = "environment/shared/instructions.md";
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void CleanSectionsDoNotPromptOrReadInput()
     {
         using var layout = new DirtyLayout();
@@ -27,6 +28,7 @@ public sealed class MigrationDirtySectionsTests
     [InlineData("platform")]
     [InlineData("codex")]
     [InlineData("copilot")]
+    [Trait("Category", "LegacyMigration")]
     public void ExactSelectedSectionPathsAreEligible(string section)
     {
         using var layout = new DirtyLayout();
@@ -49,6 +51,7 @@ public sealed class MigrationDirtySectionsTests
     [InlineData("staged-and-unstaged")]
     [InlineData("deleted")]
     [InlineData("staged-deleted")]
+    [Trait("Category", "LegacyMigration")]
     public void OrdinaryDirtyStatesRemainUnchangedUntilLaterPreparation(string state)
     {
         using var layout = new DirtyLayout();
@@ -72,6 +75,7 @@ public sealed class MigrationDirtySectionsTests
     [InlineData("environment/providers/codex/AGENTS.md")]
     [InlineData("environment/providers/codex/config.toml")]
     [InlineData(".aec-version")]
+    [Trait("Category", "LegacyMigration")]
     public void OtherDirtyPathsStopRatherThanOfferOverwrite(string path)
     {
         using var layout = new DirtyLayout();
@@ -89,6 +93,7 @@ public sealed class MigrationDirtySectionsTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void OtherPlatformAndRenderedTargetsAreNotMigrationOwnedSources()
     {
         using var layout = new DirtyLayout();
@@ -103,6 +108,7 @@ public sealed class MigrationDirtySectionsTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    [Trait("Category", "LegacyMigration")]
     public void RenamesIntoOrOutOfAnAllowedSectionStop(bool intoSection)
     {
         using var layout = new DirtyLayout();
@@ -125,6 +131,7 @@ public sealed class MigrationDirtySectionsTests
     [InlineData("120000", true)]
     [InlineData("160000", false)]
     [InlineData("160000", true)]
+    [Trait("Category", "LegacyMigration")]
     public void IndexedOrCommittedLinkKindsStopEvenWithoutAWorkingLink(string mode, bool committed)
     {
         using var layout = new DirtyLayout();
@@ -142,6 +149,7 @@ public sealed class MigrationDirtySectionsTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void ReplacementRefsCannotHideCommittedLinkKinds()
     {
         using var layout = new DirtyLayout();
@@ -164,6 +172,7 @@ public sealed class MigrationDirtySectionsTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void AddAddMergeConflictIsNotAnOrdinaryAddedSection()
     {
         using var layout = new DirtyLayout();
@@ -186,6 +195,7 @@ public sealed class MigrationDirtySectionsTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void IgnoredSectionFilesCannotBypassTheDirtyPrompt()
     {
         using var layout = new DirtyLayout();
@@ -201,6 +211,7 @@ public sealed class MigrationDirtySectionsTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void DirectoryInPlaceOfAnAllowedFileStops()
     {
         using var layout = new DirtyLayout();
@@ -210,6 +221,7 @@ public sealed class MigrationDirtySectionsTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void ChangedHeadAndAbsentHarnessesStop()
     {
         using var layout = new DirtyLayout();
@@ -221,6 +233,7 @@ public sealed class MigrationDirtySectionsTests
     [Theory]
     [InlineData("Preserve", false)]
     [InlineData("Overwrite", true)]
+    [Trait("Category", "LegacyMigration")]
     public void ExplicitChoicesOnlyReturnADecisionWithoutMutatingFiles(string answer, bool overwrite)
     {
         using var layout = new DirtyLayout();

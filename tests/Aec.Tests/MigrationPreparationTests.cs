@@ -19,6 +19,7 @@ public sealed class MigrationPreparationTests
     [Theory]
     [InlineData("")]
     [InlineData("not-a-choice\n")]
+    [Trait("Category", "LegacyMigration")]
     public void EndOfInputCancelsBeforeLookingUpTheRemote(string answers)
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -33,6 +34,7 @@ public sealed class MigrationPreparationTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void CancellationWhileAnsweringStopsBeforeRemoteLookup()
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -46,6 +48,7 @@ public sealed class MigrationPreparationTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void CleanBehindCheckoutReturnsRefreshedContextWithoutReadingInput()
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -77,6 +80,7 @@ public sealed class MigrationPreparationTests
     [InlineData(false, "Overwrite")]
     [InlineData(true, "Preserve")]
     [InlineData(true, "Overwrite")]
+    [Trait("Category", "LegacyMigration")]
     public void EqualOrAheadReturnsChoiceWithoutDiscardingDrafts(bool ahead, string answer)
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -100,6 +104,7 @@ public sealed class MigrationPreparationTests
     [Theory]
     [InlineData("Preserve")]
     [InlineData("Overwrite")]
+    [Trait("Category", "LegacyMigration")]
     public void NeitherChoicePermitsAdvancingADirtyBehindCheckout(string answer)
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -124,6 +129,7 @@ public sealed class MigrationPreparationTests
     [Theory]
     [InlineData("unrelated-dirt")]
     [InlineData("no-harness")]
+    [Trait("Category", "LegacyMigration")]
     public void LocalRefusalPrecedesPromptAndRemoteLookup(string cause)
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -143,6 +149,7 @@ public sealed class MigrationPreparationTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void ChangedHeadDuringPromptStopsBeforeRemoteLookup()
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -160,6 +167,7 @@ public sealed class MigrationPreparationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    [Trait("Category", "LegacyMigration")]
     public void SamePathEditsOrStagingDuringPromptInvalidateTheChoice(bool stageOnly)
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -180,6 +188,7 @@ public sealed class MigrationPreparationTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void PulledCompletionIsReportedAsRetainedHistoryNotCancellation()
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);
@@ -201,6 +210,7 @@ public sealed class MigrationPreparationTests
         layout.Git("remote", "set-url", "shared", Path.Combine(layout.Root, "absent-remote.git"));
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void InvalidPulledSectionReportsRetainedHistoryAfterAdvancement()
     {
         using var layout = new MigrationRepositoryFixture(includeRemote: true);

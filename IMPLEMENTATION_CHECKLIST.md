@@ -487,6 +487,55 @@ All five additional coordinator checks passed in 54.46 s. All 263 unit
 tests passed in 1.27 s with zero Git starts. Ferry accepted the
 apply-coordinator cleanup on 21 November 2026.
 
+### Public migration recovery fixture
+
+- The recovery test enrolls only Codex and still uses a real remote.
+  It verifies the CLI refuses an ignored uncommitted marker before
+  prompting, then retries, keeps the prior HEAD as the new commit's
+  parent, commits only the marker, and preserves runtime bytes and a
+  clean checkout.
+- The separate migration completion tests still cover real
+  two-provider ordering and marker-only completion.
+
+Both runs used the same one-test Debug filter, workspace fixture
+settings, TRX, and Git Trace2.
+
+| Public recovery measurement | Two providers | One provider |
+| --- | ---: | ---: |
+| Passing cases | 1 | 1 |
+| Git process starts | 6,457 | 4,661 |
+| Wall time | 128.78 s | 68.97 s |
+| Per-test hang guard | 5m | 2m |
+
+The revised case passed under the documented two-minute guard with
+1,796 fewer Git starts (27.8%). The four targeted regression workloads
+together removed 19,799 measured starts. All 263 unit tests passed in
+1.17 s with zero Git starts. Ferry accepted the recovery fixture and
+routine suite split on 21 November 2026.
+
+### Routine regression and legacy migration
+
+- The documented routine Debug run uses `Category!=LegacyMigration`.
+  The separate `Category=LegacyMigration` run covers the real-Git
+  1.x to 2.0 workflow. The unfiltered Release run includes both.
+- Discovery found 840 routine cases and 627 legacy cases. The sets
+  are disjoint and cover all 1,467 discovered cases. All five
+  `MigrationReview` cases are in the legacy group.
+- The routine selection keeps Git-free migration decisions, the
+  general help check, and current lifecycle and two-checkout cases.
+
+The routine Debug run passed all 840 cases in 678.88 s (11m 19s)
+with the two-minute per-test hang guard. The TRX exactly matched
+routine discovery and included zero legacy cases. Git Trace2
+recorded 38,385 starts. This is the first completed routine baseline
+with the new selection.
+
+All 263 unit cases passed in 1.22 s with zero Git starts. Three
+opt-in legacy checks passed in 7.09 s, including staged and unstaged
+marker refusal and the case tagged for both migration categories.
+The full opt-in legacy group and unfiltered Release run remain
+unverified for this checkpoint.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted

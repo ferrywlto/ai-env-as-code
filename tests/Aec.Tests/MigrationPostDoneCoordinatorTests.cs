@@ -4,6 +4,7 @@ using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationPostDoneCoordinatorTests
 {
     private const string Shared = "environment/shared/instructions.md";
