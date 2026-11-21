@@ -20,18 +20,9 @@ public sealed class RegressionFollowupTests
     public void FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery() =>
         MigrationCommandTests.FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery();
 
-    [Theory]
-    [InlineData("head")]
-    [InlineData("branch")]
-    [InlineData("runtime")]
-    [InlineData("canonical")]
-    [InlineData("marker")]
-    [InlineData("enrollment")]
-    [InlineData("proposal")]
-    [InlineData("path")]
-    [InlineData("missing-row")]
-    public void StaleOrTamperedReviewStopsBeforeWriteStageOrCommit(string change) =>
-        MigrationLegacyCaptureCommitterTests.StaleOrTamperedReviewStopsBeforeWriteStageOrCommit(change);
+    [Fact]
+    public void StaleOrTamperedReviewStopsBeforeWriteStageOrCommit() =>
+        MigrationLegacyCaptureCommitterTests.StaleOrTamperedReviewStopsBeforeWriteStageOrCommit();
 
     [Theory]
     [InlineData("dirty-target", "Dirty path is outside the selected migration sections")]
@@ -64,21 +55,10 @@ public sealed class RegressionFollowupTests
         MigrationPostDoneCoordinatorTests.ComponentFailureStopsWithoutMarkerOrLaterWrites();
 
     [Theory]
-    [InlineData("head")]
     [InlineData("branch")]
-    [InlineData("context")]
-    [InlineData("platform")]
-    [InlineData("harness")]
     [InlineData("path")]
-    [InlineData("action")]
-    [InlineData("proposal")]
-    [InlineData("baseline")]
-    [InlineData("source-snapshot")]
-    [InlineData("source-membership")]
     [InlineData("index")]
-    [InlineData("target-ignored")]
     [InlineData("other-overlay")]
-    [InlineData("other-enrollment")]
     public void StaleOrTamperedReviewIsRejectedWithoutWriterChanges(string state) =>
         MigrationTargetWriterTests.StaleOrTamperedReviewIsRejectedWithoutWriterChanges(state);
 }

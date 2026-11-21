@@ -426,6 +426,38 @@ legacy migration and combined portable capture checks both passed in
 104.10 s with a three-minute per-test guard. Ferry accepted the cleanup
 on 21 November 2026. Full-suite verification remains pending for #19.
 
+### Target and legacy review comparison coverage
+
+- Typed unit tests exercise target review comparisons, including the
+  selected and required source inventories. Four writer cases retain
+  real branch, staged index, peer overlay, and forged target path
+  checks. Three use only the selected Codex harness.
+- Target HEAD, original commit, ignored target, and enrollment checks
+  remain in target preview, source validation, or target committer
+  suites exercising the same fresh-preview guards.
+- Typed unit tests exercise legacy review branch, file membership,
+  path, and byte comparisons. One real capture committer case rejects
+  a forged proposal before writing or staging. The legacy writer's
+  existing stale-input matrix covers the six removed checkout and
+  runtime mutations with specific diagnostics.
+
+Both runs used the same two-method Debug filter, workspace fixtures,
+TRX, Git Trace2, and the two-minute per-test hang guard.
+
+| Target and legacy review measurement | Before | After |
+| --- | ---: | ---: |
+| Passing real-Git cases | 24 | 5 |
+| Git process starts | 6,972 | 1,408 |
+| Wall time | 122.42 s | 20.99 s |
+
+The bounded workload removed 5,564 Git starts (79.8%). This and the
+separate target-drift and post-DONE workload removed 15,304 Git starts
+across their measured cases. Full-suite Git savings remain unverified.
+
+All 23 focused guard and commit cases passed in 107.84 s. All 260
+unit tests passed in 1.21 s with zero Git starts. Ferry accepted the
+review comparison cleanup on 21 November 2026.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted

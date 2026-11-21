@@ -1,4 +1,3 @@
-using System.Text;
 using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 
 namespace Aec.Tests;
@@ -94,70 +93,31 @@ public sealed class MigrationTargetWriterTests
 
     internal static void StaleOrTamperedReviewIsRejectedWithoutWriterChanges(string state)
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = state == "other-overlay" ? new Layout("codex", "copilot") : new Layout("codex");
+        if (state != "other-overlay") File.Delete(layout.Runtime("copilot"));
         var reviewed = Preview(layout, "codex");
         switch (state)
         {
-            case "head":
-                layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint");
-                break;
             case "branch":
                 layout.Files.Git("switch", "-c", "other-branch");
                 break;
-            case "context":
-                reviewed = reviewed with
-                {
-                    Preparation = reviewed.Preparation with { OriginalCommit = "HEAD~1" }
-                };
-                break;
-            case "platform":
-                reviewed = reviewed with { Platform = "wrong-platform" };
-                break;
-            case "harness":
-                reviewed = reviewed with { Harness = reviewed.Harness with { Provider = "copilot" } };
-                break;
             case "path":
                 reviewed = reviewed with { TargetRelativePath = "environment/targets/outside.md" };
-                break;
-            case "action":
-                reviewed = reviewed with { Action = MigrationTargetAction.Regenerate };
-                break;
-            case "proposal":
-                reviewed = reviewed with { DesiredContent = Encoding.UTF8.GetBytes("Forged proposal.\n") };
-                break;
-            case "baseline":
-                reviewed = reviewed with { CommittedContent = Encoding.UTF8.GetBytes("Forged baseline.\n") };
-                break;
-            case "source-snapshot":
-                reviewed = reviewed with { Sources = reviewed.Sources.Select((source, index) => index == 0
-                        ? source with { WorkingContent = Encoding.UTF8.GetBytes("Forged source.\n") }
-                        : source).ToArray() };
-                break;
-            case "source-membership":
-                reviewed = reviewed with { Sources = reviewed.Sources.Take(2).ToArray() };
                 break;
             case "index":
                 layout.Files.Write("notes.md", "Staged unrelated content.\n");
                 layout.Files.Git("add", "--", "notes.md");
                 break;
-            case "target-ignored":
-                reviewed = PreviewMissingTarget(layout, "codex");
-                File.AppendAllText(Path.Combine(layout.Repository, ".git", "info", "exclude"),
-                    reviewed.TargetRelativePath + "\n");
-                break;
             case "other-overlay":
                 layout.Files.Write("environment/providers/copilot/overlay.md", "Other overlay draft.\n");
                 break;
             default:
-                File.Delete(layout.Runtime("copilot"));
-                break;
+                throw new ArgumentOutOfRangeException(nameof(state), state, null);
         }
         var before = Capture(layout);
 
-        if (state == "context")
-            Assert.Throws<InvalidDataException>(() => MigrationTargetWriter.Write(reviewed));
-        else
-            Assert.Throws<InvalidOperationException>(() => MigrationTargetWriter.Write(reviewed));
+        var error = Assert.Throws<InvalidOperationException>(() => MigrationTargetWriter.Write(reviewed));
+        if (state == "path") Assert.Contains("Migration target path differs from review", error.Message, StringComparison.Ordinal);
 
         AssertEntireFixtureUnchanged(layout, before);
     }
@@ -248,13 +208,6 @@ public sealed class MigrationTargetWriterTests
 
     private static MigrationTargetPreview Preview(Layout layout, string provider, string? original = null) =>
         MigrationTargetPreview.Read(layout.Context(original), provider);
-
-    private static MigrationTargetPreview PreviewMissingTarget(Layout layout, string provider)
-    {
-        var target = layout.Target(provider);
-        RemoveAndCommitTarget(layout, target);
-        return Preview(layout, provider);
-    }
 
     private static void RemoveAndCommitTarget(Layout layout, string target)
     {

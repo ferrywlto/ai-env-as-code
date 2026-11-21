@@ -139,7 +139,7 @@ internal sealed class MigrationTargetWriter
         }
     }
 
-    private static void VerifyReview(MigrationTargetPreview reviewed, MigrationTargetPreview fresh)
+    internal static void VerifyReview(MigrationTargetPreview reviewed, MigrationTargetPreview fresh)
     {
         if (reviewed.Branch != fresh.Branch)
             throw new InvalidOperationException("Migration target branch changed after review.");
