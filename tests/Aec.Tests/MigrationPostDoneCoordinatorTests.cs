@@ -12,7 +12,7 @@ public sealed class MigrationPostDoneCoordinatorTests
 
     internal static void CommitsSourcesTargetsThenMarkerAndAppliesEnrolledProviders(string selected, int count)
     {
-        using var layout = selected == "both" ? new Layout("codex", "copilot") : new Layout(selected);
+        using var layout = selected == "both" ? Layout.WithRemote("codex", "copilot") : Layout.WithRemote(selected);
         if (selected != "both") File.Delete(layout.Runtime("copilot"));
         var original = layout.Files.Head();
         layout.Files.Write(Shared, "Changed approval.\n");
@@ -57,7 +57,7 @@ public sealed class MigrationPostDoneCoordinatorTests
     [Fact]
     public void FirstLegacyMigrationCreatesSourcesAndTargetsBeforeCompleting()
     {
-        using var layout = new Layout();
+        using var layout = Layout.WithRemote();
         var original = layout.Files.Head();
         var canonical = new[] { AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath,
             AecApplication.CopilotSourceRelativePath }.ToDictionary(path => path,

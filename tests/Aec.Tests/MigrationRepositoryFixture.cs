@@ -6,10 +6,10 @@ internal sealed class MigrationRepositoryFixture : IDisposable
 {
     private readonly string? previousCodex = Environment.GetEnvironmentVariable("CODEX_HOME");
     private readonly string? previousCopilot = Environment.GetEnvironmentVariable("COPILOT_HOME");
-    private readonly string remote;
+    private readonly string? remote;
     private string? writer;
 
-    public MigrationRepositoryFixture(bool includeCopilotCanonical = false)
+    public MigrationRepositoryFixture(bool includeCopilotCanonical = false, bool includeRemote = false)
     {
         var temporaryRoot = TestTemporaryDirectory.Root;
         Root = Path.Combine(temporaryRoot,
@@ -36,10 +36,13 @@ internal sealed class MigrationRepositoryFixture : IDisposable
             Git("add", "--", AecApplication.CopilotSourceRelativePath);
             Git("commit", "--quiet", "-m", "Fixture legacy Copilot enrollment");
         }
-        remote = Path.Combine(Root, "shared remote.git");
-        Git("init", "--bare", "--quiet", "--template=", "--initial-branch=main", remote);
-        Git("remote", "add", "shared", remote);
-        Git("push", "--quiet", "--set-upstream", "shared", "main");
+        if (includeRemote)
+        {
+            remote = Path.Combine(Root, "shared remote.git");
+            Git("init", "--bare", "--quiet", "--template=", "--initial-branch=main", remote);
+            Git("remote", "add", "shared", remote);
+            Git("push", "--quiet", "--set-upstream", "shared", "main");
+        }
         Environment.SetEnvironmentVariable("CODEX_HOME", codex);
         Environment.SetEnvironmentVariable("COPILOT_HOME", copilot);
     }
@@ -52,11 +55,12 @@ internal sealed class MigrationRepositoryFixture : IDisposable
 
     public void AdvanceRemote(Action<string>? edit = null)
     {
+        var remotePath = remote ?? throw new InvalidOperationException("The fixture was created without a remote.");
         if (writer is null)
         {
             var checkout = Path.Combine(Root, "remote-writer");
             Git("clone", "--no-local", "--quiet", "--origin", "shared",
-                "--config", "core.autocrlf=false", remote, checkout);
+                "--config", "core.autocrlf=false", remotePath, checkout);
             writer = checkout;
         }
 

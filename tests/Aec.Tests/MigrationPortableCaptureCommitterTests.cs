@@ -27,7 +27,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     public void OneChangedProviderCommitsItsSourceAndConsumers(
         string provider, string section, bool includeConfig)
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         layout.EditRuntime(provider, section == "shared" ? "Shared approval." : "Provider mechanics.", "Approved revision.");
         if (includeConfig)
             File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\nmodel = 'machine-only'\n");
@@ -55,7 +55,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     [InlineData("platform")]
     public void MatchingProposalsProduceOneCommitWithExactlyTheirConsumers(string section)
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var targets = MigrationPortableTargetWriterTests.EnrollOtherPlatforms(layout, "codex", "copilot");
         var original = section == "shared" ? "Shared approval." : "Local paths.";
         layout.EditRuntime("codex", original, "Agreed revision.");
@@ -70,7 +70,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     [Trait("Category", "MigrationReview")]
     public void SeparateOverlaysAndManagedConfigShareOneCommit()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
         File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\nmodel = 'private-machine-model'\n");
@@ -82,7 +82,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     [Fact]
     public void CombinedPlatformAndProviderChangesCommitTheirUnionAcrossPlatforms()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var targets = MigrationPortableTargetWriterTests.EnrollOtherPlatforms(layout, "codex", "copilot");
         layout.EditRuntime("codex", "Local paths.", "Platform revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Provider revision.");
@@ -97,7 +97,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     [Fact]
     public void ConfigOnlyCaptureLeavesAllInstructionFilesUntouched()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         File.WriteAllText(layout.ConfigRuntime, "personality = 'none'\nmodel = 'private'\n");
         AssertCapture(layout, ConfigOnlyPaths);
         Assert.Equal("personality = \"none\"\n",
@@ -109,7 +109,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     [InlineData("copilot")]
     public void MixedFormatsPreserveLegacyRuntimeAndUnconsumedAuthoredDraft(string provider)
     {
-        using var layout = new Layout(provider);
+        using var layout = Layout.WithRemote(provider);
         var legacy = provider == "codex" ? "copilot" : "codex";
         File.AppendAllText(layout.Runtime(legacy), "Pending legacy edit.\n");
         layout.Files.Write($"environment/providers/{legacy}/overlay.md", "Keep this unconsumed authored draft.\n");
@@ -173,7 +173,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     [Fact]
     public void CallerDerivedProposalsCannotRedirectCombinedCapture()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
         var reviewed = Preview(layout);
@@ -192,7 +192,7 @@ public sealed class MigrationPortableCaptureCommitterTests
     [Fact]
     public void BaselineGitExecutableModesArePreservedForSourceAndTarget()
     {
-        using var layout = new Layout("codex");
+        using var layout = Layout.WithRemote("codex");
         const string source = "environment/providers/codex/overlay.md";
         var target = layout.Target("codex");
         // Git executable bits can be tested on Windows too; do not require

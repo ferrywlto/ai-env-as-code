@@ -16,7 +16,7 @@ public sealed class MigrationLegacyCaptureCommitterTests
     [Fact]
     public void CommitsOnlyChangedLegacyFilesPreservingRuntimeAndAuthoredDrafts()
     {
-        using var layout = new MigrationRepositoryFixture(includeCopilotCanonical: true);
+        using var layout = new MigrationRepositoryFixture(includeCopilotCanonical: true, includeRemote: true);
         File.AppendAllText(CodexRuntime(layout), "Codex runtime edit.\n");
         File.AppendAllText(layout.CopilotRuntime, "Copilot runtime edit.\n");
         File.WriteAllText(ConfigRuntime(layout), "personality = 'pragmatic'\nmodel = 'machine-only'\n");

@@ -340,6 +340,38 @@ All nine focused preview and writer checks passed in 29.40 s. All
 the scaffold writer cleanup on 20 November 2026. Full-suite verification
 remains pending for #19.
 
+### Shared migration remote fixture
+
+- Local-only migration fixtures skip creating a bare remote, configuring
+  an upstream, and pushing the seed branch. They retain real local
+  history, index, working files, and provider runtimes.
+- Tests that exercise remote operations, assert remote or tracking refs,
+  or use an unreachable remote to check refusal ordering request a
+  remote explicitly. Public migration and recovery keep their upstream.
+
+The same 31-case filter covered scaffold and legacy capture previews,
+fast-forward, and portable capture. Both runs used a prior Debug build,
+workspace fixtures, TRX, Git Trace2, and the same hang limits.
+
+| Shared fixture measurement | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 31 | 31 |
+| Bare remote initializations and initial pushes | 31 each | 4 each |
+| Git process starts | 6,775 | 6,532 |
+| Observed wall time | 203.56 s | 256.59 s |
+
+The 27 skipped remotes removed 243 Git starts. The four cases that
+retained a remote also ran slower, with summed TRX durations of
+44.60 s before and 54.14 s after. This sample verifies less Git work.
+The wall-time benefit remains unverified.
+
+All 11 focused remote contract cases passed in 402.23 s, including
+remote-backed preparation, source and target commits, first migration,
+and public retry. That run used a five-minute per-test hang guard for the
+public retry, which took 3m 18s. All 219 unit tests passed in 1.64 s with
+zero Git starts. Ferry accepted the fixture cleanup on 21 November 2026.
+Full-suite verification remains pending for #19.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted

@@ -21,7 +21,7 @@ public sealed class MigrationPreparationTests
     [InlineData("not-a-choice\n")]
     public void EndOfInputCancelsBeforeLookingUpTheRemote(string answers)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.Write(Shared, "Dirty draft.\n");
         BreakRemote(layout);
         using var input = new StringReader(answers);
@@ -35,7 +35,7 @@ public sealed class MigrationPreparationTests
     [Fact]
     public void CancellationWhileAnsweringStopsBeforeRemoteLookup()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.Write(Shared, "Dirty draft.\n");
         BreakRemote(layout);
         using var cancellation = new CancellationTokenSource();
@@ -48,7 +48,7 @@ public sealed class MigrationPreparationTests
     [Fact]
     public void CleanBehindCheckoutReturnsRefreshedContextWithoutReadingInput()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         var original = layout.Head();
         layout.AdvanceRemote();
         var expected = layout.Git("ls-remote", "shared", "refs/heads/main").Split('\t')[0];
@@ -79,7 +79,7 @@ public sealed class MigrationPreparationTests
     [InlineData(true, "Overwrite")]
     public void EqualOrAheadReturnsChoiceWithoutDiscardingDrafts(bool ahead, string answer)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         if (ahead) layout.Git("commit", "--allow-empty", "-m", "Local revision");
         layout.Write(Shared, "Keep staged and unstaged draft.\n");
         layout.Git("add", "--", Shared);
@@ -102,7 +102,7 @@ public sealed class MigrationPreparationTests
     [InlineData("Overwrite")]
     public void NeitherChoicePermitsAdvancingADirtyBehindCheckout(string answer)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote();
         layout.Write(Shared, "User draft must not be discarded.\n");
         var head = layout.Head();
@@ -126,7 +126,7 @@ public sealed class MigrationPreparationTests
     [InlineData("no-harness")]
     public void LocalRefusalPrecedesPromptAndRemoteLookup(string cause)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         BreakRemote(layout);
         if (cause == "unrelated-dirt") layout.Write("unrelated.md", "Unrelated changes.\n");
         else foreach (var path in layout.RuntimeBytes().Keys.Where(path =>
@@ -145,7 +145,7 @@ public sealed class MigrationPreparationTests
     [Fact]
     public void ChangedHeadDuringPromptStopsBeforeRemoteLookup()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.Write(Shared, "Draft.\n");
         BreakRemote(layout);
         using var input = new CallbackInput(() => layout.Git("commit", "--allow-empty", "-m", "User checkpoint"), "Preserve");
@@ -162,7 +162,7 @@ public sealed class MigrationPreparationTests
     [InlineData(true)]
     public void SamePathEditsOrStagingDuringPromptInvalidateTheChoice(bool stageOnly)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.Write(Shared, "Reviewed draft.\n");
         BreakRemote(layout);
         using var input = new CallbackInput(() =>
@@ -182,7 +182,7 @@ public sealed class MigrationPreparationTests
     [Fact]
     public void PulledCompletionIsReportedAsRetainedHistoryNotCancellation()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote(writer => File.WriteAllText(Path.Combine(writer,
             MigrationPreflight.FormatRelativePath), "2.0\n"));
         var expected = layout.Git("ls-remote", "shared", "refs/heads/main").Split('\t')[0];
@@ -203,7 +203,7 @@ public sealed class MigrationPreparationTests
     [Fact]
     public void InvalidPulledSectionReportsRetainedHistoryAfterAdvancement()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote(writer =>
         {
             // A directory exercises the invalid-file boundary without requiring

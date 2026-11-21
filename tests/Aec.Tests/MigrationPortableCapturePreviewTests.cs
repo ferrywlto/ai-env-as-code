@@ -159,13 +159,22 @@ public sealed class MigrationPortableCapturePreviewTests
 
     internal sealed class Layout : IDisposable
     {
-        public MigrationRepositoryFixture Files { get; } = new(includeCopilotCanonical: true);
+        public MigrationRepositoryFixture Files { get; }
         public string Repository => Files.Repository;
         public string Platform { get; } = RenderCommand.CurrentPlatform();
         public string ConfigRuntime => Path.Combine(Files.Root, "codex-home", "config.toml");
 
         public Layout(params string[] portableProviders)
+            : this(portableProviders, includeRemote: false)
         {
+        }
+
+        public static Layout WithRemote(params string[] portableProviders) =>
+            new(portableProviders, includeRemote: true);
+
+        private Layout(string[] portableProviders, bool includeRemote)
+        {
+            Files = new MigrationRepositoryFixture(includeCopilotCanonical: true, includeRemote: includeRemote);
             if (portableProviders.Length == 0) return;
             var paths = new List<string> { "environment/shared/instructions.md", $"environment/platforms/{Platform}/policy.md" };
             Files.Write(paths[0], "Shared approval.\n");

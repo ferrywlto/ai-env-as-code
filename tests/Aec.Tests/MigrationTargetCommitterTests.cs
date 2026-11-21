@@ -13,7 +13,7 @@ public sealed class MigrationTargetCommitterTests
     [InlineData("copilot")]
     public void CreatesAndCommitsOnlyTheReviewedTarget(string provider)
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         RemoveAndCommitTarget(layout, layout.Target(provider));
         var reviewed = Preview(layout, provider);
         var before = CaptureOutsideLocalGit(layout);
@@ -29,7 +29,7 @@ public sealed class MigrationTargetCommitterTests
     [InlineData("copilot")]
     public void RegeneratesAndCommitsOnlyTheReviewedTarget(string provider)
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var originalHead = layout.Files.Head();
         CommitSourceEdit(layout, provider, "Reviewed revision.\n");
         var reviewed = Preview(layout, provider, originalHead);
@@ -47,7 +47,7 @@ public sealed class MigrationTargetCommitterTests
     [InlineData("copilot")]
     public void UnchangedTargetIsMutationFreeNoOp(string provider)
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var reviewed = Preview(layout, provider);
         var before = CaptureEntireFixture(layout);
         var head = layout.Files.Head();
@@ -63,7 +63,7 @@ public sealed class MigrationTargetCommitterTests
     [Fact]
     public void CommittedEmptySourcesCreateNonemptyRenderedTarget()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var target = layout.Target("codex");
         RemoveAndCommitTarget(layout, target);
         var sources = new[]
@@ -90,7 +90,7 @@ public sealed class MigrationTargetCommitterTests
     [Fact]
     public void NewTargetCommitsAsRegularFileAndUsesPrivateWorkingPermissions()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var target = layout.Target("codex");
         RemoveAndCommitTarget(layout, target);
         var reviewed = Preview(layout, "codex");
@@ -112,7 +112,7 @@ public sealed class MigrationTargetCommitterTests
     public void RegenerationPreservesCommittedGitModeAndRawWorkingPermissions(string gitMode)
     {
         if (gitMode == "100755" && OperatingSystem.IsWindows()) return;
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var originalHead = layout.Files.Head();
         var target = layout.Target("codex");
         var targetPath = Path.Combine(layout.Repository, target);

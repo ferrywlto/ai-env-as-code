@@ -10,7 +10,7 @@ public sealed class MigrationCommandTests
     [Fact]
     public void PublicMigrationCompletesWithUnusedGlobalLfsFilter()
     {
-        using var layout = new Layout();
+        using var layout = Layout.WithRemote();
         var sentinel = Path.Combine(layout.Files.Root, "filter-ran");
         var globalConfig = Path.Combine(layout.Files.Root, "global-gitconfig");
         var config = $"[user]\n\tname = AEC Fixture\n\temail = fixture@example.invalid\n[filter \"lfs\"]\n\tclean = touch '{sentinel}'\n\tsmudge = touch '{sentinel}'\n\tprocess = touch '{sentinel}'\n\trequired = true\n";
@@ -40,7 +40,7 @@ public sealed class MigrationCommandTests
     [InlineData(true)]
     public void PublicCommandCompletesOnlyAfterDone(bool confirm)
     {
-        using var layout = new Layout();
+        using var layout = Layout.WithRemote();
         using var output = new StringWriter();
         using var error = new StringWriter();
         using var input = new EditingReader(layout, output, confirm);
@@ -62,7 +62,7 @@ public sealed class MigrationCommandTests
     [Fact]
     public void PublicRetryPreservesAnExistingScaffoldDraftAndCompletes()
     {
-        using var layout = new Layout();
+        using var layout = Layout.WithRemote();
         const string draft = "Reviewed shared instructions.\n";
         SeedScaffoldDraft(layout, draft);
         string[] args = ["migrate", "2.0", "--repo", layout.Repository];
@@ -114,7 +114,7 @@ public sealed class MigrationCommandTests
     {
         // The fixture already has the committed targets and applied runtimes
         // that exist immediately before a migration publishes its marker.
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var dataHead = layout.Files.Head();
         var runtime = layout.Files.RuntimeBytes();
         var exclude = Path.Combine(layout.Repository, ".git", "info", "exclude");

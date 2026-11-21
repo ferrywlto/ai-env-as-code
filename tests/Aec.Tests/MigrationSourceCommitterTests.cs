@@ -12,7 +12,7 @@ public sealed class MigrationSourceCommitterTests
     [Fact]
     public void CommitsFourNewEmptyRequiredSourcesAndThenIsNoOp()
     {
-        using var layout = new Layout();
+        using var layout = Layout.WithRemote();
         var paths = RequiredPaths(layout);
         foreach (var path in paths) layout.Files.Write(path, string.Empty);
         var reviewed = Preview(layout);
@@ -47,7 +47,7 @@ public sealed class MigrationSourceCommitterTests
     [InlineData("copilot")]
     public void CommitsReviewedSectionEditsOnly(string section)
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var path = section switch
         {
             "shared" => Shared,
@@ -63,7 +63,7 @@ public sealed class MigrationSourceCommitterTests
     [Fact]
     public void MixedExistingAndNewSourcesCommitTheirUnion()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         const string added = "environment/providers/copilot/overlay.md";
         layout.Files.Git("rm", "--cached", "--", added);
         layout.Files.Git("commit", "--quiet", "-m", "Remove Copilot source baseline");
@@ -115,7 +115,7 @@ public sealed class MigrationSourceCommitterTests
     [Fact]
     public void HiddenAssumeUnchangedSourceIsRefusedWithoutClearingFlag()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         File.AppendAllText(Path.Combine(layout.Repository, Shared), "Reviewed edit.\n");
         var reviewed = Preview(layout);
         layout.Files.Git("update-index", "--assume-unchanged", "--", Shared);
@@ -131,7 +131,7 @@ public sealed class MigrationSourceCommitterTests
     [Fact]
     public void GitNewlineTransformationIsRejectedWithStagingRetained()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var path = "environment/providers/codex/overlay.md";
         File.WriteAllBytes(Path.Combine(layout.Repository, path), Encoding.UTF8.GetBytes("Line one.\r\nLine two.\r\n"));
         var reviewed = Preview(layout);
@@ -149,7 +149,7 @@ public sealed class MigrationSourceCommitterTests
     [Fact]
     public void SigningFailureRetainsExactStagedSources()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         File.AppendAllText(Path.Combine(layout.Repository, Shared), "Reviewed edit.\n");
         var reviewed = Preview(layout);
         var paths = reviewed.ChangedPaths.ToArray();
@@ -173,7 +173,7 @@ public sealed class MigrationSourceCommitterTests
     public void ExistingExecutableModeIsPreserved()
     {
         if (OperatingSystem.IsWindows()) return;
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         const string existing = "environment/providers/codex/overlay.md";
         var path = Path.Combine(layout.Repository, existing);
         File.SetUnixFileMode(path, File.GetUnixFileMode(path) | UnixFileMode.UserExecute);
@@ -189,7 +189,7 @@ public sealed class MigrationSourceCommitterTests
     public void NewExecutableModeIsRejectedWithStagingRetained()
     {
         if (OperatingSystem.IsWindows()) return;
-        using var layout = new Layout();
+        using var layout = Layout.WithRemote();
         var paths = RequiredPaths(layout);
         foreach (var relative in paths) layout.Files.Write(relative, string.Empty);
         var path = Path.Combine(layout.Repository, Shared);
@@ -210,7 +210,7 @@ public sealed class MigrationSourceCommitterTests
     public void ExistingTrackedModeChangeIsRefusedBeforePublish()
     {
         if (OperatingSystem.IsWindows()) return;
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         const string path = "environment/providers/codex/overlay.md";
         File.AppendAllText(Path.Combine(layout.Repository, path), "Reviewed edit.\n");
         var reviewed = Preview(layout);
