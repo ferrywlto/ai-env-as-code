@@ -9,10 +9,7 @@ public sealed class RegressionFollowupTests
 
     [Theory]
     [InlineData("copilot")]
-    [InlineData("codex")]
     [InlineData("source")]
-    [InlineData("target")]
-    [InlineData("exception")]
     public void DriftAfterFirstProviderStopsSecondAndReportsPartialState(string mutation) =>
         MigrationApplyCoordinatorTests.DriftAfterFirstProviderStopsSecondAndReportsPartialState(mutation);
 

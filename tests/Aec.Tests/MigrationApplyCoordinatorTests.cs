@@ -99,18 +99,18 @@ public sealed class MigrationApplyCoordinatorTests
         var before = Snapshot(layout.Files.Root);
         var calls = new List<string>();
         const string externalChange = "External change.\n";
-        var mutatedPath = mutation switch
+        const string source = "environment/shared/instructions.md";
+        var (mutatedPath, expectedDiagnostic) = mutation switch
         {
-            "source" => Path.Combine(layout.Repository, "environment/shared/instructions.md"),
-            "target" => Path.Combine(layout.Repository, layout.Target("copilot")),
-            _ => layout.Runtime(mutation)
+            "source" => (Path.Combine(layout.Repository, source), $"Instruction source changed during validation: {source}."),
+            "copilot" => (layout.Runtime("copilot"), $"Protected migration input changed during source validation: {layout.Runtime("copilot")}."),
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null)
         };
 
         var error = Assert.Throws<InvalidOperationException>(() =>
             MigrationApplyCoordinator.Apply([copilot, codex], provider =>
             {
                 calls.Add(provider);
-                if (mutation == "exception") throw new IOException("Injected boundary failure");
                 File.AppendAllText(mutatedPath, externalChange);
             }));
 
@@ -120,14 +120,11 @@ public sealed class MigrationApplyCoordinatorTests
         Assert.Contains("No automatic rollback", error.Message, StringComparison.Ordinal);
         Assert.Contains(layout.Runtime("codex"), error.Message, StringComparison.Ordinal);
         Assert.Contains(layout.Runtime("copilot"), error.Message, StringComparison.Ordinal);
+        Assert.Equal(expectedDiagnostic, Assert.IsType<InvalidOperationException>(error.InnerException).Message);
         Assert.Equal(copilotBefore + (mutation == "copilot" ? externalChange : ""),
             File.ReadAllText(layout.Runtime("copilot")));
-        Assert.Equal(System.Text.Encoding.UTF8.GetString(codex.Apply.DesiredRuntime) +
-            (mutation == "codex" ? externalChange : ""), File.ReadAllText(layout.Runtime("codex")));
-        var allowed = mutation == "exception"
-            ? new[] { layout.Runtime("codex") }
-            : new[] { layout.Runtime("codex"), mutatedPath };
-        AssertOnlyChanges(layout.Files.Root, before, allowed);
+        Assert.Equal(System.Text.Encoding.UTF8.GetString(codex.Apply.DesiredRuntime), File.ReadAllText(layout.Runtime("codex")));
+        AssertOnlyChanges(layout.Files.Root, before, [layout.Runtime("codex"), mutatedPath]);
     }
 
     private static void RestoreLegacy(MigrationPortableCapturePreviewTests.Layout layout, string provider) =>

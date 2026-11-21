@@ -458,6 +458,35 @@ All 23 focused guard and commit cases passed in 107.84 s. All 260
 unit tests passed in 1.21 s with zero Git starts. Ferry accepted the
 review comparison cleanup on 21 November 2026.
 
+### Apply coordinator partial-failure coverage
+
+- Three in-memory cases exercise completed-runtime drift, committed
+  target drift, and an exception after the first provider. They run the
+  coordinator's provider loop and protected-byte comparison and verify
+  the completed result, pinned inputs, and skipped second writer.
+- Two real-Git cases retain peer-runtime and authored-source drift.
+  They assert separate guard diagnostics, preserve the first provider's
+  applied bytes, and check that the second provider never writes.
+
+Both runs used the same Debug filter, workspace fixtures, TRX, Git
+Trace2, and the two-minute per-test hang guard.
+
+| Apply failure measurement | Before | After |
+| --- | ---: | ---: |
+| Passing real-Git cases | 5 | 2 |
+| Git process starts | 4,503 | 1,804 |
+| Observed wall time | 63.80 s | 37.94 s |
+
+The two retained cases ran slower in the second pass (25.23 s to
+37.12 s in summed TRX durations). Git starts show the removed fixture
+work directly. The three targeted regression workloads together
+removed 18,003 measured Git starts. Full-suite verification remains
+pending for #19.
+
+All five additional coordinator checks passed in 54.46 s. All 263 unit
+tests passed in 1.27 s with zero Git starts. Ferry accepted the
+apply-coordinator cleanup on 21 November 2026.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
