@@ -39,7 +39,7 @@ internal sealed record MigrationPreflight(
         {
             // Untracked, staged, deleted or transformed markers must fail, never
             // fall back to legacy. A section directory alone proves no completion.
-            var bytes = ApplyCommand.ReadCommittedFile(repository, commit,
+            var bytes = CommittedFileReader.ReadCommittedFile(repository, commit,
                 FormatRelativePath, "Repository format marker");
             current = ParseFormatVersion(new UTF8Encoding(false, true).GetString(bytes)
                 .TrimEnd('\r', '\n'), "Repository format marker");

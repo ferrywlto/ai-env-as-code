@@ -122,7 +122,7 @@ public sealed class CommittedFileProvenanceTests
             var before = Snapshot();
             try
             {
-                return ApplyCommand.ReadCommittedFile(root, commit, RelativePath, "Source");
+                return CommittedFileReader.ReadCommittedFile(root, commit, RelativePath, "Source");
             }
             finally
             {

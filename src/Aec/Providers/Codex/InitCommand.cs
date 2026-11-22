@@ -483,7 +483,7 @@ internal static class InitCommand
         }
 
         var commit = ApplyCommand.ResolveHeadCommit(repository);
-        var files = ApplyCommand.ReadCommittedFiles(repository, commit,
+        var files = CommittedFileReader.ReadCommittedFiles(repository, commit,
             (AecApplication.SourceRelativePath, "Canonical source"),
             (AecApplication.ConfigSourceRelativePath, "Canonical config"));
         var content = files[0];

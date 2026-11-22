@@ -41,6 +41,11 @@
   Copilot while preserving provider parsing, byte-order marks and separators.
   The unit and block/uninstall selection passed 358 tests, including in-place
   Copilot digest coverage.
+- [x] Ferry reviewed the ninth slice: move committed-file provenance readers from the
+  Codex apply command to a repository-focused class. The reader and its Git
+  adapters are unchanged; callers in both providers and migration use it. The
+  unit, provenance, initialization, apply and focused review selection passed
+  521 tests in 2m 20s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

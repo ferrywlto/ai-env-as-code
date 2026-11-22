@@ -82,7 +82,7 @@ internal static class CopilotInitCommand
                 // A pulled checkout retains the original machine's canonical path.
                 // Bind this machine's runtime only; never commit a path-only change.
                 expectedCommit = ApplyCommand.ResolveHeadCommit(repository);
-                var committed = ApplyCommand.ReadCommittedFile(
+                var committed = CommittedFileReader.ReadCommittedFile(
                     repository,
                     expectedCommit,
                     AecApplication.CopilotSourceRelativePath,
@@ -140,7 +140,7 @@ internal static class CopilotInitCommand
         string platform,
         TextWriter output)
     {
-        var canonical = ApplyCommand.ReadCommittedFile(
+        var canonical = CommittedFileReader.ReadCommittedFile(
             repository, commit, AecApplication.CopilotSourceRelativePath,
             "Canonical Copilot instructions");
         var canonicalBinding = CopilotInstructionBlock.ReadManagedBinding(canonical)
@@ -215,7 +215,7 @@ internal static class CopilotInitCommand
     {
         if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
                 StringComparison.Ordinal) ||
-            !ApplyCommand.ReadCommittedFile(
+            !CommittedFileReader.ReadCommittedFile(
                 repository, commit, AecApplication.CopilotSourceRelativePath,
                 "Canonical Copilot instructions").AsSpan().SequenceEqual(canonical) ||
             !CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Copilot)

@@ -46,7 +46,7 @@ internal static class CommittedTargetValidator
         var commit = ApplyCommand.ResolveHeadCommit(repository);
 
         var targetRelativePath = $"environment/targets/{platform}/{provider}/{fileName}";
-        var files = ApplyCommand.ReadCommittedFiles(repository, commit,
+        var files = CommittedFileReader.ReadCommittedFiles(repository, commit,
             ("environment/shared/instructions.md", "Authored shared instructions"),
             ($"environment/platforms/{platform}/policy.md", "Authored platform policy"),
             ($"environment/providers/{provider}/overlay.md", "Authored provider overlay"),

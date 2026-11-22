@@ -66,7 +66,7 @@ internal static class SharedEnrollmentCommand
 
         if (provider == AecIdentifiers.Copilot)
         {
-            var canonical = ApplyCommand.ReadCommittedFile(
+            var canonical = CommittedFileReader.ReadCommittedFile(
                 repository,
                 commit,
                 AecApplication.CopilotSourceRelativePath,
@@ -106,7 +106,7 @@ internal static class SharedEnrollmentCommand
 
         foreach (var relativePath in sourcePaths)
         {
-            _ = ApplyCommand.ReadCommittedFile(
+            _ = CommittedFileReader.ReadCommittedFile(
                 repository, commit, relativePath, "Authored instruction source");
         }
 
@@ -165,7 +165,7 @@ internal static class SharedEnrollmentCommand
 
     private static string ReadCommittedSource(string repository, string commit, string relativePath)
     {
-        var bytes = ApplyCommand.ReadCommittedFile(
+        var bytes = CommittedFileReader.ReadCommittedFile(
             repository, commit, relativePath, "Authored instruction source");
         return StrictUtf8.GetString(bytes);
     }

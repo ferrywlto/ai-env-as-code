@@ -57,7 +57,7 @@ internal static class RenderCommand
             {
                 // A committed target must be clean before regeneration. Its working
                 // bytes may contain a user's edit that render must never overwrite.
-                _ = ApplyCommand.ReadCommittedFile(
+                _ = CommittedFileReader.ReadCommittedFile(
                     repository, commit, relativePath, "Rendered target");
             }
             else if (GitProcess.RunRequired(repository, "Git could not inspect target history",

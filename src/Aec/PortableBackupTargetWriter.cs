@@ -97,7 +97,7 @@ internal static class PortableBackupTargetWriter
             AecApplication.EnsureNoLinksInExistingPath(
                 Path.GetDirectoryName(targetPath)!, "Rendered target path");
             var current = renderedPaths is null
-                ? ApplyCommand.ReadCommittedFile(
+                ? CommittedFileReader.ReadCommittedFile(
                     reviewed.Repository, reviewed.Commit, path, "Rendered target")
                 : GitProcess.RunRequiredBytes(reviewed.Repository,
                     "Could not read committed rendered target", "show", $"{reviewed.Commit}:{path}");
@@ -199,7 +199,7 @@ internal static class PortableBackupTargetWriter
             }
             else
             {
-                baseline = ApplyCommand.ReadCommittedFile(
+                baseline = CommittedFileReader.ReadCommittedFile(
                     reviewed.Repository, reviewed.Commit, relativePath, "Authored source");
             }
 

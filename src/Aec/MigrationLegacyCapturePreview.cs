@@ -139,7 +139,7 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
     {
         AecApplication.EnsureNoLinksInExistingPath(
             Path.GetDirectoryName(Path.Combine(current.Repository, relative))!, "Canonical migration source path");
-        var bytes = ApplyCommand.ReadCommittedFile(current.Repository, current.Commit, relative, "Canonical migration source");
+        var bytes = CommittedFileReader.ReadCommittedFile(current.Repository, current.Commit, relative, "Canonical migration source");
         if (!bytes.AsSpan().SequenceEqual(ReadHistoricalFile(current.Repository, current.Commit, relative)))
         {
             throw new InvalidOperationException("Canonical bytes differ from the actual Git object; replacement objects are not capture provenance.");
