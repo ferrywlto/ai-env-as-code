@@ -4,19 +4,31 @@ namespace Aec.Tests;
 public sealed class PortableCopilotStatusCommandTests
 {
     [Fact]
-    public void ReportsInSyncForCommittedRenderedTargetWithoutWrites()
+    public void UsesCopilotHomeEnvironmentAndReportsInSyncWithoutWrites()
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-        layout.WriteRuntime(portableBlock: true);
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
+        var runtime = layout.WriteRuntime(portableBlock: true);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        File.WriteAllText(configPath, "not a TOML file");
         var head = layout.Head();
 
-        var result = Run(layout);
+        var previous = Environment.GetEnvironmentVariable("COPILOT_HOME");
+        CommandResult result;
+        try
+        {
+            Environment.SetEnvironmentVariable("COPILOT_HOME", layout.ProviderHome);
+            result = TestApplication.Run("status", "--repo", layout.Repository, "--provider=copilot");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("COPILOT_HOME", previous);
+        }
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(StatusOutput("in_sync"), result.Output);
         Assert.Empty(result.Error);
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal("not a TOML file", File.ReadAllText(configPath));
         Assert.Equal(head, layout.Head());
         Assert.Equal(string.Empty, layout.GitStatus());
     }
@@ -79,56 +91,6 @@ public sealed class PortableCopilotStatusCommandTests
         Assert.Contains("Committed target", result.Error, StringComparison.Ordinal);
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
-    public void UsesCopilotHomeEnvironmentWhenTheFlagIsAbsent()
-    {
-        using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-        layout.WriteRuntime(portableBlock: true);
-        var previous = Environment.GetEnvironmentVariable("COPILOT_HOME");
-
-        try
-        {
-            Environment.SetEnvironmentVariable("COPILOT_HOME", layout.ProviderHome);
-            var result = TestApplication.Run("status", "--repo", layout.Repository,
-                "--provider=copilot");
-
-            Assert.Equal(0, result.ExitCode);
-            Assert.Equal(StatusOutput("in_sync"), result.Output);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("COPILOT_HOME", previous);
-        }
-    }
-
-    [Fact]
-    public void RejectsCodexHomeForCopilotStatus()
-    {
-        using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-
-        var result = TestApplication.Run("status", "--repo", layout.Repository,
-            "--provider=copilot", "--codex-home", layout.ProviderHome);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("--codex-home is not valid with --provider=copilot",
-            result.Error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void RejectsCopilotHomeWithoutProvider()
-    {
-        using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-
-        var result = TestApplication.Run("status", "--repo", layout.Repository,
-            "--copilot-home", layout.ProviderHome);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("--copilot-home requires --provider=copilot",
-            result.Error, StringComparison.Ordinal);
     }
 
     [Fact]

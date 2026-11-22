@@ -278,7 +278,7 @@ public sealed class UpgradeTests
     public void EmptyCodexHomeFailsWithoutInstallingTheSkill()
     {
         var root = Path.Combine(
-            OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            TestTemporaryDirectory.Root,
             "aec-upgrade-empty-tests",
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -375,7 +375,7 @@ public sealed class UpgradeTests
         public UpgradeLayout()
         {
             Root = Path.Combine(
-                OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+                TestTemporaryDirectory.Root,
                 "aec-upgrade-tests",
                 Guid.NewGuid().ToString("N"));
             CodexHome = Path.Combine(Root, "codex home");

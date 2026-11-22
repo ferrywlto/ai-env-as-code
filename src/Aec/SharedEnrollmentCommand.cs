@@ -33,7 +33,9 @@ internal static class SharedEnrollmentCommand
         ApplyCommand.EnsureRuntimeOutsideRepository(
             repository, providerHome, fileName, "Provider runtime target");
         AecApplication.EnsureNoLinksInExistingPath(targetDirectory, "Enrollment target path");
-        ValidateProviderRuntime(repository, provider, Path.Combine(providerHome, fileName));
+        var runtime = AecApplication.ReadRequiredTextFile(Path.Combine(providerHome, fileName),
+            "Provider runtime instructions");
+        ValidateRuntimeBinding(repository, provider, runtime);
 
         var sourcePaths = new[]
         {
@@ -122,9 +124,8 @@ internal static class SharedEnrollmentCommand
         return 0;
     }
 
-    private static void ValidateProviderRuntime(string repository, string provider, string runtimePath)
+    internal static void ValidateRuntimeBinding(string repository, string provider, byte[] runtime)
     {
-        var runtime = AecApplication.ReadRequiredTextFile(runtimePath, "Provider runtime instructions");
         var recordedRepository = provider == AecIdentifiers.Codex
             ? AecInstructionBlock.ReadRepositoryBinding(runtime)?.Repository
             : CopilotInstructionBlock.ReadRepositoryBinding(runtime);

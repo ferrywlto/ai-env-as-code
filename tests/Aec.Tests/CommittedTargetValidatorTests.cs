@@ -14,8 +14,10 @@ public sealed class CommittedTargetValidatorTests
         var head = layout.Head();
         var expected = File.ReadAllBytes(layout.TargetPath);
 
-        var actual = CommittedTargetValidator.Read(layout.Repository, layout.Platform, provider);
+        var (commit, actual) = CommittedTargetValidator.ReadWithCommit(
+            layout.Repository, layout.Platform, provider);
 
+        Assert.Equal(head, commit);
         Assert.Equal(expected, actual);
         Assert.Equal(head, layout.Head());
         Assert.Empty(GitProcess.RunRequired(layout.Repository, "Could not inspect status",
@@ -98,7 +100,7 @@ public sealed class CommittedTargetValidatorTests
 
         public TargetLayout(string provider, bool commitTarget = true)
         {
-            root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-committed-target-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(root, "data");
             Platform = RenderCommand.CurrentPlatform();

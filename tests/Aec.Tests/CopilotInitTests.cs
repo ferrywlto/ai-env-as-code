@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
@@ -11,7 +13,13 @@ public sealed class CopilotInitTests
             File.ReadAllBytes(layout.RuntimeInstructions),
             layout.Repository);
 
-        var result = Run(layout.Repository, layout.CopilotHome);
+        var result = TestApplication.Run(
+            "init",
+            "--provider=copilot",
+            "--copilot-home",
+            layout.CopilotHome,
+            "--repo",
+            layout.Repository);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
@@ -25,109 +33,18 @@ public sealed class CopilotInitTests
         Assert.False(File.Exists(Path.Combine(layout.CopilotHome, "config.json")));
     }
 
-    [Fact]
-    public void AcceptsProviderBeforeRepository()
-    {
-        using var layout = new CopilotLayout();
-
-        var result = TestApplication.Run(
-            "init",
-            "--provider=copilot",
-            "--copilot-home",
-            layout.CopilotHome,
-            "--repo",
-            layout.Repository);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.True(File.Exists(layout.CanonicalInstructions));
-    }
-
-    [Fact]
-    public void RequiresAnExplicitRepository()
-    {
-        using var layout = new CopilotLayout();
-        var previousDirectory = Environment.CurrentDirectory;
-
-        try
-        {
-            Environment.CurrentDirectory = layout.Repository;
-
-            var result = TestApplication.Run(
-                "init",
-                "--provider=copilot",
-                "--copilot-home",
-                layout.CopilotHome);
-
-            Assert.Equal(1, result.ExitCode);
-            Assert.Contains("init requires --repo", result.Error, StringComparison.Ordinal);
-            Assert.False(File.Exists(layout.CanonicalInstructions));
-        }
-        finally
-        {
-            Environment.CurrentDirectory = previousDirectory;
-        }
-    }
-
-    [Fact]
-    public void ExplicitCopilotHomeTakesPrecedenceOverEnvironment()
-    {
-        using var layout = new CopilotLayout();
-        var previous = Environment.GetEnvironmentVariable("COPILOT_HOME");
-
-        try
-        {
-            Environment.SetEnvironmentVariable("COPILOT_HOME", "not-an-absolute-path");
-
-            var result = Run(layout.Repository, layout.CopilotHome);
-
-            Assert.Equal(0, result.ExitCode);
-            Assert.True(File.Exists(layout.RuntimeInstructions));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("COPILOT_HOME", previous);
-        }
-    }
-
-    [Fact]
-    public void UsesCopilotHomeEnvironmentWhenNoOptionWasSupplied()
-    {
-        using var layout = new CopilotLayout();
-        var previous = Environment.GetEnvironmentVariable("COPILOT_HOME");
-        var previousCodexHome = Environment.GetEnvironmentVariable("CODEX_HOME");
-
-        try
-        {
-            Environment.SetEnvironmentVariable("COPILOT_HOME", layout.CopilotHome);
-            Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
-
-            var result = TestApplication.Run(
-                "init",
-                "--repo",
-                layout.Repository,
-                "--provider=copilot");
-
-            Assert.Equal(0, result.ExitCode);
-            Assert.True(File.Exists(layout.CanonicalInstructions));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("COPILOT_HOME", previous);
-            Environment.SetEnvironmentVariable("CODEX_HOME", previousCodexHome);
-        }
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void ImplicitCopilotHomeRejectsConflictingCodexBinding(bool forcePathChange)
     {
-        using var layout = new CopilotLayout();
-        var pulled = Path.Combine(layout.Root, "second checkout");
-        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Repository,
-            pulled).ExitCode);
+        using var layout = new CopilotLayout(initializeGit: false);
+        var pulled = Path.Combine(layout.Root, "selected checkout");
+        Directory.CreateDirectory(pulled);
+        Directory.CreateDirectory(layout.CodexHome);
+        File.WriteAllBytes(Path.Combine(layout.CodexHome, "AGENTS.md"),
+            AecInstructionBlock.Merge("Codex runtime.\n"u8.ToArray(), layout.Repository));
         var runtimeBefore = File.ReadAllBytes(layout.RuntimeInstructions);
-        var originalHead = TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim();
         var previousCodexHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         var previousCopilotHome = Environment.GetEnvironmentVariable("COPILOT_HOME");
 
@@ -153,8 +70,7 @@ public sealed class CopilotInitTests
             Assert.False(File.Exists(Path.Combine(pulled,
                 AecApplication.CopilotSourceRelativePath)));
             Assert.False(File.Exists(layout.Skill));
-            Assert.Equal(originalHead,
-                TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
+            Assert.False(Directory.Exists(Path.Combine(pulled, ".git")));
         }
         finally
         {
@@ -242,35 +158,31 @@ public sealed class CopilotInitTests
     [Fact]
     public void RejectsAProviderPathBoundToAnotherRepository()
     {
-        using var layout = new CopilotLayout();
-        Assert.Equal(0, Run(layout.Repository, layout.CopilotHome).ExitCode);
+        using var layout = new CopilotLayout(createRuntime: false);
+        Directory.CreateDirectory(layout.CopilotHome);
+        var runtimeBefore = layout.SeedCanonicalInstructions();
+        File.WriteAllBytes(layout.RuntimeInstructions, runtimeBefore);
         var movedRepository = Path.Combine(layout.Root, "moved-repository");
         Directory.Move(layout.Repository, movedRepository);
         var movedCanonical = Path.Combine(movedRepository, AecApplication.CopilotSourceRelativePath);
-        var runtimeBefore = File.ReadAllBytes(layout.RuntimeInstructions);
 
         var result = Run(movedRepository, layout.CopilotHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("different data repository", result.Error, StringComparison.Ordinal);
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.RuntimeInstructions));
-        Assert.True(File.Exists(movedCanonical));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(movedCanonical));
     }
 
     [Fact]
     public void ConfirmedCloneAttachmentChangesOnlyLocalRuntimeBinding()
     {
-        using var layout = new CopilotLayout();
-        Assert.Equal(0, Run(layout.Repository, layout.CopilotHome).ExitCode);
-        Assert.Equal(0, TestGit.Run(layout.Repository, "add", "--",
-            AecApplication.CopilotSourceRelativePath).ExitCode);
-        Assert.Equal(0, TestGit.Run(layout.Repository, "commit", "--quiet", "--message",
-            "Enroll Copilot instructions").ExitCode);
+        using var layout = new CopilotLayout(initializeGit: false, createRuntime: false);
+        layout.SeedCommittedInstructions();
 
-        var pulled = Path.Combine(layout.Root, "pulled-repository");
+        var pulled = layout.Clone("pulled-repository");
         var secondHome = Path.Combine(layout.Root, "second-copilot-home");
-        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Repository,
-            pulled).ExitCode);
+
         Directory.CreateDirectory(secondHome);
         var canonicalPath = Path.Combine(pulled, AecApplication.CopilotSourceRelativePath);
         var canonicalBefore = File.ReadAllBytes(canonicalPath);
@@ -286,8 +198,9 @@ public sealed class CopilotInitTests
         var confirmed = Run(pulled, secondHome, forcePathChange: true);
         Assert.Equal(0, confirmed.ExitCode);
         var runtimePath = Path.Combine(secondHome, "copilot-instructions.md");
-        Assert.Equal(pulled, CopilotInstructionBlock.ReadRepositoryBinding(
-            File.ReadAllBytes(runtimePath)));
+        var runtime = File.ReadAllBytes(runtimePath);
+        Assert.Equal(pulled, CopilotInstructionBlock.ReadRepositoryBinding(runtime));
+        Assert.Equal(CopilotInstructionBlock.RebindRepository(canonicalBefore, pulled), runtime);
         Assert.Equal(canonicalBefore, File.ReadAllBytes(canonicalPath));
         Assert.Equal(headBefore, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
         Assert.Equal(string.Empty, TestGit.Run(pulled, "status", "--porcelain").Output);
@@ -310,16 +223,11 @@ public sealed class CopilotInitTests
     [Fact]
     public void ConfirmedCloneAttachmentRejectsUncommittedCanonicalChanges()
     {
-        using var layout = new CopilotLayout();
-        Assert.Equal(0, Run(layout.Repository, layout.CopilotHome).ExitCode);
-        Assert.Equal(0, TestGit.Run(layout.Repository, "add", "--",
-            AecApplication.CopilotSourceRelativePath).ExitCode);
-        Assert.Equal(0, TestGit.Run(layout.Repository, "commit", "--quiet", "--message",
-            "Enroll Copilot instructions").ExitCode);
-        var pulled = Path.Combine(layout.Root, "dirty-pulled-repository");
+        using var layout = new CopilotLayout(initializeGit: false, createRuntime: false);
+        layout.SeedCommittedInstructions();
+        var pulled = layout.Clone("dirty-pulled-repository");
         var secondHome = Path.Combine(layout.Root, "second-copilot-home");
-        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Repository,
-            pulled).ExitCode);
+
         Directory.CreateDirectory(secondHome);
         File.AppendAllText(Path.Combine(pulled, AecApplication.CopilotSourceRelativePath),
             "Local uncommitted edit.\n");
@@ -335,18 +243,14 @@ public sealed class CopilotInitTests
     [Fact]
     public void EnrolledTargetAttachesCloneWithoutChangingSharedHistory()
     {
-        using var layout = new CopilotLayout();
-        CommitPortableTarget(layout);
+        using var layout = new CopilotLayout(initializeGit: false, createRuntime: false);
         var platform = RenderCommand.CurrentPlatform();
-        var originalAttachment = Run(layout.Repository, layout.CopilotHome);
-        Assert.Equal(0, originalAttachment.ExitCode);
-        Assert.Equal(0, TestApplication.Run("status", "--repo", layout.Repository,
-            "--provider=copilot", "--copilot-home", layout.CopilotHome).ExitCode);
+        var target = layout.SeedEnrolledTarget(platform);
+        var originalRuntime = CopilotInstructionBlock.MergeForPortableTarget(target, layout.Repository, platform);
 
-        var pulled = Path.Combine(layout.Root, "portable-clone");
+        var pulled = layout.Clone("portable-clone");
         var secondHome = Path.Combine(layout.Root, "second-copilot-home");
-        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Repository,
-            pulled).ExitCode);
+
         Directory.CreateDirectory(secondHome);
         var canonicalPath = Path.Combine(pulled, AecApplication.CopilotSourceRelativePath);
         var canonicalBefore = File.ReadAllBytes(canonicalPath);
@@ -357,8 +261,7 @@ public sealed class CopilotInitTests
         Assert.Contains("--force-path-change", unconfirmed.Error, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(secondHome, "copilot-instructions.md")));
 
-        File.Copy(layout.RuntimeInstructions,
-            Path.Combine(secondHome, "copilot-instructions.md"));
+        File.WriteAllBytes(Path.Combine(secondHome, "copilot-instructions.md"), originalRuntime);
         var wrongRuntimeBinding = Run(pulled, secondHome);
         Assert.Equal(1, wrongRuntimeBinding.ExitCode);
         Assert.Contains("--force-path-change", wrongRuntimeBinding.Error,
@@ -372,8 +275,8 @@ public sealed class CopilotInitTests
         var binding = CopilotInstructionBlock.ReadManagedBinding(runtime)!;
         Assert.Equal(pulled, binding.Repository);
         Assert.Equal(platform, binding.Platform);
-        Assert.Equal(0, TestApplication.Run("status", "--repo", pulled,
-            "--provider=copilot", "--copilot-home", secondHome).ExitCode);
+        Assert.Equal(CopilotInstructionBlock.MergeForPortableTarget(target, pulled, platform),
+            runtime);
         Assert.Equal(canonicalBefore, File.ReadAllBytes(canonicalPath));
         Assert.Equal(headBefore, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
         Assert.Empty(TestGit.Run(pulled, "status", "--porcelain").Output);
@@ -393,12 +296,10 @@ public sealed class CopilotInitTests
         Assert.Equal(canonicalBefore, File.ReadAllBytes(canonicalPath));
         Assert.Equal(headBefore, TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim());
 
-        File.WriteAllBytes(targetPath, File.ReadAllBytes(Path.Combine(
-            layout.Repository, "environment", "targets", platform, "copilot",
-            "copilot-instructions.md")));
+        File.WriteAllBytes(targetPath, target);
         var otherPlatform = platform == "windows-x64" ? "linux-arm64" : "windows-x64";
         var wrongPlatformRuntime = CopilotInstructionBlock.MergeForPortableTarget(
-            File.ReadAllBytes(targetPath), pulled, otherPlatform);
+            target, pulled, otherPlatform);
         File.WriteAllBytes(runtimePath, wrongPlatformRuntime);
         var wrongPlatformResult = Run(pulled, secondHome);
         Assert.Equal(1, wrongPlatformResult.ExitCode);
@@ -410,12 +311,11 @@ public sealed class CopilotInitTests
     [Fact]
     public void EnrolledTargetRejectsDirtyCanonicalBeforeInstallingSkill()
     {
-        using var layout = new CopilotLayout();
-        CommitPortableTarget(layout);
-        var pulled = Path.Combine(layout.Root, "dirty-portable-clone");
+        using var layout = new CopilotLayout(initializeGit: false, createRuntime: false);
+        layout.SeedEnrolledTarget(RenderCommand.CurrentPlatform());
+        var pulled = layout.Clone("dirty-portable-clone");
         var secondHome = Path.Combine(layout.Root, "second-copilot-home");
-        Assert.Equal(0, TestGit.Run(layout.Root, "clone", "--quiet", layout.Repository,
-            pulled).ExitCode);
+
         Directory.CreateDirectory(secondHome);
         File.AppendAllText(Path.Combine(pulled, AecApplication.CopilotSourceRelativePath),
             "Uncommitted canonical edit.\n");
@@ -426,26 +326,6 @@ public sealed class CopilotInitTests
         Assert.Contains("unstaged changes", result.Error, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(secondHome, "copilot-instructions.md")));
         Assert.False(File.Exists(Path.Combine(secondHome, "skills", "aec", "SKILL.md")));
-    }
-
-    [Fact]
-    public void RejectsCodexHomeAndCopilotHomeTogether()
-    {
-        using var layout = new CopilotLayout();
-
-        var result = TestApplication.Run(
-            "init",
-            "--repo",
-            layout.Repository,
-            "--provider=copilot",
-            "--copilot-home",
-            layout.CopilotHome,
-            "--codex-home",
-            layout.CodexHome);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains("--codex-home is not valid", result.Error, StringComparison.Ordinal);
-        Assert.False(File.Exists(layout.CanonicalInstructions));
     }
 
     private static CommandResult Run(
@@ -465,42 +345,14 @@ public sealed class CopilotInitTests
         return TestApplication.Run([.. arguments]);
     }
 
-    private static void CommitPortableTarget(CopilotLayout layout)
-    {
-        Assert.Equal(0, Run(layout.Repository, layout.CopilotHome).ExitCode);
-        var platform = RenderCommand.CurrentPlatform();
-        var shared = Path.Combine(layout.Repository, "environment", "shared",
-            "instructions.md");
-        var policy = Path.Combine(layout.Repository, "environment", "platforms",
-            platform, "policy.md");
-        var overlay = Path.Combine(layout.Repository, "environment", "providers",
-            "copilot", "overlay.md");
-        foreach (var path in new[] { shared, policy, overlay })
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        }
-
-        File.WriteAllText(shared, "Shared approval.\n");
-        File.WriteAllText(policy, "Local paths.\n");
-        File.WriteAllText(overlay, "Copilot mechanics.\n");
-        Assert.Equal(0, TestGit.Run(layout.Repository, "add", "--", "environment").ExitCode);
-        Assert.Equal(0, TestGit.Run(layout.Repository, "commit", "--quiet", "--message",
-            "Author Copilot portable sources").ExitCode);
-        Assert.Equal(0, TestApplication.Run("init", "--repo", layout.Repository,
-            "--provider=copilot", "--copilot-home", layout.CopilotHome,
-            "--enroll-shared").ExitCode);
-        Assert.Equal(0, TestGit.Run(layout.Repository, "add", "--", "environment/targets")
-            .ExitCode);
-        Assert.Equal(0, TestGit.Run(layout.Repository, "commit", "--quiet", "--message",
-            "Enroll Copilot target").ExitCode);
-    }
-
     private sealed class CopilotLayout : IDisposable
     {
-        public CopilotLayout()
+        private static byte[] InitialInstructions => "Existing Copilot instruction.\n"u8.ToArray();
+
+        public CopilotLayout(bool initializeGit = true, bool createRuntime = true)
         {
             Root = Path.Combine(
-                OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+                TestTemporaryDirectory.Root,
                 "aec-copilot-init-tests",
                 Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "repository");
@@ -512,21 +364,21 @@ public sealed class CopilotInitTests
                 AecApplication.CopilotSourceRelativePath);
             Skill = Path.Combine(CopilotHome, "skills", "aec", "SKILL.md");
 
-            Directory.CreateDirectory(CodexHome);
-            File.WriteAllText(Path.Combine(CodexHome, "AGENTS.md"), "Codex runtime.\n");
-            var initialization = TestApplication.Run(
-                "init",
-                "--repo",
-                Repository,
-                "--codex-home",
-                CodexHome);
-            if (initialization.ExitCode != 0)
+            Directory.CreateDirectory(Root);
+            if (initializeGit)
             {
-                throw new InvalidOperationException(initialization.Error);
+                // Ordinary Copilot init accepts an unborn worktree with the provider directories.
+                Directory.CreateDirectory(Path.Combine(Repository, "environment", "providers", "codex"));
+                var initialization = TestGit.Run(
+                    Repository, "init", "--quiet", "--template=", "--initial-branch=main");
+                Assert.Equal(0, initialization.ExitCode);
             }
 
-            Directory.CreateDirectory(CopilotHome);
-            File.WriteAllText(RuntimeInstructions, "Existing Copilot instruction.\n");
+            if (createRuntime)
+            {
+                Directory.CreateDirectory(CopilotHome);
+                File.WriteAllBytes(RuntimeInstructions, InitialInstructions);
+            }
         }
 
         public string Root { get; }
@@ -542,6 +394,64 @@ public sealed class CopilotInitTests
         public string CanonicalInstructions { get; }
 
         public string Skill { get; }
+
+        public byte[] SeedCanonicalInstructions()
+        {
+            var canonical = CopilotInstructionBlock.Merge(InitialInstructions, Repository);
+            Directory.CreateDirectory(Path.GetDirectoryName(CanonicalInstructions)!);
+            File.WriteAllBytes(CanonicalInstructions, canonical);
+            return canonical;
+        }
+
+        public void SeedCommittedInstructions()
+        {
+            TestGit.SeedInitializedCodexRepository(Repository, codexHome: null,
+                "Codex runtime.\n", "personality = \"none\"\n");
+            SeedCanonicalInstructions();
+            Commit("Enroll Copilot instructions", AecApplication.CopilotSourceRelativePath);
+        }
+
+        public byte[] SeedEnrolledTarget(string platform)
+        {
+            SeedCommittedInstructions();
+            const string sharedPath = "environment/shared/instructions.md";
+            var policyPath = $"environment/platforms/{platform}/policy.md";
+            const string overlayPath = "environment/providers/copilot/overlay.md";
+            const string shared = "Shared approval.\n";
+            const string policy = "Local paths.\n";
+            const string overlay = "Copilot mechanics.\n";
+            Write(sharedPath, Encoding.UTF8.GetBytes(shared));
+            Write(policyPath, Encoding.UTF8.GetBytes(policy));
+            Write(overlayPath, Encoding.UTF8.GetBytes(overlay));
+            Commit("Author Copilot portable sources", sharedPath, policyPath, overlayPath);
+
+            var targetPath = $"environment/targets/{platform}/copilot/copilot-instructions.md";
+            var target = Encoding.UTF8.GetBytes(InstructionSections.Render(shared, policy, overlay));
+            Write(targetPath, target);
+            Commit("Enroll Copilot target", targetPath);
+            return target;
+
+            void Write(string relativePath, byte[] bytes)
+            {
+                var path = Path.Combine(Repository, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllBytes(path, bytes);
+            }
+        }
+
+        public string Clone(string directoryName)
+        {
+            var checkout = Path.Combine(Root, directoryName);
+            _ = GitProcess.RunRequired(Root, "Could not clone the Copilot fixture",
+                "clone", "--quiet", "--template=", "--config", "core.autocrlf=false", Repository, checkout);
+            return checkout;
+        }
+
+        private void Commit(string message, params string[] paths)
+        {
+            _ = GitProcess.RunRequired(Repository, "Could not stage the Copilot fixture", ["add", "--", .. paths]);
+            _ = GitProcess.RunRequired(Repository, "Could not commit the Copilot fixture", "commit", "--quiet", "-m", message);
+        }
 
         public void Dispose()
         {

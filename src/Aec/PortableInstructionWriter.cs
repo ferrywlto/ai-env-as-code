@@ -29,8 +29,15 @@ internal static class PortableInstructionWriter
                 "Portable apply inputs changed after preflight; no runtime instruction was replaced.");
         }
 
+        return ApplyRevalidated(current);
+    }
+
+    internal static string ApplyRevalidated(PortableRuntimeSnapshot current)
+    {
+        var runtime = current.Runtime ?? throw new InvalidOperationException(
+            "Provider runtime instructions are missing. Run ordinary provider init first.");
         var desired = PortableApplyPreview.RenderDesiredRuntime(current);
-        if (current.Runtime.AsSpan().SequenceEqual(desired))
+        if (runtime.AsSpan().SequenceEqual(desired))
         {
             return "unchanged";
         }
@@ -52,7 +59,7 @@ internal static class PortableInstructionWriter
         // cross-process compare-and-swap of the final rename.
         AtomicFile.ReplaceIfUnchanged(
             current.RuntimePath,
-            current.Runtime,
+            runtime,
             desired,
             "Provider runtime instructions");
         return "applied";

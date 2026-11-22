@@ -3,6 +3,7 @@ using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationPortableTargetWriterTests
 {
     private static readonly string[] Platforms = ["macos-arm64", "windows-x64", "linux-arm64"];
@@ -16,8 +17,8 @@ public sealed class MigrationPortableTargetWriterTests
         var reviewed = Preview(layout);
         layout.Files.AssertNoChanges(() =>
         {
-            var plan = MigrationPortableTargetWriter.Prepare(reviewed);
-            Assert.Empty(plan.Write(MigrationPortableSourceWriter.Write(reviewed)));
+            var (plan, sources) = PrepareSources(reviewed);
+            Assert.Empty(plan.Write(sources));
         });
     }
 
@@ -31,7 +32,7 @@ public sealed class MigrationPortableTargetWriterTests
         var original = section == "shared" ? "Shared approval." : "Local paths.";
         layout.EditRuntime("codex", original, "Agreed revision.");
         layout.EditRuntime("copilot", original, "Agreed revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         var expected = targets.Where(path => section == "shared" || path.Contains($"/{layout.Platform}/", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal).ToArray();
 
@@ -52,7 +53,7 @@ public sealed class MigrationPortableTargetWriterTests
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
         File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\nmodel = 'private'\n");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         Assert.Contains(AecApplication.ConfigSourceRelativePath, sources);
 
         layout.Files.AssertOnlyChanges(targets, () => Assert.Equal(targets, plan.Write(sources)));
@@ -70,7 +71,7 @@ public sealed class MigrationPortableTargetWriterTests
         var targets = EnrollOtherPlatforms(layout, "codex", "copilot");
         layout.EditRuntime("codex", "Local paths.", "Platform revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Provider revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         var expected = targets.Where(path => path.Contains($"/{layout.Platform}/", StringComparison.Ordinal) ||
             path.Contains("/copilot/", StringComparison.Ordinal)).ToArray();
 
@@ -90,7 +91,7 @@ public sealed class MigrationPortableTargetWriterTests
         var legacy = provider == "codex" ? "copilot" : "codex";
         File.AppendAllText(layout.Runtime(legacy), "Pending legacy edit.\n");
         layout.EditRuntime(provider, "Shared approval.", "Shared revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
 
         layout.Files.AssertOnlyChanges(targets, () => Assert.Equal(targets, plan.Write(sources)));
         Assert.False(File.Exists(Path.Combine(layout.Repository, layout.Target(legacy))));
@@ -102,7 +103,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex", "copilot");
         _ = EnrollOtherPlatforms(layout, "codex", "copilot");
         File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\n");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         Assert.Equal(AecApplication.ConfigSourceRelativePath, Assert.Single(sources));
         layout.Files.AssertNoChanges(() => Assert.Empty(plan.Write(sources)));
     }
@@ -116,7 +117,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex", "copilot");
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         string[] reported = kind switch
         {
             "missing" => [sources[0]],
@@ -140,86 +141,109 @@ public sealed class MigrationPortableTargetWriterTests
 
     internal static void StaleInputsStopBeforeAnyTargetReplacement(string kind)
     {
-        using var layout = new Layout("codex", "copilot");
-        var targets = EnrollOtherPlatforms(layout, "codex", "copilot");
+        if (kind == "other-platform")
+        {
+            NonLocalSourceAndTargetDriftStopBeforeReplacement();
+            return;
+        }
+
+        using var layout = kind == "other-runtime" ? new Layout("codex", "copilot") : new Layout("codex");
         layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
-        var (plan, sources) = PrepareSources(layout);
-        var otherTarget = targets.First(path => !path.Contains($"/{layout.Platform}/", StringComparison.Ordinal));
-        var otherPlatform = otherTarget.Split('/')[2];
+        var (plan, sources) = PrepareSources(Preview(layout));
         switch (kind)
         {
             case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
             case "branch": layout.Files.Git("switch", "-c", "other-branch"); break;
-            case "runtime": layout.EditRuntime("codex", "Shared revision.", "Later revision."); break;
             case "other-runtime": layout.EditRuntime("copilot", "Provider mechanics.", "Other revision."); break;
-            case "runtime-config": File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\n"); break;
             case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
-            case "source": layout.Files.Write("environment/shared/instructions.md", "Later shared draft.\n"); break;
-            case "other-platform-source": layout.Files.Write($"environment/platforms/{otherPlatform}/policy.md", "Other policy draft.\n"); break;
-            case "canonical-config": layout.Files.Write(AecApplication.ConfigSourceRelativePath, "personality = 'none'\n"); break;
-            case "target": layout.Files.Write(layout.Target("codex"), "Unexpected target draft.\n"); break;
-            case "other-platform-target": layout.Files.Write(otherTarget, "Unexpected other target.\n"); break;
             case "staged": layout.Files.Git("add", "--", sources[0]); break;
-            default:
+            case "raw-index":
                 using (var index = new FileStream(Path.Combine(layout.Repository, ".git", "index"), FileMode.Append)) index.WriteByte(0);
                 break;
+            default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
 
+        AssertStaleTargetWriteRefused(layout, plan, sources);
+    }
+
+    private static void NonLocalSourceAndTargetDriftStopBeforeReplacement()
+    {
+        using var layout = new Layout("codex");
+        var (platform, target) = EnrollOtherCodexTarget(layout);
+        layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
+        var (plan, sources) = PrepareSources(Preview(layout));
+
+        string[] paths = [$"environment/platforms/{platform}/policy.md", target];
+        foreach (var relativePath in paths)
+        {
+            var path = Path.Combine(layout.Repository, relativePath);
+            var original = File.ReadAllBytes(path);
+            layout.Files.Write(relativePath, "Unexpected non-local draft.\n");
+            AssertStaleTargetWriteRefused(layout, plan, sources, $"Portable canonical input changed: {relativePath}");
+            File.WriteAllBytes(path, original);
+        }
+    }
+
+    private static void AssertStaleTargetWriteRefused(Layout layout, MigrationPortableTargetWriter plan,
+        IReadOnlyList<string> sources, string? diagnostic = null)
+    {
         layout.Files.AssertNoChanges(() =>
         {
             var error = Assert.Throws<MigrationPortableTargetWriteException>(() => plan.Write(sources));
             Assert.Empty(error.WrittenPaths);
             Assert.Null(error.AttemptedPath);
+            if (diagnostic is not null)
+                Assert.Contains(diagnostic, error.InnerException!.Message, StringComparison.Ordinal);
         });
     }
 
-    internal static void OtherPlatformProblemsAreRejectedDuringPreparation(string kind)
+    internal static void OtherPlatformProblemsAreRejectedDuringPreparation(string kind, string expectedDiagnostic)
     {
-        using var layout = new Layout("codex", "copilot");
-        var targets = EnrollOtherPlatforms(layout, "codex", "copilot");
-        var otherTarget = targets.First(path => !path.Contains($"/{layout.Platform}/", StringComparison.Ordinal));
-        var policy = $"environment/platforms/{otherTarget.Split('/')[2]}/policy.md";
+        using var layout = new Layout("codex");
+        var (otherPlatform, otherTarget) = EnrollOtherCodexTarget(layout);
+        var policy = $"environment/platforms/{otherPlatform}/policy.md";
         layout.EditRuntime("codex", "Shared approval.", kind == "oversize-render" ? new string('y', 500) : "Shared revision.");
-        var reviewed = Preview(layout);
+        // Worktree drift follows review. New commits belong to the reviewed HEAD.
+        var reviewed = kind is "dirty-target" or "dirty-source" or "missing-target" ? Preview(layout) : null;
         switch (kind)
         {
             case "dirty-target": layout.Files.Write(otherTarget, "Keep target draft.\n"); break;
             case "dirty-source": layout.Files.Write(policy, "Keep policy draft.\n"); break;
             case "missing-target": File.Delete(Path.Combine(layout.Repository, otherTarget)); break;
             case "inconsistent-target": layout.Files.Write(otherTarget, "Inconsistent committed target.\n"); layout.Commit(otherTarget); break;
-            case "invalid-enrollment":
-            case "invalid-provider":
-            case "invalid-filename":
-            case "invalid-structure":
-                var invalidTarget = kind switch
-                {
-                    "invalid-enrollment" => "environment/targets/unknown/codex/AGENTS.md",
-                    "invalid-provider" => $"environment/targets/{layout.Platform}/unknown/AGENTS.md",
-                    "invalid-filename" => $"environment/targets/{layout.Platform}/codex/wrong.md",
-                    _ => $"environment/targets/{layout.Platform}/wrong.md"
-                };
-                layout.Files.Write(invalidTarget, "Unknown target.\n");
-                layout.Commit(invalidTarget);
-                break;
-            default:
+            case "oversize-render":
                 var large = new string('x', AecApplication.MaximumTextBytes - 300);
                 layout.Files.Write(policy, large);
-                foreach (var target in targets.Where(path => path.Split('/')[2] == otherTarget.Split('/')[2]))
-                    layout.Files.Write(target, InstructionSections.Render("Shared approval.\n", large, "Provider mechanics.\n"));
-                layout.Commit([policy, .. targets.Where(path => path.Split('/')[2] == otherTarget.Split('/')[2])]);
+                layout.Files.Write(otherTarget, InstructionSections.Render("Shared approval.\n", large, "Provider mechanics.\n"));
+                layout.Commit(policy, otherTarget);
                 break;
-        }
-        if (kind is "inconsistent-target" or "invalid-enrollment" or "invalid-provider" or
-            "invalid-filename" or "invalid-structure" or "oversize-render")
-        {
-            reviewed = Preview(layout);
+            default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
 
+        reviewed ??= Preview(layout);
         layout.Files.AssertNoChanges(() =>
         {
             var error = Record.Exception(() => MigrationPortableTargetWriter.Prepare(reviewed));
             Assert.NotNull(error);
             Assert.True(error is InvalidOperationException or InvalidDataException, error.ToString());
+            Assert.StartsWith(expectedDiagnostic, error.Message, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void InvalidCommittedTargetIsRejectedDuringPreparation()
+    {
+        using var layout = new Layout("codex");
+        const string invalidTarget = "environment/targets/unknown/codex/AGENTS.md";
+        layout.Files.Write(invalidTarget, "Unknown target.\n");
+        layout.Commit(invalidTarget);
+        layout.EditRuntime("codex", "Shared approval.", "Shared revision.");
+        var reviewed = Preview(layout);
+
+        layout.Files.AssertNoChanges(() =>
+        {
+            var error = Assert.Throws<InvalidDataException>(() => MigrationPortableTargetWriter.Prepare(reviewed));
+            Assert.Equal($"Unsupported committed target platform: {invalidTarget}", error.Message);
         });
     }
 
@@ -229,8 +253,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex");
         layout.EditRuntime("codex", "Provider mechanics.", "Reviewed revision.");
         var reviewed = Preview(layout);
-        var plan = MigrationPortableTargetWriter.Prepare(reviewed);
-        var sources = MigrationPortableSourceWriter.Write(reviewed);
+        var (plan, sources) = PrepareSources(reviewed);
         Array.Fill(reviewed.Codex!.Snapshot.Target, (byte)'x');
         Array.Fill(reviewed.Codex.RuntimeConfig, (byte)'x');
 
@@ -245,7 +268,7 @@ public sealed class MigrationPortableTargetWriterTests
         using var layout = new Layout("codex", "copilot");
         if (earlierWrite) layout.EditRuntime("codex", "Provider mechanics.", "First revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Blocked revision.");
-        var (plan, sources) = PrepareSources(layout);
+        var (plan, sources) = PrepareSources(Preview(layout));
         var blocked = layout.Target("copilot");
         string[] changed = earlierWrite ? [layout.Target("codex")] : [];
 
@@ -260,11 +283,12 @@ public sealed class MigrationPortableTargetWriterTests
             }));
     }
 
-    private static (MigrationPortableTargetWriter Plan, IReadOnlyList<string> Sources) PrepareSources(Layout layout)
+    private static (MigrationPortableTargetWriter Plan, IReadOnlyList<string> Sources) PrepareSources(
+        MigrationPortableCapturePreview reviewed)
     {
-        var reviewed = Preview(layout);
-        var plan = MigrationPortableTargetWriter.Prepare(reviewed);
-        return (plan, MigrationPortableSourceWriter.Write(reviewed));
+        var capture = MigrationPortableCapturePlan.Prepare(reviewed);
+        var targetWriter = MigrationPortableTargetWriter.Prepare(capture);
+        return (targetWriter, capture.WriteSources());
     }
 
     private static MigrationPortableCapturePreview Preview(Layout layout) => MigrationPortableCapturePreview.Read(layout.Context());
@@ -273,9 +297,21 @@ public sealed class MigrationPortableTargetWriterTests
     // local harnesses. Only deterministic target composition is cross-platform.
     internal static string[] EnrollOtherPlatforms(Layout layout, params string[] providers)
     {
+        var enrollments = EnrollPlatforms(layout, Platforms.Where(platform => platform != layout.Platform), providers);
+        return providers.Select(layout.Target).Concat(enrollments).Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private static (string Platform, string Target) EnrollOtherCodexTarget(Layout layout)
+    {
+        var platform = Platforms.First(value => value != layout.Platform);
+        return (platform, EnrollPlatforms(layout, [platform], ["codex"]).Single());
+    }
+
+    private static List<string> EnrollPlatforms(Layout layout, IEnumerable<string> platforms, string[] providers)
+    {
         var committed = new List<string>();
-        var targets = providers.Select(layout.Target).ToList();
-        foreach (var platform in Platforms.Where(value => value != layout.Platform))
+        var targets = new List<string>();
+        foreach (var platform in platforms)
         {
             var policy = $"environment/platforms/{platform}/policy.md";
             var content = $"Policy for {platform}.\n";
@@ -290,6 +326,6 @@ public sealed class MigrationPortableTargetWriterTests
             }
         }
         layout.Commit([.. committed]);
-        return targets.Order(StringComparer.Ordinal).ToArray();
+        return targets;
     }
 }

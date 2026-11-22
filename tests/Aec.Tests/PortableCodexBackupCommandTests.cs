@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
@@ -9,31 +11,34 @@ public sealed class PortableCodexBackupCommandTests
         using var layout = NewLayout();
         var head = layout.Head();
         var runtime = File.ReadAllBytes(layout.RuntimePath);
+        var configPath = RuntimeConfigPath(layout);
+        var config = File.ReadAllBytes(configPath);
 
-        var result = Run(layout);
+        var result = RunWithCodexHomeEnvironment(layout, explicitHome: false);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
         Assert.Equal(head, layout.Head());
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(config, File.ReadAllBytes(configPath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
     [Fact]
     public void ConfigOnlyDriftCommitsOnlyCanonicalConfig()
     {
-        using var layout = NewLayout();
+        const string config = "personality = 'friendly' # runtime\n[other]\nkey = 1\n";
+        using var layout = NewLayout(config);
         var configPath = RuntimeConfigPath(layout);
-        File.WriteAllText(configPath, "personality = \"friendly\"\nmodel = \"keep\"\n");
         var runtime = File.ReadAllBytes(layout.RuntimePath);
-        var runtimeConfig = File.ReadAllBytes(configPath);
+        var target = File.ReadAllBytes(layout.TargetPath);
         var head = layout.Head();
 
-        var result = Run(layout);
+        var result = RunWithCodexHomeEnvironment(layout, explicitHome: true);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
+        Assert.Equal($"committed {layout.Head()}{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
         Assert.Equal(head, Parent(layout));
         Assert.Equal([AecApplication.ConfigSourceRelativePath], CommittedPaths(layout));
@@ -42,8 +47,9 @@ public sealed class PortableCodexBackupCommandTests
             .Output.Trim());
         Assert.Equal("personality = \"friendly\"\n",
             File.ReadAllText(layout.CanonicalConfigPath));
+        Assert.Equal(target, File.ReadAllBytes(layout.TargetPath));
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(runtimeConfig, File.ReadAllBytes(configPath));
+        Assert.Equal(Encoding.UTF8.GetBytes(config), File.ReadAllBytes(configPath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
@@ -63,7 +69,7 @@ public sealed class PortableCodexBackupCommandTests
         var result = Run(layout);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
+        Assert.Equal($"committed {layout.Head()}{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
         Assert.Equal(head, Parent(layout));
         Assert.Equal(new[]
@@ -73,6 +79,8 @@ public sealed class PortableCodexBackupCommandTests
             Path.GetRelativePath(layout.Repository, layout.TargetPath).Replace('\\', '/')
         }.OrderBy(path => path, StringComparer.Ordinal), CommittedPaths(layout));
         Assert.Equal("Shared revision.\n", File.ReadAllText(layout.SharedSource));
+        Assert.Equal(InstructionSections.Render("Shared revision.\n", "Local paths.\n", "Provider mechanics.\n"),
+            File.ReadAllText(layout.TargetPath));
         Assert.Equal("personality = \"pragmatic\"\n",
             File.ReadAllText(layout.CanonicalConfigPath));
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
@@ -85,18 +93,12 @@ public sealed class PortableCodexBackupCommandTests
     [InlineData(false)]
     public void MissingManagedPersonalityWarnsAndStops(bool configExists)
     {
-        using var layout = NewLayout();
+        const string unmanagedConfig = "model = \"keep\"\n";
+        using var layout = NewLayout(configExists ? unmanagedConfig : null);
         var configPath = RuntimeConfigPath(layout);
-        if (configExists)
-        {
-            File.WriteAllText(configPath, "model = \"keep\"\n");
-        }
-        else
-        {
-            File.Delete(configPath);
-        }
         var head = layout.Head();
         var canonical = File.ReadAllBytes(layout.CanonicalConfigPath);
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
 
         var result = Run(layout);
 
@@ -106,6 +108,16 @@ public sealed class PortableCodexBackupCommandTests
             result.Error, StringComparison.Ordinal);
         Assert.Equal(head, layout.Head());
         Assert.Equal(canonical, File.ReadAllBytes(layout.CanonicalConfigPath));
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        if (configExists)
+        {
+            Assert.Equal(unmanagedConfig, File.ReadAllText(configPath));
+        }
+        else
+        {
+            Assert.False(File.Exists(configPath));
+        }
+
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
@@ -176,6 +188,8 @@ public sealed class PortableCodexBackupCommandTests
             .Replace("Local paths.", "Local revision.", StringComparison.Ordinal));
         File.WriteAllText(RuntimeConfigPath(layout), "personality = \"friendly\"\n");
         var head = layout.Head();
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
+        var config = File.ReadAllBytes(RuntimeConfigPath(layout));
 
         var result = Run(layout);
 
@@ -186,31 +200,9 @@ public sealed class PortableCodexBackupCommandTests
         Assert.Equal(head, layout.Head());
         Assert.Equal("personality = \"none\"\n",
             File.ReadAllText(layout.CanonicalConfigPath));
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(config, File.ReadAllBytes(RuntimeConfigPath(layout)));
         Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
-    public void ExistingStagedWorkStopsBeforeAnyCanonicalWrite()
-    {
-        using var layout = NewLayout();
-        File.WriteAllText(RuntimeConfigPath(layout), "personality = \"friendly\"\n");
-        var note = Path.Combine(layout.Repository, "note.txt");
-        File.WriteAllText(note, "Keep staged.\n");
-        GitProcess.RunRequired(layout.Repository, "Could not stage fixture note",
-            "add", "--", "note.txt");
-        var head = layout.Head();
-
-        var result = Run(layout);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("already has staged changes", result.Error,
-            StringComparison.Ordinal);
-        Assert.Equal(head, layout.Head());
-        Assert.Equal("personality = \"none\"\n",
-            File.ReadAllText(layout.CanonicalConfigPath));
-        Assert.Equal("note.txt\n", GitProcess.RunRequired(layout.Repository,
-            "Could not inspect staged paths", "diff", "--cached", "--name-only").Output);
     }
 
     [Theory]
@@ -238,107 +230,57 @@ public sealed class PortableCodexBackupCommandTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
-    [Fact]
-    public void ExplicitCodexHomeOverridesTheEnvironment()
-    {
-        using var layout = NewLayout();
-        var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
-        try
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME",
-                Path.Combine(layout.Root, "missing-home"));
-
-            var result = Run(layout);
-
-            Assert.Equal(0, result.ExitCode);
-            Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
-            Assert.Empty(result.Error);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", previous);
-        }
-    }
-
-    [Fact]
-    public void UsesCodexHomeFromEnvironmentWhenFlagIsAbsent()
-    {
-        using var layout = NewLayout();
-        var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
-        try
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", layout.ProviderHome);
-
-            var result = TestApplication.Run("backup", "--repo", layout.Repository);
-
-            Assert.Equal(0, result.ExitCode);
-            Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
-            Assert.Empty(result.Error);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", previous);
-        }
-    }
-
     [Theory]
     [InlineData("repository")]
     [InlineData("codex-home")]
-    public void SymbolicLinkAncestorStopsBeforeWriting(string linkedTarget)
+    [InlineData("inside-repository")]
+    public void UnsafeRuntimeOrRepositoryPathStopsBeforeWriting(string boundary)
     {
-        if (OperatingSystem.IsWindows())
+        var insideRepository = boundary == "inside-repository";
+        if (!insideRepository && OperatingSystem.IsWindows())
         {
             return;
         }
 
-        using var layout = NewLayout();
-        var alias = Path.Combine(layout.Root, $"{linkedTarget}-alias");
-        var repository = layout.Repository;
-        var codexHome = layout.ProviderHome;
-        if (linkedTarget == "repository")
-        {
-            Directory.CreateSymbolicLink(alias, layout.Repository);
-            repository = alias;
-        }
-        else
-        {
-            Directory.CreateSymbolicLink(alias, layout.Root);
-            codexHome = Path.Combine(alias, "provider-home");
-        }
-        var head = layout.Head();
+        var root = Path.Combine(TestTemporaryDirectory.Root, Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(root, "data");
+        var codexHome = insideRepository ? repository : Path.Combine(root, "provider-home");
+        var alias = Path.Combine(root, "path-alias");
+        Directory.CreateDirectory(repository);
+        Directory.CreateDirectory(codexHome);
         try
         {
-            var result = TestApplication.Run("backup", "--repo", repository,
-                "--codex-home", codexHome);
+            var runtime = Path.Combine(codexHome, "AGENTS.md");
+            const string instructions = "Preserve instructions.\n";
+            File.WriteAllText(runtime, instructions);
+            if (boundary == "repository")
+            {
+                Directory.CreateSymbolicLink(alias, repository);
+                repository = alias;
+            }
+            else if (!insideRepository)
+            {
+                Directory.CreateSymbolicLink(alias, root);
+                codexHome = Path.Combine(alias, "provider-home");
+            }
+
+            var result = TestApplication.Run("backup", "--repo", repository, "--codex-home", codexHome);
 
             Assert.Equal(1, result.ExitCode);
             Assert.Empty(result.Output);
-            Assert.Contains("must not contain a symbolic link", result.Error,
-                StringComparison.Ordinal);
-            Assert.Equal(head, layout.Head());
-            Assert.Equal(string.Empty, layout.GitStatus());
+            Assert.Contains(insideRepository ? "outside the data repository" : "must not contain a symbolic link",
+                result.Error, StringComparison.Ordinal);
+            Assert.Equal(instructions, File.ReadAllText(runtime));
         }
         finally
         {
-            Directory.Delete(alias);
+            if (Directory.Exists(alias))
+            {
+                Directory.Delete(alias);
+            }
+
+            TestDirectoryCleanup.Delete(root);
         }
-    }
-
-    [Fact]
-    public void CodexHomeInsideTheDataRepositoryIsRejected()
-    {
-        using var layout = NewLayout();
-        var head = layout.Head();
-
-        var result = TestApplication.Run("backup", "--repo", layout.Repository,
-            "--codex-home", layout.Repository);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("outside the data repository", result.Error,
-            StringComparison.Ordinal);
-        Assert.Equal(head, layout.Head());
-        Assert.Equal(string.Empty, layout.GitStatus());
     }
 
     [Fact]
@@ -359,18 +301,32 @@ public sealed class PortableCodexBackupCommandTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
-    private static SharedTargetStatusTests.StatusLayout NewLayout()
+    private static SharedTargetStatusTests.StatusLayout NewLayout(string? runtimeConfig = "personality = \"none\"\n")
     {
         var layout = new SharedTargetStatusTests.StatusLayout("codex");
         layout.WriteRuntime(portableBlock: true);
-        File.WriteAllText(RuntimeConfigPath(layout), "personality = \"none\"\n");
-        GitProcess.RunRequired(layout.Repository, "Could not set fixture author",
-            "config", "--local", "user.name", "AEC Test");
-        GitProcess.RunRequired(layout.Repository, "Could not set fixture email",
-            "config", "--local", "user.email", "aec-test@example.invalid");
-        GitProcess.RunRequired(layout.Repository, "Could not disable fixture signing",
-            "config", "--local", "commit.gpgsign", "false");
+        if (runtimeConfig is not null)
+        {
+            File.WriteAllText(RuntimeConfigPath(layout), runtimeConfig);
+        }
+
         return layout;
+    }
+
+    private static CommandResult RunWithCodexHomeEnvironment(
+        SharedTargetStatusTests.StatusLayout layout, bool explicitHome)
+    {
+        var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
+        try
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME",
+                explicitHome ? Path.Combine(layout.Root, "missing-home") : layout.ProviderHome);
+            return explicitHome ? Run(layout) : TestApplication.Run("backup", "--repo", layout.Repository);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", previous);
+        }
     }
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>

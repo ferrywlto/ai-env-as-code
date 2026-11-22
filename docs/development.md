@@ -10,9 +10,9 @@ You need the .NET 10 SDK. The integration tests also require Git. See the
 flowchart LR
     Change["Every change"] --> Unit["Fast unit scope"]
     Unit --> Focused["Affected command scope"]
-    Focused --> Push["Before push"]
-    Push --> Full["Full Debug regression"]
-    Full --> Release["Full Release regression<br/>before release"]
+    Focused --> Routine["Routine Debug regression<br/>before push"]
+    Focused --> Legacy["Legacy migration regression<br/>when migration changes"]
+    Routine --> Release["Full Release regression<br/>before release"]
 ```
 
 Run the fast unit suite after each edit. It runs in memory without Git.
@@ -21,8 +21,9 @@ Run the fast unit suite after each edit. It runs in memory without Git.
 dotnet test tests/Aec.Tests/Aec.Tests.csproj --filter "Category=Unit"
 ```
 
-Run the affected integration tests before review and all tests before pushing.
-Run all tests in Release mode before publishing a release. Full run times vary,
+Run the affected integration tests before review and the routine Debug suite
+before pushing. Run the legacy migration group when changing migration
+behavior and the full Release suite before publishing. Full run times vary,
 and the default console logger may stay quiet until the final summary.
 
 <details>
@@ -74,14 +75,29 @@ directory. The inactivity guard aborts an unresponsive run. See the
 [coverage map](../IMPLEMENTATION_CHECKLIST.md#focused-real-git-regression-checks)
 for the selected checks and measured times.
 
-#### Full regression
+#### Routine regression
 
-The full suite also exercises broader provider and platform scenarios,
-including public-command recovery after an interrupted migration.
+The routine suite covers current commands and Git-free migration tests.
 
 ```bash
 # Before push
 dotnet test tests/Aec.Tests/Aec.Tests.csproj \
+  --filter "Category!=LegacyMigration" \
+  --blame-hang \
+  --blame-hang-timeout 2m \
+  --blame-hang-dump-type none
+```
+
+#### Legacy migration and release regression
+
+The legacy group exercises the 1.x to 2.0 migration with real Git fixtures,
+including public-command recovery. An unfiltered test run includes both
+groups.
+
+```bash
+# When changing legacy migration
+dotnet test tests/Aec.Tests/Aec.Tests.csproj \
+  --filter "Category=LegacyMigration" \
   --blame-hang \
   --blame-hang-timeout 2m \
   --blame-hang-dump-type none

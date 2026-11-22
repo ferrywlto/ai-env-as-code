@@ -122,11 +122,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             if (!SameBytes(file.WorkingContent, ReadFile(Path.Combine(repository, file.RelativePath))))
                 throw new InvalidOperationException($"Instruction source changed during validation: {file.RelativePath}.");
         }
-        foreach (var (path, content) in protectedFiles)
-        {
-            if (!SameBytes(content, ReadFile(path)))
-                throw new InvalidOperationException($"Protected migration input changed during source validation: {path}.");
-        }
+        VerifyProtectedFiles(protectedFiles, ReadFile);
         var currentDirty = expectedCompletionMarker is not null
             ? MigrationDirtySections.ReadForCompletion(expected.Preflight, expected.Harnesses)
             : targetRelativePath is null
@@ -140,6 +136,16 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             throw new InvalidOperationException("HEAD changed during source validation.");
         if (MigrationLegacyCapturePreview.ReadBranch(repository) != branch)
             throw new InvalidOperationException("Branch changed during source validation.");
+    }
+
+    internal static void VerifyProtectedFiles(IReadOnlyDictionary<string, byte[]?> protectedFiles,
+        Func<string, byte[]?> readFile)
+    {
+        foreach (var (path, content) in protectedFiles)
+        {
+            if (!SameBytes(content, readFile(path)))
+                throw new InvalidOperationException($"Protected migration input changed during source validation: {path}.");
+        }
     }
 
     private static void VerifyEnrollment(MigrationPreparation expected)

@@ -4,6 +4,7 @@ using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationPostDoneCoordinatorTests
 {
     private const string Shared = "environment/shared/instructions.md";
@@ -12,7 +13,7 @@ public sealed class MigrationPostDoneCoordinatorTests
 
     internal static void CommitsSourcesTargetsThenMarkerAndAppliesEnrolledProviders(string selected, int count)
     {
-        using var layout = selected == "both" ? new Layout("codex", "copilot") : new Layout(selected);
+        using var layout = selected == "both" ? Layout.WithRemote("codex", "copilot") : Layout.WithRemote(selected);
         if (selected != "both") File.Delete(layout.Runtime("copilot"));
         var original = layout.Files.Head();
         layout.Files.Write(Shared, "Changed approval.\n");
@@ -57,7 +58,7 @@ public sealed class MigrationPostDoneCoordinatorTests
     [Fact]
     public void FirstLegacyMigrationCreatesSourcesAndTargetsBeforeCompleting()
     {
-        using var layout = new Layout();
+        using var layout = Layout.WithRemote();
         var original = layout.Files.Head();
         var canonical = new[] { AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath,
             AecApplication.CopilotSourceRelativePath }.ToDictionary(path => path,
@@ -137,8 +138,9 @@ public sealed class MigrationPostDoneCoordinatorTests
         Assert.Equal(result.Commit, layout.Files.Head());
     }
 
-    internal static void ComponentFailureStopsWithoutMarkerOrLaterWrites(string stop, int expectedCommits)
+    internal static void ComponentFailureStopsWithoutMarkerOrLaterWrites()
     {
+        const string stop = "target:codex";
         using var layout = new Layout("codex", "copilot");
         var original = layout.Files.Head();
         layout.Files.Write(Shared, "Changed approval.\n");
@@ -157,8 +159,7 @@ public sealed class MigrationPostDoneCoordinatorTests
         Assert.NotNull(atFailure);
         AssertSnapshot(layout, atFailure);
         Assert.Equal(head, layout.Files.Head());
-        Assert.Equal(expectedCommits.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            layout.Files.Git("rev-list", "--count", $"{original}..HEAD").Trim());
+        Assert.Equal("2", layout.Files.Git("rev-list", "--count", $"{original}..HEAD").Trim());
         Assert.False(File.Exists(Path.Combine(layout.Repository, Marker)));
         Assert.Equal(stop, seen[^1]);
         Assert.Contains("may remain", error.Message, StringComparison.Ordinal);

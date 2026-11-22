@@ -78,7 +78,14 @@ internal static class PortableCodexWriter
             {
                 beforeInstructionWrite?.Invoke();
                 instructionAttempted = true;
-                PortableInstructionWriter.Apply(current.Snapshot);
+                if (beforeInstructionWrite is null)
+                {
+                    PortableInstructionWriter.ApplyRevalidated(afterConfig.Snapshot);
+                }
+                else
+                {
+                    PortableInstructionWriter.Apply(current.Snapshot);
+                }
             }
 
             var final = PortableApplyPreview.Create(

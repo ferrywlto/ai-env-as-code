@@ -69,8 +69,13 @@ internal static class PortableBackupSourceWriter
                     "Portable backup inputs changed after review; no authored source was replaced.");
             }
 
-            var actual = PortableBackupAttributionPreview.Create(
-                reviewed.Repository, reviewed.Provider, providerHome);
+            var actual = PortableBackupAttributionPreview.Create(current);
+            if (!string.Equals(current.Commit, ApplyCommand.ResolveHeadCommit(current.Repository),
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Portable backup inputs changed after review; no authored source was replaced.");
+            }
             if (!string.Equals(actual.Section, attribution.Section, StringComparison.Ordinal) ||
                 !string.Equals(actual.SourceRelativePath, attribution.SourceRelativePath,
                     StringComparison.Ordinal) ||

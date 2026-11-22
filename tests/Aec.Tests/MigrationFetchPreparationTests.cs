@@ -1,6 +1,7 @@
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationFetchPreparationTests
 {
     [Theory]
@@ -160,7 +161,7 @@ public sealed class MigrationFetchPreparationTests
     {
         public FetchLayout()
         {
-            Root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            Root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-migration-fetch-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
             Remote = Path.Combine(Root, "shared remote.git");

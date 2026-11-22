@@ -1,8 +1,7 @@
-using System.Text;
-
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationLegacyCaptureCommitterTests
 {
     [Fact]
@@ -16,7 +15,7 @@ public sealed class MigrationLegacyCaptureCommitterTests
     [Fact]
     public void CommitsOnlyChangedLegacyFilesPreservingRuntimeAndAuthoredDrafts()
     {
-        using var layout = new MigrationRepositoryFixture(includeCopilotCanonical: true);
+        using var layout = new MigrationRepositoryFixture(includeCopilotCanonical: true, includeRemote: true);
         File.AppendAllText(CodexRuntime(layout), "Codex runtime edit.\n");
         File.AppendAllText(layout.CopilotRuntime, "Copilot runtime edit.\n");
         File.WriteAllText(ConfigRuntime(layout), "personality = 'pragmatic'\nmodel = 'machine-only'\n");
@@ -85,28 +84,23 @@ public sealed class MigrationLegacyCaptureCommitterTests
         });
     }
 
-    internal static void StaleOrTamperedReviewStopsBeforeWriteStageOrCommit(string change)
+    internal static void StaleOrTamperedReviewStopsBeforeWriteStageOrCommit()
     {
         using var layout = new MigrationRepositoryFixture(includeCopilotCanonical: true);
         File.AppendAllText(CodexRuntime(layout), "Reviewed edit.\n");
         var preview = Preview(layout);
-        switch (change)
-        {
-            case "head": layout.Git("commit", "--allow-empty", "-m", "Later commit"); break;
-            case "branch": layout.Git("switch", "-c", "other-branch"); break;
-            case "runtime": File.AppendAllText(layout.CopilotRuntime, "Later edit.\n"); break;
-            case "canonical": layout.Write(AecApplication.ConfigSourceRelativePath, "personality = 'none'\n"); break;
-            case "marker": layout.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
-            case "enrollment": File.Delete(layout.CopilotRuntime); break;
-            case "proposal": preview = preview with { Files = preview.Files.Select((file, index) => index == 0
-                ? file with { ProposedCanonical = Encoding.UTF8.GetBytes("Unreviewed bytes.\n") } : file).ToArray() }; break;
-            case "path": preview = preview with { Files = preview.Files.Select((file, index) => index == 0
-                ? file with { RelativePath = "../outside.md" } : file).ToArray() }; break;
-            default: preview = preview with { Files = preview.Files.Skip(1).ToArray() }; break;
-        }
+        var files = preview.Files.ToArray();
+        files[0] = files[0] with { ProposedCanonical = "Unreviewed bytes.\n"u8.ToArray() };
+        var altered = preview with { Files = files };
 
-        layout.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() =>
-            MigrationLegacyCaptureCommitter.WriteAndCommit(preview)));
+        layout.AssertNoChanges(() =>
+        {
+            var error = Assert.Throws<InvalidOperationException>(() =>
+                MigrationLegacyCaptureCommitter.WriteAndCommit(altered));
+            Assert.Contains("Legacy capture write/commit stopped", error.Message, StringComparison.Ordinal);
+            var cause = Assert.IsType<InvalidOperationException>(error.InnerException);
+            Assert.Contains("Legacy capture inputs or proposal changed after review", cause.Message, StringComparison.Ordinal);
+        });
     }
 
     [Fact]

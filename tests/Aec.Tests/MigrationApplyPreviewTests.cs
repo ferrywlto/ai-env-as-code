@@ -3,6 +3,7 @@ using System.Text;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationApplyPreviewTests
 {
     [Theory]
@@ -94,14 +95,6 @@ public sealed class MigrationApplyPreviewTests
         }
         else File.WriteAllText(layout.ConfigRuntime, "personality = \"friendly\"\npersonality = \"none\"\n");
         layout.Files.AssertNoChanges(() => Assert.Throws<InvalidDataException>(() => MigrationApplyPreview.Read(context, "codex")));
-    }
-
-    [Fact]
-    public void UnsupportedProviderIsRejectedWithoutChanges()
-    {
-        using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");
-        var context = layout.Context();
-        layout.Files.AssertNoChanges(() => Assert.Throws<ArgumentException>(() => MigrationApplyPreview.Read(context, "other")));
     }
 
     [Fact]

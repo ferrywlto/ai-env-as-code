@@ -239,7 +239,7 @@ internal static class MigrationScaffoldWriter
         }
     }
 
-    private static void VerifyReview(MigrationScaffoldPreview reviewed, MigrationScaffoldPreview fresh)
+    internal static void VerifyReview(MigrationScaffoldPreview reviewed, MigrationScaffoldPreview fresh)
     {
         VerifyBranch(reviewed.Branch, fresh.Branch);
         VerifyFileCount(reviewed.Files.Count, fresh.Files.Count);

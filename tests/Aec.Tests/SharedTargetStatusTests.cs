@@ -8,101 +8,10 @@ public sealed class SharedTargetStatusTests
     [Theory]
     [InlineData("codex")]
     [InlineData("copilot")]
-    public void ExactCommittedTargetAndBoundRuntimeAreInSyncWithoutWrites(string provider)
+    public void ApplyPreviewIsUnchangedForExactV2Runtime(string provider)
     {
         using var layout = new StatusLayout(provider);
         layout.WriteRuntime(portableBlock: true);
-        var head = layout.Head();
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-
-        var result = SharedTargetStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome);
-
-        Assert.Equal("in_sync", result);
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(head, layout.Head());
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void BoundRuntimeDriftIsDifferent(string provider)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(portableBlock: true);
-        File.AppendAllText(layout.RuntimePath, "Unreviewed runtime edit.");
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-
-        var result = SharedTargetStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome);
-
-        Assert.Equal("different", result);
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
-    public void CodexChatGptManagedBlockIsPreservedInExpectedRuntime()
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(codexChatGptBlock: true, portableBlock: true);
-
-        var result = SharedTargetStatus.Inspect(
-            layout.Repository, "codex", layout.ProviderHome);
-
-        Assert.Equal("in_sync", result);
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex", false)]
-    [InlineData("codex", true)]
-    [InlineData("copilot", false)]
-    public void LegacyManagedBlockIsReadableButNeedsV2Replacement(
-        string provider,
-        bool includeChatGptGuidance)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance);
-
-        var result = SharedTargetStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome);
-
-        Assert.Equal("different", result);
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex", false)]
-    [InlineData("codex", true)]
-    [InlineData("copilot", false)]
-    public void PortableManagedBlockAndCommittedTargetAreInSync(
-        string provider,
-        bool includeChatGptGuidance)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance,
-            portableBlock: true);
-
-        var result = SharedTargetStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome);
-
-        Assert.Equal("in_sync", result);
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex", false)]
-    [InlineData("codex", true)]
-    [InlineData("copilot", false)]
-    public void ApplyPreviewIsUnchangedForExactV2Runtime(
-        string provider,
-        bool includeChatGptGuidance)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance,
-            portableBlock: true);
         var runtime = File.ReadAllBytes(layout.RuntimePath);
         var head = layout.Head();
 
@@ -110,6 +19,7 @@ public sealed class SharedTargetStatusTests
             layout.Repository, provider, layout.ProviderHome);
 
         Assert.False(preview.WouldReplace);
+        Assert.Equal(provider == "codex", preview.CodexConfig is not null);
         Assert.Equal(layout.RuntimePath, preview.RuntimePath);
         Assert.Equal(runtime, preview.DesiredRuntime);
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
@@ -118,65 +28,7 @@ public sealed class SharedTargetStatusTests
     }
 
     [Theory]
-    [InlineData("codex", false, "version=9")]
-    [InlineData("codex", true, "version=10")]
-    [InlineData("copilot", false, "version=3")]
-    public void ApplyPreviewWouldUpgradeOnlyTheLocalBlock(
-        string provider,
-        bool includeChatGptGuidance,
-        string expectedVersion)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance);
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-
-        var preview = PortableApplyPreview.Create(
-            layout.Repository, provider, layout.ProviderHome);
-        var desired = Encoding.UTF8.GetString(preview.DesiredRuntime);
-
-        Assert.True(preview.WouldReplace);
-        Assert.Equal("different", SharedTargetStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome));
-        Assert.Contains(expectedVersion, desired, StringComparison.Ordinal);
-        Assert.Contains("<!-- AEC:SOURCE:SHARED:BEGIN -->", desired,
-            StringComparison.Ordinal);
-        Assert.Equal(includeChatGptGuidance,
-            desired.Contains("Manual ChatGPT instruction backups live under",
-                StringComparison.Ordinal));
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void BackupAttributionPreviewReportsNoChangeWithoutWriting(string provider)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(portableBlock: true);
-        var original = File.ReadAllBytes(layout.RuntimePath);
-        var head = layout.Head();
-
-        var preview = PortableBackupAttributionPreview.Create(
-            layout.Repository, provider, layout.ProviderHome);
-
-        Assert.Null(preview.Section);
-        Assert.Null(preview.SourceRelativePath);
-        Assert.Null(preview.ProposedContent);
-        Assert.Equal(original, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(head, layout.Head());
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex", "Shared approval.", "Shared revision.", "shared",
-        "environment/shared/instructions.md")]
     [InlineData("codex", "Local paths.", "Local revision.", "platform", "platform")]
-    [InlineData("codex", "Provider mechanics.", "Provider revision.", "provider",
-        "environment/providers/codex/overlay.md")]
-    [InlineData("copilot", "Shared approval.", "Shared revision.", "shared",
-        "environment/shared/instructions.md")]
-    [InlineData("copilot", "Local paths.", "Local revision.", "platform", "platform")]
     [InlineData("copilot", "Provider mechanics.", "Provider revision.", "provider",
         "environment/providers/copilot/overlay.md")]
     public void BackupAttributionPreviewIdentifiesOneAuthoredSection(
@@ -208,141 +60,7 @@ public sealed class SharedTargetStatusTests
     }
 
     [Theory]
-    [InlineData("codex", false, 9, 7)]
-    [InlineData("codex", true, 10, 8)]
-    [InlineData("copilot", false, 3, 2)]
-    public void BackupAttributionPreviewStopsForAnUnstampedRuntimeBlock(
-        string provider,
-        bool includeChatGptGuidance,
-        int stampedVersion,
-        int earlierVersion)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(codexChatGptBlock: includeChatGptGuidance,
-            portableBlock: true);
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-        var digest = provider == "codex"
-            ? AecInstructionBlock.ReadRepositoryBinding(runtime)!.TargetDigest!
-            : CopilotInstructionBlock.ReadManagedBinding(runtime)!.TargetDigest!;
-        var unstamped = Encoding.UTF8.GetString(runtime)
-            .Replace($"version={stampedVersion}", $"version={earlierVersion}",
-                StringComparison.Ordinal)
-            .Replace($"The last-applied target SHA-256 is `{digest}`.\n", string.Empty,
-                StringComparison.Ordinal);
-        File.WriteAllText(layout.RuntimePath, unstamped);
-        var before = File.ReadAllBytes(layout.RuntimePath);
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            PortableBackupAttributionPreview.Create(
-                layout.Repository, provider, layout.ProviderHome));
-
-        Assert.Contains("no last-applied target digest", error.Message,
-            StringComparison.Ordinal);
-        Assert.Equal(before, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void BackupAttributionPreviewStopsWhenTheRepositoryTargetAdvanced(
-        string provider)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(portableBlock: true);
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-        File.WriteAllText(layout.SharedSource, "Shared latest.\n");
-        File.WriteAllText(layout.TargetPath, File.ReadAllText(layout.TargetPath)
-            .Replace("Shared approval.", "Shared latest.", StringComparison.Ordinal));
-        GitProcess.RunRequired(layout.Repository, "Could not stage newer fixture target",
-            "add", "--", "environment/shared/instructions.md",
-            $"environment/targets/{RenderCommand.CurrentPlatform()}/{provider}/" +
-            (provider == "codex" ? "AGENTS.md" : "copilot-instructions.md"));
-        GitProcess.RunRequired(layout.Repository, "Could not commit newer fixture target",
-            "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
-            "-c", "commit.gpgsign=false", "commit", "-m", "Newer target");
-        var head = layout.Head();
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            PortableBackupAttributionPreview.Create(
-                layout.Repository, provider, layout.ProviderHome));
-
-        Assert.Contains("older target", error.Message, StringComparison.Ordinal);
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(head, layout.Head());
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void BackupAttributionPreviewStopsOnMultipleAuthoredSections(string provider)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(portableBlock: true);
-        var runtime = File.ReadAllText(layout.RuntimePath)
-            .Replace("Shared approval.", "Shared revision.", StringComparison.Ordinal)
-            .Replace("Local paths.", "Local revision.", StringComparison.Ordinal);
-        File.WriteAllText(layout.RuntimePath, runtime);
-
-        var error = Assert.Throws<InvalidDataException>(() =>
-            PortableBackupAttributionPreview.Create(
-                layout.Repository, provider, layout.ProviderHome));
-
-        Assert.Contains("multiple", error.Message, StringComparison.Ordinal);
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex", "source-marker")]
-    [InlineData("codex", "section-boundary")]
-    [InlineData("codex", "control-block")]
-    [InlineData("codex", "outside-text")]
-    [InlineData("copilot", "source-marker")]
-    [InlineData("copilot", "section-boundary")]
-    [InlineData("copilot", "control-block")]
-    [InlineData("copilot", "outside-text")]
-    public void BackupAttributionPreviewRejectsUnattributableRuntimeChanges(
-        string provider,
-        string mutation)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(portableBlock: true);
-        var runtime = File.ReadAllText(layout.RuntimePath);
-        runtime = mutation switch
-        {
-            "source-marker" => runtime.Replace("Shared approval.",
-                "Shared approval.\n<!-- AEC:SOURCE:SHARED:BEGIN -->",
-                StringComparison.Ordinal),
-            "section-boundary" => runtime.Replace(
-                "<!-- AEC:SOURCE:PLATFORM:BEGIN -->",
-                "<!-- AEC:SOURCE:PROVIDER:BEGIN -->", StringComparison.Ordinal),
-            "control-block" => runtime.Replace(
-                "Treat its Git commit history as the source of truth.",
-                "Treat its Git commit history as one source of truth.",
-                StringComparison.Ordinal),
-            "outside-text" => runtime + "\nUnowned runtime text.",
-            _ => throw new ArgumentOutOfRangeException(nameof(mutation))
-        };
-        File.WriteAllText(layout.RuntimePath, runtime);
-        var before = File.ReadAllBytes(layout.RuntimePath);
-        var head = layout.Head();
-
-        Assert.Throws<InvalidDataException>(() =>
-            PortableBackupAttributionPreview.Create(
-                layout.Repository, provider, layout.ProviderHome));
-
-        Assert.Equal(before, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(head, layout.Head());
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
     [InlineData("codex", "Shared approval.", "shared")]
-    [InlineData("codex", "Local paths.", "platform")]
-    [InlineData("codex", "Provider mechanics.", "provider")]
-    [InlineData("copilot", "Shared approval.", "shared")]
-    [InlineData("copilot", "Local paths.", "platform")]
     [InlineData("copilot", "Provider mechanics.", "provider")]
     public void InternalBackupWriterChangesOnlyTheAttributedSource(
         string provider,
@@ -354,13 +72,8 @@ public sealed class SharedTargetStatusTests
         File.WriteAllText(layout.RuntimePath,
             File.ReadAllText(layout.RuntimePath).Replace(
                 original, "Reviewed revision.", StringComparison.Ordinal));
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-        var target = File.ReadAllBytes(layout.TargetPath);
-        var head = layout.Head();
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, provider, layout.ProviderHome);
-        var attribution = PortableBackupAttributionPreview.Create(
-            layout.Repository, provider, layout.ProviderHome);
+        var reviewed = ReviewFixture(layout);
+        var attribution = PortableBackupAttributionPreview.Create(reviewed);
 
         var writtenPath = PortableBackupSourceWriter.Write(reviewed, attribution);
 
@@ -368,11 +81,11 @@ public sealed class SharedTargetStatusTests
         Assert.Equal(attribution.SourceRelativePath, writtenPath);
         Assert.Equal("Reviewed revision.\n",
             File.ReadAllText(Path.Combine(layout.Repository, writtenPath)));
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(target, File.ReadAllBytes(layout.TargetPath));
-        Assert.Equal(head, layout.Head());
-        Assert.Single(layout.GitStatus().Split('\n', StringSplitOptions.RemoveEmptyEntries));
-        Assert.Contains(writtenPath, layout.GitStatus(), StringComparison.Ordinal);
+        Assert.Equal(reviewed.Runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(reviewed.Target, File.ReadAllBytes(layout.TargetPath));
+        Assert.Equal(reviewed.Commit, layout.Head());
+        var change = Assert.Single(layout.GitStatus().Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        Assert.Contains(writtenPath, change, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -382,16 +95,15 @@ public sealed class SharedTargetStatusTests
         layout.WriteRuntime(portableBlock: true);
         File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
             .Replace("Shared approval.", "First revision.", StringComparison.Ordinal));
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "codex", layout.ProviderHome);
-        var attribution = PortableBackupAttributionPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
+        var reviewed = ReviewFixture(layout);
+        var attribution = PortableBackupAttributionPreview.Create(reviewed);
         File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
             .Replace("First revision.", "Later revision.", StringComparison.Ordinal));
         var source = File.ReadAllBytes(layout.SharedSource);
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupSourceWriter.Write(reviewed, attribution));
+        Assert.Contains("Portable backup inputs changed after review", error.Message, StringComparison.Ordinal);
 
         Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
         Assert.Equal(string.Empty, layout.GitStatus());
@@ -404,15 +116,14 @@ public sealed class SharedTargetStatusTests
         layout.WriteRuntime(portableBlock: true);
         File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
             .Replace("Shared approval.", "Reviewed revision.", StringComparison.Ordinal));
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "copilot", layout.ProviderHome);
-        var attribution = PortableBackupAttributionPreview.Create(
-            layout.Repository, "copilot", layout.ProviderHome);
+        var reviewed = ReviewFixture(layout);
+        var attribution = PortableBackupAttributionPreview.Create(reviewed);
         layout.CommitEmpty();
         var source = File.ReadAllBytes(layout.SharedSource);
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupSourceWriter.Write(reviewed, attribution));
+        Assert.Contains("Portable backup inputs changed after review", error.Message, StringComparison.Ordinal);
 
         Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
         Assert.Equal(string.Empty, layout.GitStatus());
@@ -425,15 +136,14 @@ public sealed class SharedTargetStatusTests
         layout.WriteRuntime(portableBlock: true);
         File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
             .Replace("Shared approval.", "Reviewed revision.", StringComparison.Ordinal));
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "codex", layout.ProviderHome);
-        var attribution = PortableBackupAttributionPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
+        var reviewed = ReviewFixture(layout);
+        var attribution = PortableBackupAttributionPreview.Create(reviewed);
         File.WriteAllText(layout.SharedSource, "Concurrent source edit.\n");
         var source = File.ReadAllBytes(layout.SharedSource);
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupSourceWriter.Write(reviewed, attribution));
+        Assert.Contains("Authored shared instructions has unstaged changes", error.Message, StringComparison.Ordinal);
 
         Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
         Assert.Contains("environment/shared/instructions.md", layout.GitStatus(),
@@ -447,15 +157,14 @@ public sealed class SharedTargetStatusTests
         layout.WriteRuntime(portableBlock: true);
         File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
             .Replace("Shared approval.", "Reviewed revision.", StringComparison.Ordinal));
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "copilot", layout.ProviderHome);
-        var attribution = PortableBackupAttributionPreview.Create(
-            layout.Repository, "copilot", layout.ProviderHome);
+        var reviewed = ReviewFixture(layout);
+        var attribution = PortableBackupAttributionPreview.Create(reviewed);
         File.AppendAllText(layout.TargetPath, "Concurrent target edit.\n");
         var source = File.ReadAllBytes(layout.SharedSource);
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupSourceWriter.Write(reviewed, attribution));
+        Assert.Contains("Committed target has unstaged changes", error.Message, StringComparison.Ordinal);
 
         Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
         Assert.Contains("environment/targets/", layout.GitStatus(),
@@ -463,104 +172,12 @@ public sealed class SharedTargetStatusTests
     }
 
     [Fact]
-    public void InternalBackupWriterRequiresAnAttributedChange()
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "codex", layout.ProviderHome);
-        var attribution = PortableBackupAttributionPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
-
-        Assert.Throws<InvalidOperationException>(() =>
-            PortableBackupSourceWriter.Write(reviewed, attribution));
-
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
-    public void ApplyPreviewReportsRuntimeEditsWithoutWriting()
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        File.AppendAllText(layout.RuntimePath, "Unreviewed runtime edit.");
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-
-        var preview = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
-
-        Assert.True(preview.WouldReplace);
-        Assert.DoesNotContain("Unreviewed runtime edit.",
-            Encoding.UTF8.GetString(preview.DesiredRuntime), StringComparison.Ordinal);
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-    }
-
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void ApplyPreviewStopsWhenRuntimeIsMissingOrBoundElsewhere(string provider)
-    {
-        using var layout = new StatusLayout(provider);
-        var missing = Assert.Throws<InvalidOperationException>(() =>
-            PortableApplyPreview.Create(layout.Repository, provider, layout.ProviderHome));
-        Assert.Contains("Run ordinary provider init first", missing.Message,
-            StringComparison.Ordinal);
-
-        layout.WriteRuntime(Path.Combine(layout.Root, "other-data"), portableBlock: true);
-        var wrongBinding = Assert.Throws<InvalidOperationException>(() =>
-            PortableApplyPreview.Create(layout.Repository, provider, layout.ProviderHome));
-        Assert.Contains("not bound to the selected AEC repository", wrongBinding.Message,
-            StringComparison.Ordinal);
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void ApplyPreviewStopsForAnotherPlatformBinding(string provider)
-    {
-        using var layout = new StatusLayout(provider);
-        var otherPlatform = RenderCommand.CurrentPlatform() == "macos-arm64"
-            ? "windows-x64"
-            : "macos-arm64";
-        layout.WriteRuntime(portableBlock: true, platformOverride: otherPlatform);
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            PortableApplyPreview.Create(layout.Repository, provider, layout.ProviderHome));
-
-        Assert.Contains("different AEC platform", error.Message, StringComparison.Ordinal);
-        Assert.Throws<InvalidOperationException>(() =>
-            SharedTargetStatus.Inspect(layout.Repository, provider, layout.ProviderHome));
-    }
-
-    [Fact]
-    public void ApplyPreviewRejectsUncommittedTargetBeforeComparingRuntime()
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        File.AppendAllText(layout.TargetPath, "Uncommitted target edit.");
-        var repositoryStatus = layout.GitStatus();
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            PortableApplyPreview.Create(layout.Repository, "codex", layout.ProviderHome));
-
-        Assert.Contains("Committed target has unstaged changes", error.Message,
-            StringComparison.Ordinal);
-        Assert.Equal(repositoryStatus, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("none", false)]
-    [InlineData("friendly", true)]
-    public void CodexApplyPreviewPlansOnlyManagedConfigValueWithoutWriting(
-        string runtimePersonality,
-        bool wouldReplace)
+    public void CodexApplyPreviewPlansOnlyManagedConfigValueWithoutWriting()
     {
         using var layout = new StatusLayout("codex");
         layout.WriteRuntime(portableBlock: true);
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
-        var runtimeConfig = Encoding.UTF8.GetBytes(
-            $"personality = \"{runtimePersonality}\"\nmodel = \"keep-me\"\n");
+        var runtimeConfig = "personality = \"friendly\"\nmodel = \"keep-me\"\n"u8.ToArray();
         File.WriteAllBytes(configPath, runtimeConfig);
         var head = layout.Head();
 
@@ -570,78 +187,13 @@ public sealed class SharedTargetStatusTests
         var config = Assert.IsType<PortableCodexConfigPreview>(preview.CodexConfig);
         Assert.Equal(configPath, config.RuntimePath);
         Assert.Equal(runtimeConfig, config.Runtime);
-        Assert.Equal(wouldReplace, config.WouldReplace);
+        Assert.True(config.WouldReplace);
         Assert.False(config.Inserted);
         Assert.Equal("personality = \"none\"\nmodel = \"keep-me\"\n",
             Encoding.UTF8.GetString(config.DesiredRuntime));
         Assert.Equal(runtimeConfig, File.ReadAllBytes(configPath));
         Assert.Equal(head, layout.Head());
         Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData(null, "personality = \"none\"\n")]
-    [InlineData("model = \"keep-me\"\n", "personality = \"none\"\nmodel = \"keep-me\"\n")]
-    public void CodexApplyPreviewPlansMissingRuntimePersonalityWithoutWriting(
-        string? runtimeText,
-        string expected)
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
-        if (runtimeText is not null)
-        {
-            File.WriteAllText(configPath, runtimeText);
-        }
-
-        var preview = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
-
-        var config = Assert.IsType<PortableCodexConfigPreview>(preview.CodexConfig);
-        Assert.True(config.WouldReplace);
-        Assert.True(config.Inserted);
-        Assert.Equal(expected, Encoding.UTF8.GetString(config.DesiredRuntime));
-        Assert.Equal(runtimeText is null, config.Runtime is null);
-        Assert.Equal(runtimeText is not null, File.Exists(configPath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
-    public void CodexApplyPreviewStopsForInvalidRuntimeConfig()
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
-        var runtimeConfig = "personality = \"friendly\"\npersonality = \"none\"\n";
-        File.WriteAllText(configPath, runtimeConfig);
-
-        var error = Assert.Throws<InvalidDataException>(() =>
-            PortableApplyPreview.Create(layout.Repository, "codex", layout.ProviderHome));
-
-        Assert.Contains("more than once", error.Message, StringComparison.Ordinal);
-        Assert.Equal(runtimeConfig, File.ReadAllText(configPath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void CodexApplyPreviewStopsForUncommittedCanonicalConfig(bool staged)
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        File.WriteAllText(layout.CanonicalConfigPath, "personality = \"friendly\"\n");
-        if (staged)
-        {
-            GitProcess.RunRequired(layout.Repository, "Could not stage fixture config",
-                "add", "--", AecApplication.ConfigSourceRelativePath);
-        }
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            PortableApplyPreview.Create(layout.Repository, "codex", layout.ProviderHome));
-
-        Assert.Contains(staged ? "staged changes" : "unstaged changes",
-            error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -679,20 +231,6 @@ public sealed class SharedTargetStatusTests
     }
 
     [Fact]
-    public void CopilotApplyPreviewDoesNotRequireCodexConfig()
-    {
-        using var layout = new StatusLayout("copilot");
-        layout.WriteRuntime(portableBlock: true);
-
-        var preview = PortableApplyPreview.Create(
-            layout.Repository, "copilot", layout.ProviderHome);
-
-        Assert.Null(preview.CodexConfig);
-        Assert.False(preview.WouldReplace);
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
     public void CodexCombinedWriterUpdatesConfigBeforeInstructionsAndIsIdempotent()
     {
         using var layout = new StatusLayout("codex");
@@ -701,9 +239,7 @@ public sealed class SharedTargetStatusTests
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         File.WriteAllText(configPath,
             "personality = \"friendly\"\nmodel = \"keep-me\"\n");
-        var head = layout.Head();
-        var reviewed = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
+        var reviewed = ReviewCodexApplyFixture(layout);
 
         var result = PortableCodexWriter.Apply(reviewed, () =>
         {
@@ -711,57 +247,14 @@ public sealed class SharedTargetStatusTests
                 File.ReadAllText(configPath));
             Assert.Equal(originalInstructions, File.ReadAllBytes(layout.RuntimePath));
         });
-        var after = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
+        var after = ReviewCodexApplyFixture(layout);
 
         Assert.Equal("applied", result);
         Assert.Equal("unchanged", PortableCodexWriter.Apply(after));
         Assert.False(after.WouldReplace);
         Assert.False(after.CodexConfig!.WouldReplace);
         Assert.Equal(reviewed.DesiredRuntime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(head, layout.Head());
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
-    public void CodexCombinedWriterCreatesMissingRuntimeConfigOnly()
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
-        var instructions = File.ReadAllBytes(layout.RuntimePath);
-        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
-        var reviewed = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
-
-        var result = PortableCodexWriter.Apply(reviewed);
-
-        Assert.Equal("applied", result);
-        Assert.Equal("personality = \"none\"\n", File.ReadAllText(configPath));
-        Assert.Equal(instructions, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite,
-                File.GetUnixFileMode(configPath));
-        }
-    }
-
-    [Fact]
-    public void CodexCombinedWriterChangesInstructionsWithoutRewritingMatchingConfig()
-    {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime();
-        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
-        var config = "personality = \"none\"\nmodel = \"keep-me\"\n"u8.ToArray();
-        File.WriteAllBytes(configPath, config);
-        var reviewed = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
-
-        var result = PortableCodexWriter.Apply(reviewed);
-
-        Assert.Equal("applied", result);
-        Assert.Equal(config, File.ReadAllBytes(configPath));
-        Assert.Equal(reviewed.DesiredRuntime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(reviewed.Snapshot.Commit, layout.Head());
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
@@ -775,9 +268,8 @@ public sealed class SharedTargetStatusTests
         layout.WriteRuntime();
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         File.WriteAllText(configPath, "personality = \"friendly\"\n");
-        var reviewed = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
-        var instructions = File.ReadAllBytes(layout.RuntimePath);
+        var reviewed = ReviewCodexApplyFixture(layout);
+        var instructions = reviewed.Snapshot.Runtime;
         if (changeCanonical)
         {
             File.AppendAllText(layout.CanonicalConfigPath, "# new canonical edit\n");
@@ -788,8 +280,10 @@ public sealed class SharedTargetStatusTests
         }
         var changedConfig = File.ReadAllBytes(configPath);
 
-        Assert.Throws<InvalidOperationException>(() => PortableCodexWriter.Apply(reviewed));
+        var error = Assert.Throws<InvalidOperationException>(() => PortableCodexWriter.Apply(reviewed));
 
+        Assert.Contains(changeCanonical ? "Canonical config has unstaged changes" : "changed after preflight",
+            error.Message, StringComparison.Ordinal);
         Assert.Equal(changedConfig, File.ReadAllBytes(configPath));
         Assert.Equal(instructions, File.ReadAllBytes(layout.RuntimePath));
     }
@@ -804,8 +298,7 @@ public sealed class SharedTargetStatusTests
         layout.WriteRuntime();
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         File.WriteAllText(configPath, "personality = \"friendly\"\n");
-        var reviewed = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
+        var reviewed = ReviewCodexApplyFixture(layout);
 
         var error = Assert.Throws<InvalidOperationException>(() =>
             PortableCodexWriter.Apply(reviewed, () =>
@@ -832,8 +325,7 @@ public sealed class SharedTargetStatusTests
     {
         using var layout = new StatusLayout("codex");
         layout.WriteRuntime();
-        var reviewed = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
+        var reviewed = ReviewCodexApplyFixture(layout);
         var instructions = File.ReadAllBytes(layout.RuntimePath);
         layout.CommitEmpty();
 
@@ -856,8 +348,7 @@ public sealed class SharedTargetStatusTests
         var instructions = File.ReadAllBytes(layout.RuntimePath);
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         File.WriteAllText(configPath, "personality = \"friendly\"\n");
-        var reviewed = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome);
+        var reviewed = ReviewCodexApplyFixture(layout);
 
         var error = Assert.Throws<InvalidOperationException>(() =>
             PortableCodexWriter.Apply(reviewed, layout.CommitEmpty));
@@ -869,21 +360,7 @@ public sealed class SharedTargetStatusTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
-    [Fact]
-    public void CodexCombinedWriterRejectsCopilotPreview()
-    {
-        using var layout = new StatusLayout("copilot");
-        layout.WriteRuntime(portableBlock: true);
-        var reviewed = PortableApplyPreview.Create(
-            layout.Repository, "copilot", layout.ProviderHome);
-
-        Assert.Throws<ArgumentException>(() => PortableCodexWriter.Apply(reviewed));
-
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
     [Theory]
-    [InlineData("codex", false)]
     [InlineData("codex", true)]
     [InlineData("copilot", false)]
     public void InternalWriterAppliesReviewedDriftAndIsIdempotent(
@@ -895,25 +372,19 @@ public sealed class SharedTargetStatusTests
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         var config = "personality = \"friendly\"\n# keep this setting\n"u8.ToArray();
         File.WriteAllBytes(configPath, config);
-        var head = layout.Head();
-        var preview = PortableApplyPreview.Create(
-            layout.Repository, provider, layout.ProviderHome);
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, provider, layout.ProviderHome);
+        var preview = PortableApplyPreview.PlanInstructions(ReviewFixture(layout));
 
-        var applied = PortableInstructionWriter.Apply(reviewed);
-        var afterApply = PortableRuntimeSnapshot.Read(
-            layout.Repository, provider, layout.ProviderHome);
+        var applied = PortableInstructionWriter.Apply(preview.Snapshot);
+        var afterApply = ReviewFixture(layout);
         var repeated = PortableInstructionWriter.Apply(afterApply);
 
         Assert.True(preview.WouldReplace);
         Assert.Equal("applied", applied);
         Assert.Equal("unchanged", repeated);
         Assert.Equal(preview.DesiredRuntime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal("in_sync", SharedTargetStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome));
+        Assert.Equal("in_sync", PortableEnvironmentStatus.ClassifyInstructions(afterApply));
         Assert.Equal(config, File.ReadAllBytes(configPath));
-        Assert.Equal(head, layout.Head());
+        Assert.Equal(preview.Snapshot.Commit, layout.Head());
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
@@ -921,18 +392,14 @@ public sealed class SharedTargetStatusTests
     public void InternalWriterMayReplaceRuntimeOnlyDriftAfterReview()
     {
         using var layout = new StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
+        var desired = layout.WriteRuntime(portableBlock: true);
         File.AppendAllText(layout.RuntimePath, "Runtime-only edit, not committed.\n");
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "codex", layout.ProviderHome);
+        var reviewed = ReviewFixture(layout);
 
         var result = PortableInstructionWriter.Apply(reviewed);
 
         Assert.Equal("applied", result);
-        Assert.DoesNotContain("Runtime-only edit", File.ReadAllText(layout.RuntimePath),
-            StringComparison.Ordinal);
-        Assert.Equal("in_sync", SharedTargetStatus.Inspect(
-            layout.Repository, "codex", layout.ProviderHome));
+        Assert.Equal(desired, File.ReadAllBytes(layout.RuntimePath));
     }
 
     [Fact]
@@ -940,8 +407,7 @@ public sealed class SharedTargetStatusTests
     {
         using var layout = new StatusLayout("codex");
         layout.WriteRuntime();
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "codex", layout.ProviderHome);
+        var reviewed = ReviewFixture(layout);
         File.AppendAllText(layout.RuntimePath, "New edit after preflight.\n");
         var changedRuntime = File.ReadAllBytes(layout.RuntimePath);
 
@@ -958,9 +424,8 @@ public sealed class SharedTargetStatusTests
     {
         using var layout = new StatusLayout("copilot");
         layout.WriteRuntime();
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "copilot", layout.ProviderHome);
-        var originalRuntime = File.ReadAllBytes(layout.RuntimePath);
+        var reviewed = ReviewFixture(layout);
+        var originalRuntime = reviewed.Runtime;
         layout.CommitEmpty();
 
         var error = Assert.Throws<InvalidOperationException>(() =>
@@ -976,9 +441,8 @@ public sealed class SharedTargetStatusTests
     {
         using var layout = new StatusLayout("codex");
         layout.WriteRuntime();
-        var reviewed = PortableRuntimeSnapshot.Read(
-            layout.Repository, "codex", layout.ProviderHome);
-        var originalRuntime = File.ReadAllBytes(layout.RuntimePath);
+        var reviewed = ReviewFixture(layout);
+        var originalRuntime = reviewed.Runtime;
         File.AppendAllText(layout.TargetPath, "Uncommitted target edit.\n");
         var repositoryStatus = layout.GitStatus();
 
@@ -991,100 +455,53 @@ public sealed class SharedTargetStatusTests
         Assert.Equal(repositoryStatus, layout.GitStatus());
     }
 
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void MissingRuntimeIsReportedWithoutAssumingLocalEnrollment(string provider)
-    {
-        using var layout = new StatusLayout(provider);
-
-        var result = SharedTargetStatus.Inspect(
-            layout.Repository, provider, layout.ProviderHome);
-
-        Assert.Equal("missing", result);
-        Assert.False(File.Exists(layout.RuntimePath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void RuntimeBoundToAnotherRepositoryIsRejected(string provider)
-    {
-        using var layout = new StatusLayout(provider);
-        layout.WriteRuntime(Path.Combine(layout.Root, "other-data"));
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            SharedTargetStatus.Inspect(layout.Repository, provider, layout.ProviderHome));
-
-        Assert.Contains("not bound to the selected AEC repository", error.Message,
-            StringComparison.Ordinal);
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void RuntimeWithoutAManagedBindingIsRejected(string provider)
-    {
-        using var layout = new StatusLayout(provider);
-        File.WriteAllText(layout.RuntimePath, "Local text without an AEC block.");
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            SharedTargetStatus.Inspect(layout.Repository, provider, layout.ProviderHome));
-
-        Assert.Contains("not bound to the selected AEC repository", error.Message,
-            StringComparison.Ordinal);
-    }
-
     [Fact]
-    public void UncommittedTargetStopsBeforeReportingRuntimeDrift()
+    public void MissingProviderHomeFailsBeforeReadingGit()
     {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime();
-        File.AppendAllText(layout.TargetPath, "Uncommitted target edit.");
-        var repositoryStatus = layout.GitStatus();
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            SharedTargetStatus.Inspect(layout.Repository, "codex", layout.ProviderHome));
-
-        Assert.Contains("Committed target has unstaged changes", error.Message,
-            StringComparison.Ordinal);
-        Assert.Equal(repositoryStatus, layout.GitStatus());
+        var repositoryPath = Path.Combine(TestTemporaryDirectory.Root, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(repositoryPath);
+        try
+        {
+            var missingHome = Path.Combine(repositoryPath, "missing-home");
+            var error = Assert.Throws<DirectoryNotFoundException>(() =>
+                PortableEnvironmentStatus.Inspect(repositoryPath, "codex", missingHome));
+            Assert.Contains(missingHome, error.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TestDirectoryCleanup.Delete(repositoryPath);
+        }
     }
 
-    [Fact]
-    public void StaleCommittedTargetStopsBeforeReportingRuntimeDrift()
+    private static PortableRuntimeSnapshot ReviewFixture(StatusLayout layout)
     {
-        using var layout = new StatusLayout("codex");
-        layout.WriteRuntime();
-        File.WriteAllText(layout.SharedSource, "Changed shared approval.\n");
-        layout.CommitSource();
-
-        var error = Assert.Throws<InvalidDataException>(() =>
-            SharedTargetStatus.Inspect(layout.Repository, "codex", layout.ProviderHome));
-
-        Assert.Contains("does not match committed authored sources", error.Message,
-            StringComparison.Ordinal);
-        Assert.Equal(string.Empty, layout.GitStatus());
+        var platform = RenderCommand.CurrentPlatform();
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
+        var version = PortableRuntimeSnapshot.ValidateRuntimeBinding(layout.Repository, platform, layout.Provider, runtime);
+        return new PortableRuntimeSnapshot(layout.Repository, platform, layout.Provider,
+            layout.RuntimePath, layout.Head(), File.ReadAllBytes(layout.TargetPath), runtime, version);
     }
 
-    [Fact]
-    public void MissingProviderHomeDoesNotTreatPulledTargetAsInstallation()
+    private static PortableApplyPreview ReviewCodexApplyFixture(StatusLayout layout)
     {
-        using var layout = new StatusLayout("codex");
-        Directory.Delete(layout.ProviderHome);
-
-        Assert.Throws<DirectoryNotFoundException>(() =>
-            SharedTargetStatus.Inspect(layout.Repository, "codex", layout.ProviderHome));
+        var preview = PortableApplyPreview.PlanInstructions(ReviewFixture(layout));
+        var canonical = File.ReadAllBytes(layout.CanonicalConfigPath);
+        var runtimePath = Path.Combine(layout.ProviderHome, "config.toml");
+        var runtime = File.Exists(runtimePath) ? File.ReadAllBytes(runtimePath) : null;
+        var personality = CodexPersonalityConfig.ReadCanonical(canonical, layout.CanonicalConfigPath);
+        var update = CodexPersonalityConfig.PlanRuntimeUpdate(runtime, runtimePath, personality);
+        return preview with
+        {
+            CodexConfig = new PortableCodexConfigPreview(
+                runtimePath, canonical, runtime, update.Content, update.Changed, update.Inserted)
+        };
     }
 
     internal sealed class StatusLayout : IDisposable
     {
         public StatusLayout(string provider)
         {
-            var temporaryRoot = Environment.GetEnvironmentVariable("AEC_TEST_TEMP_ROOT")
-                ?? (OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath());
+            var temporaryRoot = TestTemporaryDirectory.Root;
             Root = Path.Combine(temporaryRoot,
                 "aec-shared-status-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
@@ -1127,7 +544,7 @@ public sealed class SharedTargetStatusTests
             Provider = provider;
         }
 
-        private string Provider { get; }
+        public string Provider { get; }
         public string Root { get; }
         public string Repository { get; }
         public string ProviderHome { get; }
@@ -1135,15 +552,6 @@ public sealed class SharedTargetStatusTests
         public string TargetPath { get; }
         public string RuntimePath { get; }
         public string CanonicalConfigPath { get; }
-
-        public void CommitSource()
-        {
-            GitProcess.RunRequired(Repository, "Could not stage shared source", "add", "--",
-                "environment/shared/instructions.md");
-            GitProcess.RunRequired(Repository, "Could not commit shared source",
-                "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
-                "-c", "commit.gpgsign=false", "commit", "-m", "Changed shared source");
-        }
 
         public void CommitEmpty()
         {
@@ -1153,7 +561,18 @@ public sealed class SharedTargetStatusTests
                 "Unrelated committed change");
         }
 
-        public void WriteRuntime(
+        public byte[] WriteRuntime(
+            string? boundRepository = null,
+            bool codexChatGptBlock = false,
+            bool portableBlock = false,
+            string? platformOverride = null)
+        {
+            var runtime = CreateRuntime(boundRepository, codexChatGptBlock, portableBlock, platformOverride);
+            File.WriteAllBytes(RuntimePath, runtime);
+            return runtime;
+        }
+
+        public byte[] CreateRuntime(
             string? boundRepository = null,
             bool codexChatGptBlock = false,
             bool portableBlock = false,
@@ -1162,7 +581,7 @@ public sealed class SharedTargetStatusTests
             var repository = boundRepository ?? Repository;
             var target = File.ReadAllBytes(TargetPath);
             var platform = platformOverride ?? RenderCommand.CurrentPlatform();
-            var runtime = Provider switch
+            return Provider switch
             {
                 "codex" when portableBlock => AecInstructionBlock.MergeForPortableTarget(
                     target, repository, platform, codexChatGptBlock),
@@ -1173,7 +592,6 @@ public sealed class SharedTargetStatusTests
                     target, repository, platform),
                 _ => CopilotInstructionBlock.Merge(target, repository)
             };
-            File.WriteAllBytes(RuntimePath, runtime);
         }
 
         public string Head() =>

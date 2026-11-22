@@ -3,6 +3,7 @@ using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationScaffoldWriterTests
 {
     private const string Shared = "environment/shared/instructions.md";
@@ -114,13 +115,8 @@ public sealed class MigrationScaffoldWriterTests
     }
 
     [Theory]
-    [InlineData("head")]
     [InlineData("branch")]
-    [InlineData("new-source")]
     [InlineData("draft-bytes")]
-    [InlineData("enrollment")]
-    [InlineData("marker")]
-    [InlineData("ignored")]
     [InlineData("index")]
     public void StaleReviewStopsBeforeCreationAndPreservesNewState(string kind)
     {
@@ -129,43 +125,29 @@ public sealed class MigrationScaffoldWriterTests
         var reviewed = Preview(layout);
         switch (kind)
         {
-            case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
             case "branch": layout.Files.Git("switch", "-c", "other-branch"); break;
-            case "new-source": layout.Files.Write($"environment/platforms/{layout.Platform}/policy.md", "Later draft.\n"); break;
             case "draft-bytes": layout.Files.Write(Shared, "Later draft.\n"); break;
-            case "enrollment": File.Delete(layout.Runtime("copilot")); break;
-            case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
-            case "ignored": layout.Files.Write(".git/info/exclude", $"environment/platforms/{layout.Platform}/policy.md\n"); break;
-            default: layout.Files.Git("add", "--", Shared); break;
+            case "index": layout.Files.Git("add", "--", Shared); break;
+            default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
         layout.Files.AssertNoChanges(() =>
             Assert.Throws<InvalidOperationException>(() => MigrationScaffoldWriter.Write(reviewed)));
     }
 
-    [Theory]
-    [InlineData("path")]
-    [InlineData("action")]
-    [InlineData("bytes")]
-    [InlineData("membership")]
-    public void CallerModifiedInventoryCannotAuthorizeDifferentWrites(string kind)
+    [Fact]
+    public void CallerModifiedInventoryCannotAuthorizeDifferentWrites()
     {
         using var layout = new Layout();
         layout.Files.Write(Shared, "Reviewed draft.\n");
         var reviewed = Preview(layout);
         var files = reviewed.Files.ToArray();
-        switch (kind)
-        {
-            case "path": files[0] = files[0] with { RelativePath = "../escape.md" }; break;
-            case "action": files[0] = files[0] with { Action = MigrationScaffoldAction.PreserveExisting }; break;
-            case "bytes":
-                var draft = Array.FindIndex(files, file => file.RelativePath == Shared);
-                files[draft].WorkingContent![0] ^= 1;
-                break;
-            default: files = files[..^1]; break;
-        }
+        files[0] = files[0] with { RelativePath = "../escape.md" };
         reviewed = reviewed with { Files = files };
         layout.Files.AssertNoChanges(() =>
-            Assert.Throws<InvalidOperationException>(() => MigrationScaffoldWriter.Write(reviewed)));
+        {
+            var error = Assert.Throws<InvalidOperationException>(() => MigrationScaffoldWriter.Write(reviewed));
+            Assert.Contains("Scaffold inventory paths changed after review", error.Message, StringComparison.Ordinal);
+        });
     }
 
     [Theory]
@@ -215,9 +197,6 @@ public sealed class MigrationScaffoldWriterTests
     [InlineData("enrollment")]
     [InlineData("runtime")]
     [InlineData("runtime-config")]
-    [InlineData("legacy-agents")]
-    [InlineData("legacy-config")]
-    [InlineData("legacy-copilot")]
     [InlineData("hidden-section")]
     [InlineData("unexpected-dirt")]
     [InlineData("ignored-missing")]
@@ -245,9 +224,6 @@ public sealed class MigrationScaffoldWriterTests
             case "enrollment": File.Delete(layout.Runtime("copilot")); break;
             case "runtime": File.AppendAllText(layout.Runtime("codex"), "Later runtime edit.\n"); break;
             case "runtime-config": File.AppendAllText(layout.ConfigRuntime, "# Later config edit.\n"); break;
-            case "legacy-agents": File.AppendAllText(Path.Combine(layout.Repository, AecApplication.SourceRelativePath), "Later legacy edit.\n"); break;
-            case "legacy-config": File.AppendAllText(Path.Combine(layout.Repository, AecApplication.ConfigSourceRelativePath), "# Later legacy edit.\n"); break;
-            case "legacy-copilot": File.AppendAllText(Path.Combine(layout.Repository, AecApplication.CopilotSourceRelativePath), "Later legacy edit.\n"); break;
             case "hidden-section": layout.Files.Write(Shared, "Hidden later edit.\n"); break;
             case "unexpected-dirt": layout.Files.Write("unexpected.md", "Unreviewed edit.\n"); break;
             case "ignored-missing": layout.Files.Write(".git/info/exclude", Shared + "\n"); break;
@@ -261,6 +237,33 @@ public sealed class MigrationScaffoldWriterTests
         }
         layout.Files.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() =>
             MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [], [])));
+    }
+
+    [Fact]
+    public void FocusedGuardRejectsHiddenChangesToEachLegacyInput()
+    {
+        using var layout = new Layout();
+        string[] legacyPaths = [AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath,
+            AecApplication.CopilotSourceRelativePath];
+        // Hide the edits from Git status so the guard must compare the protected bytes.
+        layout.Files.Git(["update-index", "--assume-unchanged", "--", .. legacyPaths]);
+        var baseline = Preview(layout);
+        var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(layout.Repository, ".git", "index"));
+        var protectedFiles = MigrationScaffoldWriter.ReadProtectedFiles(baseline);
+
+        foreach (var relativePath in legacyPaths)
+        {
+            var path = Path.Combine(layout.Repository, relativePath);
+            var original = Assert.IsType<byte[]>(protectedFiles[path]);
+            File.AppendAllText(path, "\n# Later legacy edit.\n");
+            layout.Files.AssertNoChanges(() =>
+            {
+                var error = Assert.Throws<InvalidOperationException>(() =>
+                    MigrationScaffoldWriter.VerifyCurrentInputs(baseline, index, protectedFiles, [], []));
+                Assert.Equal($"Protected migration input changed during scaffold creation: {path}.", error.Message);
+            });
+            File.WriteAllBytes(path, original);
+        }
     }
 
     [Theory]

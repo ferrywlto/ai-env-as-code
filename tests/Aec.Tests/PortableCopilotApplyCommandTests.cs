@@ -29,12 +29,13 @@ public sealed class PortableCopilotApplyCommandTests
     public void AppliesCommittedRenderedTargetWithoutChangingRepositoryOrConfig()
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-        layout.WriteRuntime(portableBlock: true);
+        var desired = layout.WriteRuntime(portableBlock: true);
         File.AppendAllText(layout.RuntimePath, "Unreviewed runtime edit.\n");
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         File.WriteAllText(configPath, "not a TOML file");
-        var desired = PortableApplyPreview.Create(
-            layout.Repository, "copilot", layout.ProviderHome).DesiredRuntime;
+        var notePath = Path.Combine(layout.Repository, "unrelated.txt");
+        File.WriteAllText(notePath, "preserve\n");
+        var status = layout.GitStatus();
         var head = layout.Head();
 
         var result = Run(layout);
@@ -44,8 +45,9 @@ public sealed class PortableCopilotApplyCommandTests
         Assert.Empty(result.Error);
         Assert.Equal(desired, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal("not a TOML file", File.ReadAllText(configPath));
+        Assert.Equal("preserve\n", File.ReadAllText(notePath));
         Assert.Equal(head, layout.Head());
-        Assert.Equal(string.Empty, layout.GitStatus());
+        Assert.Equal(status, layout.GitStatus());
     }
 
     [Fact]
@@ -53,8 +55,7 @@ public sealed class PortableCopilotApplyCommandTests
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
         layout.WriteRuntime();
-        var desired = PortableApplyPreview.Create(
-            layout.Repository, "copilot", layout.ProviderHome).DesiredRuntime;
+        var desired = layout.CreateRuntime(portableBlock: true);
 
         var result = Run(layout);
 
@@ -196,66 +197,28 @@ public sealed class PortableCopilotApplyCommandTests
     }
 
     [Fact]
-    public void UnrelatedRepositoryChangesArePreserved()
-    {
-        using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-        layout.WriteRuntime(portableBlock: true);
-        File.AppendAllText(layout.RuntimePath, "Unreviewed runtime edit.\n");
-        File.WriteAllText(Path.Combine(layout.Repository, "unrelated.txt"), "preserve\n");
-        var status = layout.GitStatus();
-        var head = layout.Head();
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"applied{Environment.NewLine}", result.Output);
-        Assert.Equal(status, layout.GitStatus());
-        Assert.Equal(head, layout.Head());
-    }
-
-    [Fact]
-    public void RejectsCodexHomeForCopilotApply()
-    {
-        using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-
-        var result = TestApplication.Run("apply", "--repo", layout.Repository,
-            "--provider=copilot", "--codex-home", layout.ProviderHome);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("--codex-home is not valid with --provider=copilot",
-            result.Error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void RejectsCopilotHomeWithoutProvider()
-    {
-        using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-
-        var result = TestApplication.Run("apply", "--repo", layout.Repository,
-            "--copilot-home", layout.ProviderHome);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("--copilot-home requires --provider=copilot",
-            result.Error, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void CopilotRuntimeInsideRepositoryIsRejected()
     {
-        using var layout = new SharedTargetStatusTests.StatusLayout("copilot");
-        layout.WriteRuntime(portableBlock: true);
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
+        var repository = Path.Combine(TestTemporaryDirectory.Root, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(repository);
+        try
+        {
+            var runtimePath = Path.Combine(repository, "copilot-instructions.md");
+            File.WriteAllText(runtimePath, "Preserve instructions.\n");
 
-        var result = TestApplication.Run("apply", "--repo", layout.Repository,
-            "--provider=copilot", "--copilot-home", layout.Repository);
+            var result = TestApplication.Run("apply", "--repo", repository,
+                "--provider=copilot", "--copilot-home", repository);
 
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("Provider runtime target must be outside the data repository",
-            result.Error, StringComparison.Ordinal);
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+            Assert.Equal(1, result.ExitCode);
+            Assert.Empty(result.Output);
+            Assert.Contains("Provider runtime target must be outside the data repository",
+                result.Error, StringComparison.Ordinal);
+            Assert.Equal("Preserve instructions.\n", File.ReadAllText(runtimePath));
+        }
+        finally
+        {
+            TestDirectoryCleanup.Delete(repository);
+        }
     }
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>

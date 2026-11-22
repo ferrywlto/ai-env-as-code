@@ -136,8 +136,8 @@ internal sealed class MigrationPortableCapturePlan
 
         VerifyCompletionMarkerAbsent();
         VerifyHarnessEnrollment(expectedHead);
-        VerifyRuntimeFiles();
-        VerifyCanonicalFiles(writtenSources, writtenTargets);
+        VerifyRuntimeFiles(runtimes, ReadFile);
+        VerifyCanonicalFiles(originals, proposals, writtenSources, writtenTargets, ReadCanonicalFile);
     }
 
     private void VerifyHead(string expectedHead)
@@ -189,11 +189,12 @@ internal sealed class MigrationPortableCapturePlan
         }
     }
 
-    private void VerifyRuntimeFiles()
+    internal static void VerifyRuntimeFiles(IReadOnlyDictionary<string, byte[]?> runtimes,
+        Func<string, byte[]?> readFile)
     {
         foreach (var (runtimePath, expectedContent) in runtimes)
         {
-            var currentContent = ReadFile(runtimePath);
+            var currentContent = readFile(runtimePath);
             if (!SameBytes(expectedContent, currentContent))
             {
                 throw new InvalidOperationException($"Runtime capture input changed: {runtimePath}; no further files will be replaced.");
@@ -201,8 +202,9 @@ internal sealed class MigrationPortableCapturePlan
         }
     }
 
-    private void VerifyCanonicalFiles(IReadOnlyList<string> writtenSources,
-        IReadOnlyDictionary<string, byte[]>? writtenTargets)
+    internal static void VerifyCanonicalFiles(IReadOnlyDictionary<string, byte[]?> originals,
+        IReadOnlyDictionary<string, byte[]> proposals, IReadOnlyList<string> writtenSources,
+        IReadOnlyDictionary<string, byte[]>? writtenTargets, Func<string, byte[]?> readFile)
     {
         foreach (var (relativePath, originalContent) in originals)
         {
@@ -216,14 +218,15 @@ internal sealed class MigrationPortableCapturePlan
                 expectedContent = proposals[relativePath];
             }
 
-            var canonicalPath = Path.Combine(Repository, relativePath);
-            var currentContent = ReadFile(canonicalPath);
+            var currentContent = readFile(relativePath);
             if (!SameBytes(expectedContent, currentContent))
             {
                 throw new InvalidOperationException($"Portable canonical input changed: {relativePath}; no further files will be replaced.");
             }
         }
     }
+
+    private byte[]? ReadCanonicalFile(string relativePath) => ReadFile(Path.Combine(Repository, relativePath));
 
     private void AddInstructions(PortableRuntimeSnapshot? snapshot, PortableBackupAttributionPreview? attribution)
     {

@@ -3,6 +3,7 @@ using System.Text;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationHarnessSelectionTests
 {
     [Theory]
@@ -180,7 +181,7 @@ public sealed class MigrationHarnessSelectionTests
 
         public SelectionLayout()
         {
-            Root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            Root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-migration-selection-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data");
             Directory.CreateDirectory(Repository);

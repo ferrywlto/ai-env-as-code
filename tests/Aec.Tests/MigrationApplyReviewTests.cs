@@ -3,6 +3,68 @@ namespace Aec.Tests;
 [Trait("Category", "Unit")]
 public sealed class MigrationApplyReviewTests
 {
+    [Fact]
+    public void EmptyReviewSetIsRejected()
+    {
+        var error = Assert.Throws<ArgumentException>(() => MigrationApplyCoordinator.Apply([]));
+        Assert.Contains("requires reviewed enrolled providers", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("missing", "Review every enrolled provider")]
+    [InlineData("duplicate", "Duplicate migration apply provider")]
+    [InlineData("preparation", "different original commits")]
+    [InlineData("unsupported", "Unsupported migration apply provider")]
+    public void InvalidReviewSetIsRejected(string kind, string diagnostic)
+    {
+        var codex = CreateReview(AecIdentifiers.Codex);
+        var copilot = CreateReview(AecIdentifiers.Copilot);
+        var preparation = codex.Preparation with { Harnesses = [codex.Harness, copilot.Harness] };
+        codex = codex with { Preparation = preparation };
+        copilot = copilot with { Preparation = preparation };
+        MigrationApplyPreview[] reviews = kind switch
+        {
+            "missing" => [codex],
+            "duplicate" => [codex, codex],
+            "preparation" => [codex, copilot with { Preparation = preparation with { OriginalCommit = "different" } }],
+            "unsupported" => [codex, copilot with { Harness = copilot.Harness with { Provider = "other" } }],
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+
+        var error = Assert.Throws<ArgumentException>(() => MigrationApplyCoordinator.Apply(reviews));
+        Assert.Contains(diagnostic, error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CodexWriterRejectsAnInvalidReview(bool missingConfig)
+    {
+        var review = CreateReview(missingConfig ? AecIdentifiers.Codex : AecIdentifiers.Copilot);
+        if (missingConfig)
+            review = review with { Apply = review.Apply with { CodexConfig = null } };
+
+        var error = Assert.Throws<ArgumentException>(() => MigrationCodexApplyWriter.Apply(review));
+        Assert.Contains("reviewed Codex migration apply preview is required", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CopilotWriterRejectsACodexReview()
+    {
+        var review = CreateReview(AecIdentifiers.Codex);
+        var error = Assert.Throws<InvalidOperationException>(() => MigrationCopilotApplyWriter.Apply(review));
+        Assert.Equal("A reviewed Copilot migration apply preview is required.", error.Message);
+    }
+
+    [Fact]
+    public void UnsupportedPreviewProviderIsRejected()
+    {
+        var review = CreateReview(AecIdentifiers.Codex);
+        var error = Assert.Throws<ArgumentException>(() =>
+            MigrationApplyPreview.Read(review.Preparation, "other"));
+        Assert.Contains("Unsupported migration apply provider: other", error.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(AecIdentifiers.Codex)]
     [InlineData(AecIdentifiers.Copilot)]
@@ -106,6 +168,109 @@ public sealed class MigrationApplyReviewTests
 
         AssertRefused(missing, empty, "runtime instructions");
         AssertRefused(empty, missing, "runtime instructions");
+    }
+
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("target")]
+    [InlineData("exception")]
+    public void FailureAfterFirstProviderReportsPartialApplyAndStopsSecond(string mutation)
+    {
+        var codex = CreateReview(AecIdentifiers.Codex);
+        var copilot = CreateReview(AecIdentifiers.Copilot);
+        var preparation = codex.Preparation with { Harnesses = [codex.Harness, copilot.Harness] };
+        var config = codex.Apply.CodexConfig! with { DesiredRuntime = [2] };
+        codex = codex with { Preparation = preparation, Apply = codex.Apply with { CodexConfig = config } };
+        copilot = copilot with { Preparation = preparation };
+        var repository = preparation.Preflight.Repository;
+        var codexRuntime = codex.Harness.RuntimePath;
+        var copilotRuntime = copilot.Harness.RuntimePath;
+        var canonicalConfig = Path.Combine(repository, AecApplication.ConfigSourceRelativePath);
+        var codexTarget = Path.Combine(repository, "environment", "targets",
+            codex.Apply.Snapshot.Platform, codex.Harness.Provider, "AGENTS.md");
+        var copilotTarget = Path.Combine(repository, "environment", "targets",
+            copilot.Apply.Snapshot.Platform, copilot.Harness.Provider, "copilot-instructions.md");
+        var protectedFiles = new Dictionary<string, byte[]?>(StringComparer.Ordinal)
+        {
+            [codexRuntime] = null,
+            [copilotRuntime] = null,
+            [config.RuntimePath] = null,
+            [canonicalConfig] = null
+        };
+        var observed = new Dictionary<string, byte[]?>(StringComparer.Ordinal)
+        {
+            [codexRuntime] = codex.Apply.Snapshot.Runtime,
+            [copilotRuntime] = copilot.Apply.Snapshot.Runtime,
+            [config.RuntimePath] = config.Runtime,
+            [canonicalConfig] = config.Canonical,
+            [codexTarget] = codex.Apply.Snapshot.Target,
+            [copilotTarget] = copilot.Apply.Snapshot.Target
+        };
+        var changedPath = mutation switch
+        {
+            "codex" => codexRuntime,
+            "target" => copilotTarget,
+            "exception" => null,
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null)
+        };
+        var writers = new List<string>();
+        var callbacks = new List<string>();
+        var verificationCount = 0;
+        var injected = new IOException("Injected boundary failure");
+        var externalBytes = "External change."u8.ToArray();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            MigrationApplyCoordinator.ApplyReviewedProviders(
+                [codex, copilot], protectedFiles,
+                preview =>
+                {
+                    var provider = preview.Harness.Provider;
+                    writers.Add(provider);
+                    observed[preview.Harness.RuntimePath] = preview.Apply.DesiredRuntime;
+                    if (preview.Apply.CodexConfig is { } proposal)
+                        observed[proposal.RuntimePath] = proposal.DesiredRuntime;
+                    return "applied";
+                },
+                () =>
+                {
+                    verificationCount++;
+                    MigrationSourceValidationPreview.VerifyProtectedFiles(protectedFiles, file => observed[file]);
+                },
+                provider =>
+                {
+                    callbacks.Add(provider);
+                    if (changedPath is null) throw injected;
+                    observed[changedPath] = externalBytes;
+                }));
+
+        Assert.Equal(new[] { AecIdentifiers.Codex }, writers);
+        Assert.Equal(writers, callbacks);
+        Assert.Equal(changedPath is null ? 1 : 2, verificationCount);
+        Assert.Contains("while completing codex. Completed providers: codex (applied).", error.Message,
+            StringComparison.Ordinal);
+        Assert.Contains(codexRuntime, error.Message, StringComparison.Ordinal);
+        Assert.Contains(copilotRuntime, error.Message, StringComparison.Ordinal);
+        Assert.Contains(config.RuntimePath, error.Message, StringComparison.Ordinal);
+        Assert.Contains("No automatic rollback was attempted", error.Message, StringComparison.Ordinal);
+        Assert.Equal(codex.Apply.DesiredRuntime, protectedFiles[codexRuntime]);
+        Assert.Equal(config.DesiredRuntime, protectedFiles[config.RuntimePath]);
+        Assert.Equal(config.Canonical, protectedFiles[canonicalConfig]);
+        Assert.Equal(copilot.Apply.Snapshot.Runtime, protectedFiles[copilotRuntime]);
+        Assert.Equal(codex.Apply.Snapshot.Target, protectedFiles[codexTarget]);
+        Assert.Equal(copilot.Apply.Snapshot.Target, protectedFiles[copilotTarget]);
+        Assert.Equal(copilot.Apply.Snapshot.Runtime, observed[copilotRuntime]);
+
+        if (changedPath is null)
+        {
+            Assert.Same(injected, error.InnerException);
+            Assert.Equal(codex.Apply.DesiredRuntime, observed[codexRuntime]);
+        }
+        else
+        {
+            var cause = Assert.IsType<InvalidOperationException>(error.InnerException);
+            Assert.Equal($"Protected migration input changed during source validation: {changedPath}.", cause.Message);
+            Assert.Equal(externalBytes, observed[changedPath]);
+        }
     }
 
     private static void AssertRefused(MigrationApplyPreview reviewed, MigrationApplyPreview fresh, string input)

@@ -34,7 +34,7 @@ public sealed class PortableCodexApplyCommandTests
         bool instructionDrift, bool personalityDrift)
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
+        var desired = layout.WriteRuntime(portableBlock: true);
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         File.WriteAllText(configPath,
             $"personality = \"{(personalityDrift ? "friendly" : "none")}\"\n" +
@@ -44,8 +44,6 @@ public sealed class PortableCodexApplyCommandTests
             File.AppendAllText(layout.RuntimePath, "Unreviewed instruction edit.\n");
         }
 
-        var desired = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome).DesiredRuntime;
         var head = layout.Head();
 
         var result = Run(layout);
@@ -84,6 +82,7 @@ public sealed class PortableCodexApplyCommandTests
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("codex");
         layout.WriteRuntime(portableBlock: true);
+        var instructions = File.ReadAllBytes(layout.RuntimePath);
         var configPath = Path.Combine(layout.ProviderHome, "config.toml");
         Assert.False(File.Exists(configPath));
 
@@ -94,6 +93,12 @@ public sealed class PortableCodexApplyCommandTests
         Assert.Contains("warning: runtime config does not declare root `personality`",
             result.Error, StringComparison.Ordinal);
         Assert.Equal("personality = \"none\"\n", File.ReadAllText(configPath));
+        Assert.Equal(instructions, File.ReadAllBytes(layout.RuntimePath));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(configPath));
+        }
+
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 

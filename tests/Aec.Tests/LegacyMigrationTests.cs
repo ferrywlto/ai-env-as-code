@@ -3,6 +3,7 @@ using System.Text;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class LegacyMigrationTests
 {
     [Fact]
@@ -127,7 +128,7 @@ public sealed class LegacyMigrationTests
 
         public LegacyLayout()
         {
-            root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-legacy-migration-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(root, "data");
             foreach (var provider in Providers)

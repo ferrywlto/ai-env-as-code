@@ -3,12 +3,13 @@ using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationCaptureCoordinatorTests
 {
     [Fact]
     public void LegacyCaptureAdvancesPinnedCommitAndPreservesAuthoredDraft()
     {
-        using var layout = new Layout();
+        using var layout = Layout.WithRemote();
         var original = layout.Files.Head();
         layout.Files.Git("commit", "--allow-empty", "-m", "Retrieved checkpoint");
         File.AppendAllText(layout.Runtime("codex"), "Legacy runtime revision.\n");
@@ -27,7 +28,7 @@ public sealed class MigrationCaptureCoordinatorTests
     [Fact]
     public void PortableCaptureCommitsBothProvidersAgainstThePreparedParent()
     {
-        using var layout = new Layout("codex", "copilot");
+        using var layout = Layout.WithRemote("codex", "copilot");
         var original = layout.Files.Git("rev-parse", "HEAD^").Trim();
         layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
         layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");

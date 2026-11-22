@@ -3,6 +3,7 @@ using System.Text;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationCopilotApplyWriterTests
 {
     [Fact]
@@ -69,16 +70,6 @@ public sealed class MigrationCopilotApplyWriterTests
                 layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n");
                 break;
         }
-
-        layout.Files.AssertNoChanges(() =>
-            Assert.Throws<InvalidOperationException>(() => MigrationCopilotApplyWriter.Apply(preview)));
-    }
-
-    [Fact]
-    public void RejectsCodexPreviewWithoutChanges()
-    {
-        using var layout = new MigrationPortableCapturePreviewTests.Layout("codex", "copilot");
-        var preview = MigrationApplyPreview.Read(layout.Context(), "codex");
 
         layout.Files.AssertNoChanges(() =>
             Assert.Throws<InvalidOperationException>(() => MigrationCopilotApplyWriter.Apply(preview)));

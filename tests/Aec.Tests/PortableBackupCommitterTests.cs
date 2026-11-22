@@ -11,17 +11,15 @@ public sealed class PortableBackupCommitterTests
         string section, string provider, int targetCount)
     {
         using var layout = new PortableBackupTargetWriterTests.Layout(localProvider: provider);
-        layout.EditRuntime(section);
-        var oldHead = layout.Head();
-        var (reviewed, attribution) = layout.WriteReviewedSource();
-        var targets = PortableBackupTargetWriter.Render(reviewed, attribution);
+        var (reviewed, attribution) = layout.SeedReviewedSource(section);
+        var targets = layout.SeedRenderedTargets(attribution);
         File.WriteAllText(Path.Combine(layout.Repository, "unrelated-note.txt"), "Keep me untracked.\n");
 
         var commit = PortableBackupCommitter.Commit(reviewed, attribution, targets);
 
         Assert.Equal(targetCount, targets.Count);
         Assert.Equal(commit, layout.Head());
-        Assert.Equal(oldHead, GitProcess.RunRequired(layout.Repository,
+        Assert.Equal(reviewed.Commit, GitProcess.RunRequired(layout.Repository,
             "Could not read backup parent", "rev-parse", "HEAD^").Output.Trim());
         var committedPaths = GitProcess.RunRequired(layout.Repository,
             "Could not list committed paths", "diff-tree", "--no-commit-id", "--name-only",
@@ -39,15 +37,14 @@ public sealed class PortableBackupCommitterTests
     public void MissingAffectedTargetStopsBeforeStaging()
     {
         using var layout = new PortableBackupTargetWriterTests.Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
-        var targets = PortableBackupTargetWriter.Render(reviewed, attribution);
-        var oldHead = layout.Head();
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
+        var targets = layout.SeedRenderedTargets(attribution);
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupCommitter.Commit(reviewed, attribution, targets.Skip(1).ToArray()));
+        Assert.Contains("Rendered target paths do not match all affected committed enrollments", error.Message, StringComparison.Ordinal);
 
-        Assert.Equal(oldHead, layout.Head());
+        Assert.Equal(reviewed.Commit, layout.Head());
         Assert.Empty(GitProcess.RunRequired(layout.Repository,
             "Could not inspect fixture index", "diff", "--cached", "--name-only").Output);
     }
@@ -55,19 +52,18 @@ public sealed class PortableBackupCommitterTests
     [Fact]
     public void ExistingUnrelatedStageStopsBeforeAddingBackupPaths()
     {
-        using var layout = new PortableBackupTargetWriterTests.Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
-        var targets = PortableBackupTargetWriter.Render(reviewed, attribution);
+        using var layout = new PortableBackupTargetWriterTests.Layout(localEnrollmentOnly: true);
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
+        var targets = layout.SeedRenderedTargets(attribution);
         File.WriteAllText(Path.Combine(layout.Repository, "unrelated-note.txt"), "Staged note.\n");
         GitProcess.RunRequired(layout.Repository, "Could not stage unrelated fixture file",
             "add", "--", "unrelated-note.txt");
-        var oldHead = layout.Head();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupCommitter.Commit(reviewed, attribution, targets));
+        Assert.Contains("The repository already has staged changes", error.Message, StringComparison.Ordinal);
 
-        Assert.Equal(oldHead, layout.Head());
+        Assert.Equal(reviewed.Commit, layout.Head());
         Assert.Equal("unrelated-note.txt\n", GitProcess.RunRequired(layout.Repository,
             "Could not inspect fixture index", "diff", "--cached", "--name-only").Output);
     }
@@ -75,17 +71,16 @@ public sealed class PortableBackupCommitterTests
     [Fact]
     public void TargetDriftStopsBeforeStaging()
     {
-        using var layout = new PortableBackupTargetWriterTests.Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
-        var targets = PortableBackupTargetWriter.Render(reviewed, attribution);
+        using var layout = new PortableBackupTargetWriterTests.Layout(localEnrollmentOnly: true);
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
+        var targets = layout.SeedRenderedTargets(attribution);
         File.AppendAllText(Path.Combine(layout.Repository, targets[0]), "Concurrent edit.\n");
-        var oldHead = layout.Head();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupCommitter.Commit(reviewed, attribution, targets));
+        Assert.Contains("A rendered target changed after replacement", error.Message, StringComparison.Ordinal);
 
-        Assert.Equal(oldHead, layout.Head());
+        Assert.Equal(reviewed.Commit, layout.Head());
         Assert.Empty(GitProcess.RunRequired(layout.Repository,
             "Could not inspect fixture index", "diff", "--cached", "--name-only").Output);
     }
@@ -93,17 +88,16 @@ public sealed class PortableBackupCommitterTests
     [Fact]
     public void RuntimeDriftStopsBeforeStaging()
     {
-        using var layout = new PortableBackupTargetWriterTests.Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
-        var targets = PortableBackupTargetWriter.Render(reviewed, attribution);
+        using var layout = new PortableBackupTargetWriterTests.Layout(localEnrollmentOnly: true);
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
+        var targets = layout.SeedRenderedTargets(attribution);
         File.AppendAllText(layout.RuntimePath, "Concurrent edit.\n");
-        var oldHead = layout.Head();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupCommitter.Commit(reviewed, attribution, targets));
+        Assert.Contains("Backup HEAD or runtime changed after review", error.Message, StringComparison.Ordinal);
 
-        Assert.Equal(oldHead, layout.Head());
+        Assert.Equal(reviewed.Commit, layout.Head());
         Assert.Empty(GitProcess.RunRequired(layout.Repository,
             "Could not inspect fixture index", "diff", "--cached", "--name-only").Output);
     }

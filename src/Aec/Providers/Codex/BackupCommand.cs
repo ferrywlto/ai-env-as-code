@@ -328,35 +328,7 @@ internal static class BackupCommand
 
     internal static void ValidateRepository(string repository)
     {
-        var insideWorkTree = RunRequired(
-            repository,
-            "Repository is not a Git work tree",
-            "rev-parse",
-            "--is-inside-work-tree").Output.Trim();
-        if (!string.Equals(insideWorkTree, "true", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException($"Repository is not a Git work tree: {repository}");
-        }
-
-        var bare = RunRequired(
-            repository,
-            "Git could not inspect the repository",
-            "rev-parse",
-            "--is-bare-repository").Output.Trim();
-        if (!string.Equals(bare, "false", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException($"Repository must not be bare: {repository}");
-        }
-
-        var prefix = RunRequired(
-            repository,
-            "Git could not locate the repository root",
-            "rev-parse",
-            "--show-prefix").Output;
-        if (prefix.Trim().Length != 0)
-        {
-            throw new InvalidOperationException($"--repo must identify the Git repository root: {repository}");
-        }
+        ApplyCommand.ValidateRepositoryRoot(repository);
 
         var branch = Run(repository, "symbolic-ref", "--quiet", "HEAD");
         if (branch.ExitCode == 1)
@@ -387,23 +359,24 @@ internal static class BackupCommand
             throw new InvalidOperationException("Backup cannot run while the repository has unmerged files.");
         }
 
-        foreach (var operation in new[]
-                 {
-                     "MERGE_HEAD",
-                     "CHERRY_PICK_HEAD",
-                     "REVERT_HEAD",
-                     "BISECT_LOG",
-                     "rebase-merge",
-                     "rebase-apply",
-                     "sequencer"
-                 })
+        string[] operations =
+        [
+            "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG",
+            "rebase-merge", "rebase-apply", "sequencer"
+        ];
+        var paths = Run(repository,
+            ["rev-parse", .. operations.SelectMany(operation => new[] { "--git-path", operation })]);
+        // A linked Git directory can contain a newline. Resolve paths separately
+        // when the output cannot be mapped unambiguously to the requested paths.
+        var lines = paths.Output.EndsWith('\n') ? paths.Output[..^1].Split('\n') : [];
+        var useBatch = paths.ExitCode == 0 && lines.Length == operations.Length;
+        for (var index = 0; index < operations.Length; index++)
         {
-            var gitPath = RunRequired(
-                repository,
-                $"Git could not inspect operation {operation}",
-                "rev-parse",
-                "--git-path",
-                operation).Output.Trim();
+            var operation = operations[index];
+            var gitPath = useBatch
+                ? lines[index].Trim()
+                : RunRequired(repository, $"Git could not inspect operation {operation}",
+                    "rev-parse", "--git-path", operation).Output.Trim();
             if (gitPath.Length == 0)
             {
                 throw new InvalidOperationException($"Git returned an empty path for operation {operation}.");

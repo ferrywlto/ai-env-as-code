@@ -3,6 +3,7 @@ using System.Text;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationLegacyCapturePreviewTests
 {
     [Theory]
@@ -238,7 +239,7 @@ public sealed class MigrationLegacyCapturePreviewTests
     [Fact]
     public void PreparedPullRetainsOriginalCommitForTheReadOnlyCaptureDecision()
     {
-        using var layout = new MigrationRepositoryFixture(includeCopilotCanonical: true);
+        using var layout = new MigrationRepositoryFixture(includeCopilotCanonical: true, includeRemote: true);
         var original = layout.Head();
         layout.AdvanceRemote();
         File.AppendAllText(Runtime(layout, "codex"), "Local runtime edit.\n");

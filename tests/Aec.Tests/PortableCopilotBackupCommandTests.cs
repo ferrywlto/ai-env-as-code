@@ -29,6 +29,8 @@ public sealed class PortableCopilotBackupCommandTests
             Path.GetRelativePath(layout.Repository, layout.TargetPath).Replace('\\', '/')
         }.OrderBy(path => path, StringComparer.Ordinal), CommittedPaths(layout));
         Assert.Equal("Shared revision.\n", File.ReadAllText(layout.SharedSource));
+        Assert.Equal(InstructionSections.Render("Shared revision.\n", "Local paths.\n", "Provider mechanics.\n"),
+            File.ReadAllText(layout.TargetPath));
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
@@ -82,6 +84,7 @@ public sealed class PortableCopilotBackupCommandTests
         File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
             .Replace("Shared approval.", "Shared revision.", StringComparison.Ordinal)
             .Replace("Local paths.", "Local revision.", StringComparison.Ordinal));
+        var runtime = File.ReadAllBytes(layout.RuntimePath);
         var head = layout.Head();
 
         var result = Run(layout);
@@ -91,6 +94,7 @@ public sealed class PortableCopilotBackupCommandTests
         Assert.Contains("multiple authored instruction sections", result.Error,
             StringComparison.Ordinal);
         Assert.Equal(head, layout.Head());
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
@@ -191,12 +195,6 @@ public sealed class PortableCopilotBackupCommandTests
     {
         var layout = new SharedTargetStatusTests.StatusLayout("copilot");
         layout.WriteRuntime(portableBlock: true);
-        GitProcess.RunRequired(layout.Repository, "Could not set fixture Git author",
-            "config", "--local", "user.name", "AEC Test");
-        GitProcess.RunRequired(layout.Repository, "Could not set fixture Git email",
-            "config", "--local", "user.email", "aec-test@example.invalid");
-        GitProcess.RunRequired(layout.Repository, "Could not disable fixture signing",
-            "config", "--local", "commit.gpgsign", "false");
         return layout;
     }
 

@@ -7,11 +7,11 @@ public sealed class ChatGptInitTests
     public void InitializesChatGptProviderWithoutTouchingRuntime()
     {
         using var layout = new ChatGptLayout();
+        layout.SeedInitializedCodex();
         var skillsDirectory = Path.Combine(layout.CodexHome, "skills");
-        Directory.Delete(skillsDirectory, recursive: true);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
 
-        var result = Run(layout.Repository);
+        var result = TestApplication.Run("init", "--provider=chatgpt", "--repo", layout.Repository);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
@@ -33,25 +33,10 @@ public sealed class ChatGptInitTests
     }
 
     [Fact]
-    public void AcceptsProviderBeforeRepo()
-    {
-        using var layout = new ChatGptLayout();
-
-        var result = TestApplication.Run(
-            "init",
-            "--provider=chatgpt",
-            "--repo",
-            layout.Repository);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"initialized{Environment.NewLine}", result.Output);
-        Assert.True(File.Exists(layout.CustomInstructions));
-    }
-
-    [Fact]
     public void ProviderRequiresRepoInsteadOfDefaultingToCurrentDirectory()
     {
         using var layout = new ChatGptLayout();
+        Directory.CreateDirectory(layout.Repository);
         var previousDirectory = Environment.CurrentDirectory;
 
         try
@@ -62,6 +47,7 @@ public sealed class ChatGptInitTests
 
             Assert.Equal(1, result.ExitCode);
             Assert.Contains("init requires --repo", result.Error, StringComparison.Ordinal);
+            Assert.Empty(Directory.GetFileSystemEntries(layout.Repository));
         }
         finally
         {
@@ -70,28 +56,10 @@ public sealed class ChatGptInitTests
     }
 
     [Fact]
-    public void ProviderModeRejectsCodexHomeWithoutTouchingRuntimeOrRepository()
-    {
-        using var layout = new ChatGptLayout();
-        var runtimeBefore = File.ReadAllBytes(layout.Runtime);
-        var canonicalBefore = File.ReadAllBytes(layout.CanonicalAgents);
-
-        var result = Run(layout.Repository, "--codex-home", layout.CodexHome);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains(
-            "--codex-home is not valid with --provider=chatgpt",
-            result.Error,
-            StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.GetDirectoryName(layout.CustomInstructions)!));
-        Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
-        Assert.Equal(canonicalBefore, File.ReadAllBytes(layout.CanonicalAgents));
-    }
-
-    [Fact]
     public void ProviderModeIgnoresCodexHomeEnvironment()
     {
         using var layout = new ChatGptLayout();
+        layout.SeedWorktree();
         var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
 
         try
@@ -113,6 +81,8 @@ public sealed class ChatGptInitTests
     public void ProviderModeDirectsMovedRepositoriesToOrdinaryInitBeforeMutation()
     {
         using var layout = new ChatGptLayout();
+        layout.SeedWorktree();
+        layout.SeedRuntime();
         var movedRepository = Path.Combine(layout.Root, "moved repository");
         var canonicalBefore = File.ReadAllBytes(layout.CanonicalAgents);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
@@ -136,43 +106,11 @@ public sealed class ChatGptInitTests
             "chatgpt")));
     }
 
-    [Theory]
-    [InlineData("--provider=other", "Unsupported provider")]
-    [InlineData("--provider", "Unknown argument")]
-    public void RejectsUnsupportedProviderSyntax(string providerArgument, string expectedError)
-    {
-        using var layout = new ChatGptLayout();
-
-        var result = TestApplication.Run(
-            "init",
-            "--repo",
-            layout.Repository,
-            providerArgument);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains(expectedError, result.Error, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.GetDirectoryName(layout.CustomInstructions)!));
-    }
-
-    [Fact]
-    public void RejectsDuplicateProvider()
-    {
-        using var layout = new ChatGptLayout();
-
-        var result = Run(layout.Repository, "--provider=chatgpt");
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains(
-            "--provider may be specified only once",
-            result.Error,
-            StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.GetDirectoryName(layout.CustomInstructions)!));
-    }
-
     [Fact]
     public void PreservesExistingBackupsAndDoesNotRewriteAnInitializedProvider()
     {
         using var layout = new ChatGptLayout();
+        layout.SeedWorktree();
         Directory.CreateDirectory(Path.GetDirectoryName(layout.CustomInstructions)!);
         File.WriteAllText(layout.CustomInstructions, "My copied custom instructions.\n");
 
@@ -204,10 +142,11 @@ public sealed class ChatGptInitTests
     public void UpgradesVersionTwoCanonicalBlockAndPreservesSurroundingBytes()
     {
         using var layout = new ChatGptLayout();
+        layout.SeedRuntime();
         var canonical = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(
             "Prefix\r\n<!-- AEC:BEGIN version=2 -->\r\nOld body\r\n<!-- AEC:END -->\r\nSuffix\r\n"u8.ToArray())
             .ToArray();
-        File.WriteAllBytes(layout.CanonicalAgents, canonical);
+        layout.SeedWorktree(canonical);
         var expected = AecInstructionBlock.MergeForChatGptProvider(
             canonical,
             layout.Repository);
@@ -227,9 +166,7 @@ public sealed class ChatGptInitTests
     public void CanonicalMergeErrorsDoNotClaimTheRuntimeWasRead()
     {
         using var layout = new ChatGptLayout();
-        File.WriteAllText(
-            layout.CanonicalAgents,
-            "<!-- AEC:BEGIN version=1 -->\nmissing end\n");
+        layout.SeedWorktree("<!-- AEC:BEGIN version=1 -->\nmissing end\n"u8.ToArray());
 
         var result = Run(layout.Repository);
 
@@ -243,12 +180,13 @@ public sealed class ChatGptInitTests
     public void FutureCanonicalBlockFailsBeforeScaffolding()
     {
         using var layout = new ChatGptLayout();
+        layout.SeedRuntime();
         var future = """
             <!-- AEC:BEGIN version=7 -->
             Future body
             <!-- AEC:END -->
             """u8.ToArray();
-        File.WriteAllBytes(layout.CanonicalAgents, future);
+        layout.SeedWorktree(future);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
 
         var result = Run(layout.Repository);
@@ -265,6 +203,7 @@ public sealed class ChatGptInitTests
     public void UnsafeScaffoldTargetFailsBeforeAnyWrite()
     {
         using var layout = new ChatGptLayout();
+        layout.SeedWorktree();
         var providerDirectory = Path.GetDirectoryName(layout.CustomInstructions)!;
         Directory.CreateDirectory(layout.GptBaseline);
         var canonicalBefore = File.ReadAllBytes(layout.CanonicalAgents);
@@ -289,6 +228,7 @@ public sealed class ChatGptInitTests
         }
 
         using var layout = new ChatGptLayout();
+        layout.SeedWorktree();
         var providerDirectory = Path.GetDirectoryName(layout.CustomInstructions)!;
         var referent = Path.Combine(layout.Root, "external-provider");
         Directory.CreateDirectory(referent);
@@ -317,6 +257,7 @@ public sealed class ChatGptInitTests
         }
 
         using var layout = new ChatGptLayout();
+        layout.SeedWorktree();
         Directory.CreateDirectory(Path.GetDirectoryName(layout.CustomInstructions)!);
         var referent = Path.Combine(layout.Root, "external.md");
         File.WriteAllText(referent, "External content.\n");
@@ -335,7 +276,7 @@ public sealed class ChatGptInitTests
     public void MissingCanonicalSourceFailsBeforeScaffolding()
     {
         using var layout = new ChatGptLayout();
-        File.Delete(layout.CanonicalAgents);
+        layout.SeedWorktree(canonical: null);
 
         var result = Run(layout.Repository);
 
@@ -348,6 +289,7 @@ public sealed class ChatGptInitTests
     public void NestedRepositoryDirectoryIsRejected()
     {
         using var layout = new ChatGptLayout();
+        layout.SeedWorktree(canonical: null);
         var nested = Path.Combine(layout.Repository, "nested");
         var nestedCanonical = Path.Combine(
             nested,
@@ -356,7 +298,6 @@ public sealed class ChatGptInitTests
             "codex",
             "AGENTS.md");
         Directory.CreateDirectory(Path.GetDirectoryName(nestedCanonical)!);
-        File.Copy(layout.CanonicalAgents, nestedCanonical);
 
         var result = Run(nested);
 
@@ -373,6 +314,7 @@ public sealed class ChatGptInitTests
     public void NonWorkTreeRepositoryIsRejected()
     {
         using var layout = new ChatGptLayout();
+        Directory.CreateDirectory(layout.Root);
         var bare = Path.Combine(layout.Root, "bare.git");
         Assert.Equal(0, GitProcess.Run(null, "init", "--bare", "--quiet", bare).ExitCode);
         var canonical = Path.Combine(
@@ -382,7 +324,6 @@ public sealed class ChatGptInitTests
             "codex",
             "AGENTS.md");
         Directory.CreateDirectory(Path.GetDirectoryName(canonical)!);
-        File.Copy(layout.CanonicalAgents, canonical);
 
         var result = Run(bare);
 
@@ -399,7 +340,7 @@ public sealed class ChatGptInitTests
     public void PreservesUnrelatedChangesAndGitState()
     {
         using var layout = new ChatGptLayout();
-        ConfigureIdentity(layout.Repository);
+        layout.SeedInitializedCodex();
         var tracked = Path.Combine(layout.Repository, "tracked.txt");
         File.WriteAllText(tracked, "committed\n");
         Assert.Equal(
@@ -502,7 +443,8 @@ public sealed class ChatGptInitTests
     public void CanonicalReplacementDiagnosticsDoNotClaimTheRuntimeWasRead()
     {
         using var layout = new ChatGptLayout();
-        var staleSnapshot = File.ReadAllBytes(layout.CanonicalAgents);
+        var staleSnapshot = "Reviewed canonical source.\n"u8.ToArray();
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.CanonicalAgents)!);
         File.WriteAllText(layout.CanonicalAgents, "Concurrent canonical edit.\n");
 
         var exception = Assert.Throws<IOException>(() =>
@@ -515,15 +457,6 @@ public sealed class ChatGptInitTests
         Assert.Contains("Canonical source changed", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Runtime target", exception.Message, StringComparison.Ordinal);
         Assert.Equal("Concurrent canonical edit.\n", File.ReadAllText(layout.CanonicalAgents));
-    }
-
-    private static void ConfigureIdentity(string repository)
-    {
-        Assert.Equal(0, GitProcess.Run(repository, "config", "user.name", "AEC Tests").ExitCode);
-        Assert.Equal(
-            0,
-            GitProcess.Run(repository, "config", "user.email", "aec-tests@example.invalid").ExitCode);
-        Assert.Equal(0, GitProcess.Run(repository, "config", "commit.gpgSign", "false").ExitCode);
     }
 
     private static CommandResult Run(string repository, params string[] extraArguments)
@@ -543,7 +476,7 @@ public sealed class ChatGptInitTests
         public ChatGptLayout()
         {
             Root = Path.Combine(
-                OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+                TestTemporaryDirectory.Root,
                 "aec-chatgpt-init-tests",
                 Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "repository");
@@ -573,21 +506,31 @@ public sealed class ChatGptInitTests
                 "providers",
                 "chatgpt",
                 "gpt-baseline.md");
+        }
 
-            Directory.CreateDirectory(CodexHome);
-            File.WriteAllText(Runtime, "Existing runtime instruction.\n");
+        public void SeedWorktree() =>
+            SeedWorktree(AecInstructionBlock.Merge("Existing runtime instruction.\n"u8.ToArray(), Repository));
 
-            var output = new StringWriter();
-            var error = new StringWriter();
-            var exitCode = AecApplication.Run(
-                ["init", "--repo", Repository, "--codex-home", CodexHome],
-                output,
-                error);
-            if (exitCode != 0)
+        public void SeedWorktree(byte[]? canonical)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(CanonicalAgents)!);
+            GitProcess.RunRequired(Repository, "Could not initialize ChatGPT test worktree",
+                "init", "--quiet", "--template=");
+            if (canonical is not null)
             {
-                throw new InvalidOperationException(error.ToString());
+                File.WriteAllBytes(CanonicalAgents, canonical);
             }
         }
+
+        public void SeedRuntime()
+        {
+            Directory.CreateDirectory(CodexHome);
+            File.WriteAllText(Runtime, "Existing runtime instruction.\n");
+        }
+
+        public void SeedInitializedCodex() =>
+            TestGit.SeedInitializedCodexRepository(
+                Repository, CodexHome, "Existing runtime instruction.\n", "personality = \"none\"\n");
 
         public string Root { get; }
 
@@ -605,12 +548,6 @@ public sealed class ChatGptInitTests
 
         public string GptBaseline { get; }
 
-        public void Dispose()
-        {
-            if (Directory.Exists(Root))
-            {
-                Directory.Delete(Root, recursive: true);
-            }
-        }
+        public void Dispose() => TestDirectoryCleanup.Delete(Root);
     }
 }

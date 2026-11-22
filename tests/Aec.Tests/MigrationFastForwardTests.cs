@@ -3,6 +3,7 @@ using System.Text;
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationFastForwardTests
 {
     [Theory]
@@ -11,7 +12,7 @@ public sealed class MigrationFastForwardTests
     [InlineData("Ahead")]
     public void AdvancesOnlyCleanBehindCheckoutWithoutCapturingRuntime(string ancestry)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         if (ancestry == "Behind") layout.AdvanceRemote();
         if (ancestry == "Ahead") layout.Git("commit", "--allow-empty", "-m", "Local work");
         var (preflight, fetched, harnesses) = layout.Prepare();
@@ -35,7 +36,7 @@ public sealed class MigrationFastForwardTests
     [InlineData("section")]
     public void BehindStopsForDirtyCheckoutWithoutStashOrDiscard(string kind)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote();
         var (preflight, fetched, harnesses) = layout.Prepare();
         var path = kind == "section" ? "environment/shared/instructions.md"
@@ -56,7 +57,7 @@ public sealed class MigrationFastForwardTests
     [InlineData("Ahead")]
     public void NoAdvancementPreservesEligibleSectionDraft(string ancestry)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         if (ancestry == "Ahead") layout.Git("commit", "--allow-empty", "-m", "Local work");
         var (preflight, fetched, harnesses) = layout.Prepare();
         layout.Write("environment/shared/instructions.md", "Preserved draft.\n");
@@ -73,7 +74,7 @@ public sealed class MigrationFastForwardTests
     [InlineData("selection")]
     public void ChangedSnapshotStopsBeforeAdvancement(string change)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote();
         var (preflight, fetched, harnesses) = layout.Prepare();
         switch (change)
@@ -94,7 +95,7 @@ public sealed class MigrationFastForwardTests
     [Fact]
     public void RecomputedAncestryRejectsAStaleOrIncorrectPreview()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote();
         var (preflight, fetched, harnesses) = layout.Prepare();
 
@@ -105,7 +106,7 @@ public sealed class MigrationFastForwardTests
     [Fact]
     public void IgnoredIncomingCollisionIsNeverOverwritten()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote(writer => File.WriteAllText(Path.Combine(writer, "collision.md"), "Remote version.\n"));
         var (preflight, fetched, harnesses) = layout.Prepare();
         File.AppendAllText(Path.Combine(layout.Repository, ".git", "info", "exclude"), "\ncollision.md\n");
@@ -127,7 +128,7 @@ public sealed class MigrationFastForwardTests
     [InlineData("config")]
     public void InvalidPulledFormatStopsButRetainsAdvancedHistory(string kind)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote(writer =>
         {
             var path = kind == "marker" ? MigrationPreflight.FormatRelativePath
@@ -154,7 +155,7 @@ public sealed class MigrationFastForwardTests
     [InlineData("core.fsmonitor")]
     public void ExternalCheckoutCommandsAreRefusedBeforeTheyCanRun(string key)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote();
         var (preflight, fetched, harnesses) = layout.Prepare();
         var sentinel = Path.Combine(layout.Root, "external-command-ran");
@@ -169,7 +170,7 @@ public sealed class MigrationFastForwardTests
     [Fact]
     public void UnusedConfiguredFilterDoesNotBlockMigrationFastForward()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         var unrelated = Path.Combine(layout.Repository, AecApplication.ConfigSourceRelativePath);
         var originalBytes = File.ReadAllBytes(unrelated);
         var notes = Path.Combine(layout.Repository, "notes.md");
@@ -194,7 +195,7 @@ public sealed class MigrationFastForwardTests
     [InlineData("--skip-worktree")]
     public void FastForwardDoesNotDiscardLocallyEditedFlaggedFiles(string flag)
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote();
         var (preflight, fetched, harnesses) = layout.Prepare();
         layout.Git("update-index", flag, "notes.md");
@@ -212,7 +213,7 @@ public sealed class MigrationFastForwardTests
     [Fact]
     public void IncomingSubmoduleIsRejectedBeforeFastForward()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote(writer =>
         {
             var submodule = Path.Combine(writer, "nested");
@@ -249,7 +250,7 @@ public sealed class MigrationFastForwardTests
     [Fact]
     public void IncomingFilterCannotRunDuringFastForward()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote(writer =>
         {
             File.WriteAllText(Path.Combine(writer, ".gitattributes"), "incoming.txt filter=fixture\n");
@@ -290,7 +291,7 @@ public sealed class MigrationFastForwardTests
     [Fact]
     public void HooksAndBranchMergeDefaultsCannotChangeTheDirection()
     {
-        using var layout = new MigrationRepositoryFixture();
+        using var layout = new MigrationRepositoryFixture(includeRemote: true);
         layout.AdvanceRemote();
         var (preflight, fetched, harnesses) = layout.Prepare();
         var hooks = Path.Combine(layout.Root, "custom-hooks");

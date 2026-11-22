@@ -6,25 +6,21 @@ internal sealed class MigrationRepositoryFixture : IDisposable
 {
     private readonly string? previousCodex = Environment.GetEnvironmentVariable("CODEX_HOME");
     private readonly string? previousCopilot = Environment.GetEnvironmentVariable("COPILOT_HOME");
-    private readonly string writer;
+    private readonly string? remote;
+    private string? writer;
 
-    public MigrationRepositoryFixture(bool includeCopilotCanonical = false)
+    public MigrationRepositoryFixture(bool includeCopilotCanonical = false, bool includeRemote = false)
     {
-        var temporaryRoot = Environment.GetEnvironmentVariable("AEC_TEST_TEMP_ROOT")
-            ?? (OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath());
+        var temporaryRoot = TestTemporaryDirectory.Root;
         Root = Path.Combine(temporaryRoot,
             "aec-migration-forward-tests", Guid.NewGuid().ToString("N"));
         Repository = Path.Combine(Root, "data");
         var codex = Path.Combine(Root, "codex-home");
         var copilot = Path.Combine(Root, "copilot-home");
-        Environment.SetEnvironmentVariable("CODEX_HOME", codex);
-        Environment.SetEnvironmentVariable("COPILOT_HOME", copilot);
         Directory.CreateDirectory(codex);
         Directory.CreateDirectory(copilot);
-        File.WriteAllText(Path.Combine(codex, "AGENTS.md"), "Personal instructions.\n");
-        File.WriteAllText(Path.Combine(codex, "config.toml"), "personality = \"friendly\"\n");
-        var initialized = TestApplication.Run("init", "--repo", Repository, "--codex-home", codex);
-        Assert.True(initialized.ExitCode == 0, initialized.Error);
+        TestGit.SeedInitializedCodexRepository(Repository, codex,
+            "Personal instructions.\n", "personality = \"friendly\"\n");
         // Empty Git templates intentionally omit info; cases below create
         // local attributes/ignore rules there without assuming Git made it.
         Directory.CreateDirectory(Path.Combine(Repository, ".git", "info"));
@@ -41,12 +37,15 @@ internal sealed class MigrationRepositoryFixture : IDisposable
             Git("add", "--", AecApplication.CopilotSourceRelativePath);
             Git("commit", "--quiet", "-m", "Fixture legacy Copilot enrollment");
         }
-        var remote = Path.Combine(Root, "shared remote.git");
-        Git("init", "--bare", "--quiet", "--template=", "--initial-branch=main", remote);
-        Git("remote", "add", "shared", remote);
-        Git("push", "--quiet", "--set-upstream", "shared", "main");
-        writer = Path.Combine(Root, "remote-writer");
-        Git("clone", "--no-local", "--quiet", "--origin", "shared", "--config", "core.autocrlf=false", remote, writer);
+        if (includeRemote)
+        {
+            remote = Path.Combine(Root, "shared remote.git");
+            Git("init", "--bare", "--quiet", "--template=", "--initial-branch=main", remote);
+            Git("remote", "add", "shared", remote);
+            Git("push", "--quiet", "--set-upstream", "shared", "main");
+        }
+        Environment.SetEnvironmentVariable("CODEX_HOME", codex);
+        Environment.SetEnvironmentVariable("COPILOT_HOME", copilot);
     }
 
     public string Root { get; }
@@ -57,6 +56,15 @@ internal sealed class MigrationRepositoryFixture : IDisposable
 
     public void AdvanceRemote(Action<string>? edit = null)
     {
+        var remotePath = remote ?? throw new InvalidOperationException("The fixture was created without a remote.");
+        if (writer is null)
+        {
+            var checkout = Path.Combine(Root, "remote-writer");
+            Git("clone", "--no-local", "--quiet", "--origin", "shared",
+                "--config", "core.autocrlf=false", remotePath, checkout);
+            writer = checkout;
+        }
+
         if (edit is not null) edit(writer);
         else File.AppendAllText(Path.Combine(writer, "notes.md"), "Remote revision.\n");
         _ = GitProcess.RunRequired(writer, "Writer staging failed", "add", "--all");

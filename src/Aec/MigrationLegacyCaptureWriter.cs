@@ -8,11 +8,7 @@ internal static class MigrationLegacyCaptureWriter
     {
         ArgumentNullException.ThrowIfNull(reviewed);
         var fresh = MigrationLegacyCapturePreview.Read(reviewed.Preparation);
-        if (fresh.Branch != reviewed.Branch || fresh.Files.Count != reviewed.Files.Count ||
-            !fresh.Files.Zip(reviewed.Files).All(pair => SameFile(pair.First, pair.Second)))
-        {
-            throw new InvalidOperationException("Legacy capture inputs or proposal changed after review; no files were replaced.");
-        }
+        EnsureUnchangedInputs(reviewed, fresh);
 
         // Use freshly derived buffers, not mutable byte arrays held by a caller.
         var repository = fresh.Preparation.Preflight.Repository;
@@ -76,6 +72,15 @@ internal static class MigrationLegacyCaptureWriter
                     throw new InvalidOperationException("Canonical or runtime bytes changed during legacy capture; no further files will be replaced.");
                 }
             }
+        }
+    }
+
+    internal static void EnsureUnchangedInputs(MigrationLegacyCapturePreview reviewed, MigrationLegacyCapturePreview fresh)
+    {
+        if (fresh.Branch != reviewed.Branch || fresh.Files.Count != reviewed.Files.Count ||
+            !fresh.Files.Zip(reviewed.Files).All(pair => SameFile(pair.First, pair.Second)))
+        {
+            throw new InvalidOperationException("Legacy capture inputs or proposal changed after review; no files were replaced.");
         }
     }
 

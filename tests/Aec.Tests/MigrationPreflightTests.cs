@@ -49,6 +49,7 @@ public sealed class MigrationPreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void ReadsLegacyHistoryDespiteDraftSectionsAndNonMainBranchWithoutWrites()
     {
         using var layout = new MigrationLayout();
@@ -76,6 +77,7 @@ public sealed class MigrationPreflightTests
     [Theory]
     [InlineData("2.0", "already 2.0")]
     [InlineData("1.0", "downgrade")]
+    [Trait("Category", "LegacyMigration")]
     public void CommittedCompletionMarkerControlsCurrentVersion(string target, string expected)
     {
         using var layout = new MigrationLayout();
@@ -90,6 +92,7 @@ public sealed class MigrationPreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void InitializedRuntimeCanBeSelectedAfterFormatPreflightWithoutTargets()
     {
         using var layout = new MigrationLayout();
@@ -123,6 +126,7 @@ public sealed class MigrationPreflightTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
+    [Trait("Category", "LegacyMigration")]
     public void OriginalHistoryCannotHideMissingOrInvalidCurrentLegacyFiles(bool config, bool delete)
     {
         using var layout = new MigrationLayout();
@@ -158,6 +162,7 @@ public sealed class MigrationPreflightTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    [Trait("Category", "LegacyMigration")]
     public void UncommittedMarkerCannotAssertCompletion(bool staged)
     {
         using var layout = new MigrationLayout();
@@ -178,6 +183,7 @@ public sealed class MigrationPreflightTests
     [Theory]
     [InlineData(false, "unstaged changes")]
     [InlineData(true, "staged changes")]
+    [Trait("Category", "LegacyMigration")]
     public void EditedMarkerDoesNotFallBackToLegacy(bool staged, string expected)
     {
         using var layout = new MigrationLayout();
@@ -197,6 +203,7 @@ public sealed class MigrationPreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void DeletedMarkerDoesNotFallBackToLegacy()
     {
         using var layout = new MigrationLayout();
@@ -208,6 +215,7 @@ public sealed class MigrationPreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void MalformedCommittedMarkerDoesNotFallBackToLegacy()
     {
         using var layout = new MigrationLayout();
@@ -222,6 +230,7 @@ public sealed class MigrationPreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void CommittedLegacyMarkerCannotClaimAnUnissuedCompletionState()
     {
         using var layout = new MigrationLayout();
@@ -236,6 +245,7 @@ public sealed class MigrationPreflightTests
     }
 
     [Fact]
+    [Trait("Category", "LegacyMigration")]
     public void MarkerCannotReplaceProofOfInitializationHistory()
     {
         using var layout = new MigrationLayout(initialize: false);
@@ -259,7 +269,7 @@ public sealed class MigrationPreflightTests
 
         public MigrationLayout(bool initialize = true)
         {
-            root = Path.Combine(OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+            root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-migration-preflight-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(root, "data");
             if (!initialize)

@@ -15,6 +15,22 @@ internal static class MigrationApplyCoordinator
         var repository = preparation.Preflight.Repository;
         var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
         var protectedFiles = MigrationSourceValidationPreview.ReadProtectedFiles(preparation);
+        void VerifyState() => MigrationSourceValidationPreview.VerifyFinalState(
+            preparation, fresh[0].Branch, index, new MigrationDirtySections([]),
+            fresh[0].RequiredSources, protectedFiles);
+
+        return ApplyReviewedProviders(fresh, protectedFiles,
+            static preview => preview.Harness.Provider == AecIdentifiers.Codex
+                ? MigrationCodexApplyWriter.Apply(preview)
+                : MigrationCopilotApplyWriter.Apply(preview),
+            VerifyState, afterProviderForTests);
+    }
+
+    internal static IReadOnlyList<MigrationProviderApplyResult> ApplyReviewedProviders(
+        IReadOnlyList<MigrationApplyPreview> fresh, Dictionary<string, byte[]?> protectedFiles,
+        Func<MigrationApplyPreview, string> applyProvider, Action verifyState, Action<string>? afterProviderForTests)
+    {
+        var repository = fresh[0].Preparation.Preflight.Repository;
         foreach (var preview in fresh)
         {
             // Pin every selected provider, not just the one currently writing.
@@ -31,20 +47,14 @@ internal static class MigrationApplyCoordinator
             }
         }
 
-        void VerifyState() => MigrationSourceValidationPreview.VerifyFinalState(
-            preparation, fresh[0].Branch, index, new MigrationDirtySections([]),
-            fresh[0].RequiredSources, protectedFiles);
-
-        VerifyState();
+        verifyState();
         var completed = new List<MigrationProviderApplyResult>();
         foreach (var preview in fresh)
         {
             var provider = preview.Harness.Provider;
             try
             {
-                var result = provider == AecIdentifiers.Codex
-                    ? MigrationCodexApplyWriter.Apply(preview)
-                    : MigrationCopilotApplyWriter.Apply(preview);
+                var result = applyProvider(preview);
 
                 // Admit only a successful writer's expected bytes. The next
                 // provider keeps its original review, not a newly accepted edit.
@@ -53,7 +63,7 @@ internal static class MigrationApplyCoordinator
                     protectedFiles[config.RuntimePath] = config.DesiredRuntime;
                 completed.Add(new MigrationProviderApplyResult(provider, result));
                 afterProviderForTests?.Invoke(provider);
-                VerifyState();
+                verifyState();
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
                                               InvalidOperationException or InvalidDataException or ArgumentException)

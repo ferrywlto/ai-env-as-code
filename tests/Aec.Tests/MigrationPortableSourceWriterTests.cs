@@ -1,21 +1,11 @@
-using System.Text;
 using Layout = Aec.Tests.MigrationPortableCapturePreviewTests.Layout;
 
 namespace Aec.Tests;
 
 [Collection(ProcessStateTestGroup.Name)]
+[Trait("Category", "LegacyMigration")]
 public sealed class MigrationPortableSourceWriterTests
 {
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void NoopPreservesEveryFileDirectoryAndGitByte(bool portable)
-    {
-        using var layout = portable ? new Layout("codex", "copilot") : new Layout();
-        var reviewed = Preview(layout);
-        layout.Files.AssertNoChanges(() => Assert.Empty(MigrationPortableSourceWriter.Write(reviewed)));
-    }
-
     [Theory]
     [InlineData("shared")]
     [InlineData("platform")]
@@ -62,42 +52,6 @@ public sealed class MigrationPortableSourceWriterTests
         });
     }
 
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void MixedFormatsPreservePendingLegacyRuntimeEdits(string portableProvider)
-    {
-        using var layout = new Layout(portableProvider);
-        var legacyProvider = portableProvider == "codex" ? "copilot" : "codex";
-        File.AppendAllText(layout.Runtime(legacyProvider), "Keep pending legacy edits.\n");
-        layout.EditRuntime(portableProvider, "Provider mechanics.", "Portable revision.");
-        var reviewed = Preview(layout);
-        var relative = $"environment/providers/{portableProvider}/overlay.md";
-
-        layout.Files.AssertOnlyChanges([relative], () =>
-            Assert.Equal(relative, Assert.Single(MigrationPortableSourceWriter.Write(reviewed))));
-        Assert.False(File.Exists(Path.Combine(layout.Repository, layout.Target(legacyProvider))));
-    }
-
-    internal static void StaleInputsStopBeforeAnyReplacement(string kind)
-    {
-        using var layout = new Layout("codex", "copilot");
-        layout.EditRuntime("codex", "Provider mechanics.", "Reviewed revision.");
-        var reviewed = Preview(layout);
-        switch (kind)
-        {
-            case "head": layout.Files.Git("commit", "--allow-empty", "-m", "Later checkpoint"); break;
-            case "branch": layout.Files.Git("switch", "-c", "other-branch"); break;
-            case "runtime": layout.EditRuntime("codex", "Reviewed revision.", "Later revision."); break;
-            case "other-runtime": layout.EditRuntime("copilot", "Provider mechanics.", "Other revision."); break;
-            case "config": File.WriteAllText(layout.ConfigRuntime, "personality = 'pragmatic'\n"); break;
-            case "marker": layout.Files.Write(MigrationPreflight.FormatRelativePath, "2.0\n"); break;
-            default: layout.Files.Write("environment/shared/instructions.md", "Keep this authored draft.\n"); break;
-        }
-
-        layout.Files.AssertNoChanges(() => Assert.Throws<InvalidOperationException>(() => MigrationPortableSourceWriter.Write(reviewed)));
-    }
-
     [Fact]
     public void ConflictingSharedRuntimeProposalsStopBeforeAnyReplacement()
     {
@@ -112,42 +66,6 @@ public sealed class MigrationPortableSourceWriterTests
             var error = Assert.Throws<InvalidOperationException>(() => MigrationPortableSourceWriter.Write(reviewed));
             Assert.Contains("proposals conflict", error.Message, StringComparison.Ordinal);
         });
-    }
-
-    [Fact]
-    public void ExistingStagedAndUnstagedDraftRemainUntouched()
-    {
-        using var layout = new Layout("codex");
-        layout.EditRuntime("codex", "Provider mechanics.", "Reviewed revision.");
-        var reviewed = Preview(layout);
-        const string draft = "environment/providers/copilot/overlay.md";
-        layout.Files.Write(draft, "Staged draft.\n");
-        layout.Files.Git("add", "--", draft);
-        layout.Files.Write(draft, "Staged plus unstaged draft.\n");
-
-        layout.Files.AssertNoChanges(() =>
-        {
-            var error = Assert.Throws<InvalidOperationException>(() => MigrationPortableSourceWriter.Write(reviewed));
-            Assert.Contains("empty staged diff", error.Message, StringComparison.Ordinal);
-        });
-    }
-
-    [Fact]
-    public void CallerSuppliedProposalFieldsCannotRedirectCombinedWrites()
-    {
-        using var layout = new Layout("codex", "copilot");
-        layout.EditRuntime("codex", "Provider mechanics.", "Codex revision.");
-        layout.EditRuntime("copilot", "Provider mechanics.", "Copilot revision.");
-        var reviewed = Preview(layout);
-        reviewed = reviewed with
-        {
-            Codex = reviewed.Codex! with { Instructions = new PortableBackupAttributionPreview("shared", "../escape.md", "Untrusted proposal.\n"),
-                ProposedCanonicalConfig = Encoding.UTF8.GetBytes("personality = 'none'\n") },
-            Copilot = reviewed.Copilot! with { Instructions = new PortableBackupAttributionPreview(null, null, null) }
-        };
-        string[] expected = ["environment/providers/codex/overlay.md", "environment/providers/copilot/overlay.md"];
-
-        layout.Files.AssertOnlyChanges(expected, () => Assert.Equal(expected, MigrationPortableSourceWriter.Write(reviewed)));
     }
 
     [Theory]

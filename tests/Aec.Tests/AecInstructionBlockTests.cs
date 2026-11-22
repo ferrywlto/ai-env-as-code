@@ -108,7 +108,8 @@ public sealed class AecInstructionBlockTests
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
-    public void OlderVersionIsReplacedInPlaceWithoutChangingOtherBytes(int version)
+    [InlineData(5)]
+    public void OlderOrStaleBlockIsReplacedInPlaceWithoutChangingOtherBytes(int version)
     {
         var original = Utf8(
             $"prefix\r\n<!-- AEC:BEGIN version={version} -->\r\nold\r\n<!-- AEC:END -->\r\nsuffix\r\n");

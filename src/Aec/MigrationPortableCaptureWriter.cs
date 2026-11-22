@@ -84,6 +84,12 @@ internal static class MigrationPortableCaptureWriter
         MigrationFastForward.EnsureSafeGitConfiguration(repository);
         EnsureEmptyIndex(repository);
         var fresh = MigrationPortableCapturePreview.Read(reviewed.Preparation);
+        EnsureUnchangedInputs(reviewed, fresh);
+        return fresh;
+    }
+
+    internal static void EnsureUnchangedInputs(MigrationPortableCapturePreview reviewed, MigrationPortableCapturePreview fresh)
+    {
         if (reviewed.Branch != fresh.Branch ||
             !SameInputs(reviewed.Codex?.Snapshot, fresh.Codex?.Snapshot) ||
             !SameInputs(reviewed.Copilot?.Snapshot, fresh.Copilot?.Snapshot) ||
@@ -93,8 +99,6 @@ internal static class MigrationPortableCaptureWriter
         {
             throw new InvalidOperationException("Portable migration capture inputs changed after review; no files were written.");
         }
-
-        return fresh;
     }
 
     private static bool SameInputs(PortableRuntimeSnapshot? reviewed, PortableRuntimeSnapshot? fresh)

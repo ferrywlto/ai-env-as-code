@@ -262,7 +262,7 @@ public sealed class UninstallTests
         public UninstallLayout()
         {
             Root = Path.Combine(
-                OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath(),
+                TestTemporaryDirectory.Root,
                 "aec-uninstall-tests",
                 Guid.NewGuid().ToString("N"));
             CodexHome = Path.Combine(Root, "codex home");
