@@ -29,6 +29,10 @@
   capture-specific diagnostics, staged verification and write-time guards.
   The combined unit and four migration committer selections passed 426 tests
   in 10m 11s, including the legacy portable capture cases.
+- [x] Ferry reviewed the sixth slice: share the Codex and Copilot pre-write branch and
+  staged-index guard. Keep the separate check before staging and provider-specific
+  errors. Added Codex staged-work coverage; the unit and portable backup selection
+  passed 372 tests.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

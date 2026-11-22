@@ -26,6 +26,17 @@ internal static class PortableBackupCommitter
             renderedPaths, reviewed);
     }
 
+    internal static void EnsureReadyToWrite(string repository, string provider)
+    {
+        RequireLocalBranch(repository);
+        var staged = GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code");
+        if (staged.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"The repository already has staged changes; {provider} backup stopped before writing.");
+        }
+    }
+
     private static string CommitCore(
         PortableRuntimeSnapshot reviewed,
         PortableBackupAttributionPreview? attribution,

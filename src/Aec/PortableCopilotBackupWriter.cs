@@ -13,14 +13,7 @@ internal static class PortableCopilotBackupWriter
             throw new InvalidOperationException("Copilot backup has no reviewed changes.");
         }
 
-        var repository = current.Snapshot.Repository;
-        PortableBackupCommitter.RequireLocalBranch(repository);
-        var staged = GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code");
-        if (staged.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                "The repository already has staged changes; Copilot backup stopped before writing.");
-        }
+        PortableBackupCommitter.EnsureReadyToWrite(current.Snapshot.Repository, "Copilot");
 
         try
         {
