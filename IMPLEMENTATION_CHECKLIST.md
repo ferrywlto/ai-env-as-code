@@ -33,6 +33,10 @@
   staged-index guard. Keep the separate check before staging and provider-specific
   errors. Added Codex staged-work coverage; the unit and portable backup selection
   passed 372 tests.
+- [x] Ferry reviewed the seventh slice: replace four identical migration index-reader
+  wrappers with one repository-based call to the existing path reader. Preserve
+  index path, link checks, diagnostics and the timing of each read. The unit
+  and focused migration selection passed 353 tests.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

@@ -91,6 +91,9 @@ internal static class MigrationLegacyCaptureWriter
         current.Runtime.AsSpan().SequenceEqual(reviewed.Runtime) &&
         current.ProposedCanonical.AsSpan().SequenceEqual(reviewed.ProposedCanonical);
 
+    internal static byte[] ReadRepositoryIndex(string repository) =>
+        ReadIndex(Path.Combine(repository, ".git", "index"));
+
     internal static byte[] ReadIndex(string path)
     {
         var file = new FileInfo(path);

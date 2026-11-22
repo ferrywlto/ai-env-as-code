@@ -30,7 +30,7 @@ internal static class MigrationTargetCommitter
             GitProcess.RunRequired(repository, "Could not stage migration instruction target",
                 "add", "--", writer.RelativePath);
             var staged = MigrationCommitProof.VerifyStagedFiles(repository, parent, expectedFiles, modes);
-            writer.VerifyWrittenForCommit(ReadIndex(repository));
+            writer.VerifyWrittenForCommit(MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository));
 
             // Reuse signing and verified-tree publication; never let Git reread
             // mutable working files as the content authority for this commit.
@@ -41,7 +41,7 @@ internal static class MigrationTargetCommitter
             // write-tree can refresh index cache extensions legitimately. Prove
             // the resulting index is clean before pinning it for final guards.
             MigrationPortableCaptureWriter.EnsureEmptyIndex(repository);
-            writer.VerifyCommitted(commit, ReadIndex(repository));
+            writer.VerifyCommitted(commit, MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository));
             return commit;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
@@ -54,6 +54,4 @@ internal static class MigrationTargetCommitter
         }
     }
 
-    private static byte[] ReadIndex(string repository) =>
-        MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
 }

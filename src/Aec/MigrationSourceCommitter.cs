@@ -17,7 +17,7 @@ internal static class MigrationSourceCommitter
         if (branch != fresh.Branch)
             throw new InvalidOperationException("Migration source branch changed before staging.");
         MigrationPortableCaptureWriter.EnsureEmptyIndex(repository);
-        var index = ReadIndex(repository);
+        var index = MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository);
         var protectedFiles = ReadProtectedFiles(fresh);
         var paths = fresh.ChangedPaths.ToArray();
         var changedFiles = fresh.Files.Where(file => paths.Contains(file.RelativePath, StringComparer.Ordinal)).ToArray();
@@ -34,7 +34,7 @@ internal static class MigrationSourceCommitter
             GitProcess.RunRequired(repository, "Could not stage reviewed migration sources",
                 ["add", "--", .. paths]);
             var stagedFiles = MigrationCommitProof.VerifyStagedFiles(repository, parent, expectedFiles, modes);
-            var stagedIndex = ReadIndex(repository);
+            var stagedIndex = MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository);
             MigrationSourceValidationPreview.VerifyFinalState(fresh.Preparation, fresh.Branch,
                 stagedIndex, new MigrationDirtySections(paths), fresh.Files, protectedFiles);
 
@@ -53,7 +53,7 @@ internal static class MigrationSourceCommitter
                 Preflight = fresh.Preparation.Preflight with { Commit = commit }
             };
             MigrationSourceValidationPreview.VerifyFinalState(committedPreparation, fresh.Branch,
-                ReadIndex(repository), new MigrationDirtySections([]), fresh.Files, protectedFiles);
+                MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository), new MigrationDirtySections([]), fresh.Files, protectedFiles);
             return commit;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
@@ -107,8 +107,6 @@ internal static class MigrationSourceCommitter
         return files;
     }
 
-    private static byte[] ReadIndex(string repository) =>
-        MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
 
     private static bool SameBytes(byte[]? before, byte[]? current)
     {

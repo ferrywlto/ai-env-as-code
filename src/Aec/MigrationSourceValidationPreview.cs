@@ -25,7 +25,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
         VerifyEntry(expected);
         var repository = expected.Preflight.Repository;
         var branch = MigrationLegacyCapturePreview.ReadBranch(repository);
-        var index = ReadIndex(repository);
+        var index = MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository);
         var protectedFiles = ReadProtectedFiles(expected);
 
         // Refresh current owned dirt instead of comparing it with the pre-start
@@ -130,7 +130,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             : MigrationDirtySections.ReadForTarget(expected.Preflight, expected.Harnesses, targetRelativePath);
         if (!currentDirty.Paths.SequenceEqual(dirty.Paths, StringComparer.Ordinal))
             throw new InvalidOperationException("Dirty paths changed during source validation.");
-        if (!index.AsSpan().SequenceEqual(ReadIndex(repository)))
+        if (!index.AsSpan().SequenceEqual(MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository)))
             throw new InvalidOperationException("Git index changed during source validation.");
         if (ApplyCommand.ResolveHeadCommit(repository) != expected.Preflight.Commit)
             throw new InvalidOperationException("HEAD changed during source validation.");
@@ -176,8 +176,6 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
         return files;
     }
 
-    private static byte[] ReadIndex(string repository) =>
-        MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
 
     private static byte[]? ReadFile(string path)
     {

@@ -32,7 +32,7 @@ internal static class MigrationCompletionCommitter
             GitProcess.RunRequired(repository, "Could not stage migration completion marker", "add", "--", relative);
             afterStageForTests?.Invoke();
             var staged = MigrationCommitProof.VerifyStagedFiles(repository, parent, files, modes);
-            writer.VerifyWrittenForCommit(ReadIndex(repository));
+            writer.VerifyWrittenForCommit(MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository));
 
             // Respect configured signing and publish the verified staged blobs,
             // not a new read of mutable working files.
@@ -41,7 +41,7 @@ internal static class MigrationCompletionCommitter
             MigrationCommitProof.VerifyCommit(repository, parent, commit, staged, modes);
             afterCommitForTests?.Invoke();
             MigrationPortableCaptureWriter.EnsureEmptyIndex(repository);
-            writer.VerifyCommitted(commit, ReadIndex(repository));
+            writer.VerifyCommitted(commit, MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository));
             return commit;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
@@ -54,6 +54,4 @@ internal static class MigrationCompletionCommitter
         }
     }
 
-    private static byte[] ReadIndex(string repository) =>
-        MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
 }
