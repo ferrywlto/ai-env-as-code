@@ -55,6 +55,10 @@
   delegates out of the apply writer; callers retain their pinned commits, byte
   reads and diagnostics. The unit, apply, initialization, portable backup and
   migration selection passed 553 tests in 4m 55s.
+- [x] Ferry reviewed the twelfth slice: remove the test-only apply entry point and run
+  its writer cases through attachment checkpoints. Preserve foreign-binding
+  precedence and real Git provenance coverage. Unit, apply, initialization,
+  provenance and portable review selection passed 494 tests in 1m 32s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

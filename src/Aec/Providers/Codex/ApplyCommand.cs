@@ -2,21 +2,6 @@ namespace Aec;
 
 internal static class ApplyCommand
 {
-    public static int Run(
-        string repository,
-        string codexHome,
-        TextWriter output,
-        TextWriter warning)
-    {
-        return Run(
-            repository,
-            codexHome,
-            output,
-            warning,
-            initialization: null,
-            repositoryExpectation: null);
-    }
-
     internal static int RunForInitialization(
         string repository,
         string codexHome,
