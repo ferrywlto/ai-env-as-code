@@ -9,40 +9,11 @@ internal static class BackupCommand
     private const string OutsideConfigSourcePathspec =
         ":(top,exclude,literal)environment/providers/codex/config.toml";
 
-    public static int Run(
-        string repository,
-        string codexHome,
-        TextWriter output,
-        TextWriter warning)
-    {
-        return RunManagedEnvironment(
-            repository,
-            codexHome,
-            output,
-            warning,
-            initialization: null);
-    }
-
     internal static int RunForInitialization(
         string repository,
         string codexHome,
         CodexPersonality? expectedRuntimePersonality,
         TextWriter output)
-    {
-        return RunManagedEnvironment(
-            repository,
-            codexHome,
-            output,
-            TextWriter.Null,
-            new InitializationBackupExpectation(expectedRuntimePersonality));
-    }
-
-    private static int RunManagedEnvironment(
-        string repository,
-        string codexHome,
-        TextWriter output,
-        TextWriter warning,
-        InitializationBackupExpectation? initialization)
     {
         ValidateRepository(repository);
         EnsureNoChangesOutsideManagedSources(repository);
@@ -65,29 +36,14 @@ internal static class BackupCommand
         var runtimePersonality = runtimeConfig is null
             ? null
             : CodexPersonalityConfig.ReadRuntime(runtimeConfig, runtimeConfigPath);
-        CodexPersonality desiredPersonality;
-        if (initialization is not null)
+        if (runtimePersonality != expectedRuntimePersonality)
         {
-            if (runtimePersonality != initialization.RuntimePersonality)
-            {
-                throw new InvalidOperationException(
-                    "Runtime personality changed after initialization preflight; " +
-                    "the baseline was not committed.");
-            }
+            throw new InvalidOperationException(
+                "Runtime personality changed after initialization preflight; " +
+                "the baseline was not committed.");
+        }
 
-            desiredPersonality = runtimePersonality ?? CodexPersonality.None;
-        }
-        else if (runtimePersonality is null)
-        {
-            warning.WriteLine(
-                "warning: runtime config does not declare root `personality`; " +
-                "backup stopped without changing the repository.");
-            return 1;
-        }
-        else
-        {
-            desiredPersonality = runtimePersonality.Value;
-        }
+        var desiredPersonality = runtimePersonality ?? CodexPersonality.None;
 
         var configUpdate = CodexPersonalityConfig.PlanCanonicalUpdate(
             configSource,
@@ -768,6 +724,4 @@ internal static class BackupCommand
             ["--no-replace-objects", .. arguments]);
     }
 
-    private sealed record InitializationBackupExpectation(
-        CodexPersonality? RuntimePersonality);
 }

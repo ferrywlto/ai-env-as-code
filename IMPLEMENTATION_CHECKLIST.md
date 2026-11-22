@@ -16,6 +16,10 @@
   covers stale canonical instruction and configuration content; initialization
   tests retain legacy-baseline resume and failed-signing recovery coverage.
   The combined unit, initialization and backup selection passed 442 tests.
+- [x] Ferry reviewed the third slice: remove the uncalled ordinary Codex backup wrapper
+  and its unreachable personality branch. Initialization retains the preflight
+  comparison; ordinary backup uses the portable command and its warning test.
+  The combined unit, initialization and Codex backup selection passed 474 tests.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor
