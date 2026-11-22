@@ -24,6 +24,11 @@
   comparison, legacy argument parsing and managed-root validation, including
   the parser-only options record. Live parsing and path checks remain in use.
   The combined unit and focused CLI selection passed 369 tests.
+- [x] Ferry reviewed the fifth slice: share portable capture post-commit parent, path,
+  byte and mode verification with the existing migration commit proof. Retain
+  capture-specific diagnostics, staged verification and write-time guards.
+  The combined unit and four migration committer selections passed 426 tests
+  in 10m 11s, including the legacy portable capture cases.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

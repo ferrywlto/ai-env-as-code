@@ -10,7 +10,7 @@ internal static class MigrationCommitProof
         string parent, Dictionary<string, byte[]> expectedFiles,
         Dictionary<string, string> modes)
     {
-        VerifyPaths(repository, expectedFiles.Keys.ToArray(),
+        VerifyPaths(repository, expectedFiles.Keys.ToArray(), false,
             "diff", "--cached", "--no-renames", "--name-only", "-z", parent, "--");
         var staged = new List<(string RelativePath, string Blob)>();
         foreach (var (relative, expectedContent) in expectedFiles)
@@ -36,29 +36,36 @@ internal static class MigrationCommitProof
     }
 
     internal static void VerifyCommit(string repository, string parent, string commit,
-        IReadOnlyList<(string RelativePath, string Blob)> files, Dictionary<string, string> modes)
+        IReadOnlyList<(string RelativePath, string Blob)> files, Dictionary<string, string> modes,
+        bool portableCapture = false)
     {
-        var parents = GitProcess.RunRequired(repository, "Could not inspect migration commit parent",
+        var parents = GitProcess.RunRequired(repository, portableCapture ? "Could not inspect portable capture parent" : "Could not inspect migration commit parent",
             "--no-replace-objects", "rev-list", "--parents", "-n", "1", commit).Output.Trim();
         if (parents != $"{commit} {parent}")
-            throw new InvalidOperationException("Migration commit is not one child of the reviewed HEAD.");
+            throw new InvalidOperationException(portableCapture
+                ? "Portable capture did not create exactly one child of the reviewed commit."
+                : "Migration commit is not one child of the reviewed HEAD.");
         var paths = files.Select(file => file.RelativePath).ToArray();
-        VerifyPaths(repository, paths, "diff-tree", "--no-commit-id", "--no-renames", "--name-only", "-r", "-z", parent, commit, "--");
+        VerifyPaths(repository, paths, portableCapture, "diff-tree", "--no-commit-id", "--no-renames", "--name-only", "-r", "-z", parent, commit, "--");
         foreach (var (relative, blob) in files)
         {
-            var entry = GitProcess.RunRequired(repository, "Could not inspect committed migration file",
+            var entry = GitProcess.RunRequired(repository, portableCapture ? "Could not inspect committed portable capture" : "Could not inspect committed migration file",
                 "--no-replace-objects", "ls-tree", "-z", commit, "--", relative).Output;
             if (entry != $"{modes[relative]} blob {blob}\t{relative}\0")
-                throw new InvalidOperationException($"Committed migration file bytes or mode differ from review: {relative}.");
+                throw new InvalidOperationException(portableCapture
+                    ? $"Committed portable capture bytes or mode differ from review: {relative}."
+                    : $"Committed migration file bytes or mode differ from review: {relative}.");
         }
     }
 
-    private static void VerifyPaths(string repository, string[] expected, params string[] arguments)
+    private static void VerifyPaths(string repository, string[] expected, bool portableCapture, params string[] arguments)
     {
-        var output = GitProcess.RunRequired(repository, "Could not inspect exact migration paths",
+        var output = GitProcess.RunRequired(repository, portableCapture ? "Could not inspect exact portable capture paths" : "Could not inspect exact migration paths",
             ["--no-replace-objects", .. arguments]).Output;
         var paths = output.Split('\0', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal);
         if (!paths.SequenceEqual(expected.Order(StringComparer.Ordinal), StringComparer.Ordinal))
-            throw new InvalidOperationException("Migration changes are not the exact reviewed path set.");
+            throw new InvalidOperationException(portableCapture
+                ? "Portable capture changes are not the exact reviewed path set."
+                : "Migration changes are not the exact reviewed path set.");
     }
 }

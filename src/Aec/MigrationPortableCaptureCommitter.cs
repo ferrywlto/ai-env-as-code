@@ -50,10 +50,8 @@ internal static class MigrationPortableCaptureCommitter
                 repository, CommitMessage, stagedFiles, capturePlan.Branch, parent, baselineModes);
 
             var commit = ApplyCommand.ResolveHeadCommit(repository);
-            VerifyCommitParent(repository, commit, parent);
-            VerifyPaths(repository, changedPaths,
-                "diff-tree", "--no-commit-id", "--no-renames", "--name-only", "-r", "-z", parent, commit, "--");
-            VerifyCommittedFiles(repository, commit, stagedFiles, baselineModes);
+            MigrationCommitProof.VerifyCommit(
+                repository, parent, commit, stagedFiles, baselineModes, portableCapture: true);
             targetWriter.VerifyForCommit(commit);
             MigrationPortableCaptureWriter.EnsureEmptyIndex(repository);
             return commit;
@@ -134,35 +132,6 @@ internal static class MigrationPortableCaptureCommitter
             stagedFiles.Add((relativePath, stagedBlob));
         }
         return stagedFiles;
-    }
-
-    private static void VerifyCommitParent(string repository, string commit, string parent)
-    {
-        var result = GitProcess.RunRequired(repository, "Could not inspect portable capture parent",
-            "--no-replace-objects", "rev-list", "--parents", "-n", "1", commit);
-        var actualParents = result.Output.Trim();
-        var expectedParents = $"{commit} {parent}";
-        if (actualParents != expectedParents)
-        {
-            throw new InvalidOperationException("Portable capture did not create exactly one child of the reviewed commit.");
-        }
-    }
-
-    private static void VerifyCommittedFiles(
-        string repository, string commit, IReadOnlyList<(string RelativePath, string Blob)> stagedFiles,
-        Dictionary<string, string> baselineModes)
-    {
-        foreach (var (relativePath, stagedBlob) in stagedFiles)
-        {
-            var result = GitProcess.RunRequired(repository, "Could not inspect committed portable capture",
-                "--no-replace-objects", "ls-tree", "-z", commit, "--", relativePath);
-            var actualEntry = result.Output;
-            var expectedEntry = $"{baselineModes[relativePath]} blob {stagedBlob}\t{relativePath}\0";
-            if (actualEntry != expectedEntry)
-            {
-                throw new InvalidOperationException($"Committed portable capture bytes or mode differ from review: {relativePath}.");
-            }
-        }
     }
 
     private static void VerifyPaths(
