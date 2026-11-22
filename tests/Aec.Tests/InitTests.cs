@@ -1263,28 +1263,6 @@ public sealed class InitTests
     }
 
     [Fact]
-    public void InitializationCommitRejectsUnexpectedCanonicalContent()
-    {
-        using var layout = new InitLayout();
-        var baseline = CreateBaselineOnlyInitialization(layout);
-        var runtime = File.ReadAllBytes(layout.Runtime);
-        var expected = AecInstructionBlock.Merge(runtime, layout.Target);
-        File.WriteAllText(layout.Source, "concurrent canonical edit\n");
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            BackupCommand.CommitCanonicalSource(
-                layout.Target,
-                "Initialize AEC instructions",
-                baseline,
-                expected,
-                allowEmpty: true));
-
-        Assert.Contains("changed before", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
-        Assert.Equal(runtime, File.ReadAllBytes(layout.Runtime));
-    }
-
-    [Fact]
     public void RejectsAFileTargetWithoutChangingIt()
     {
         using var layout = new InitLayout();

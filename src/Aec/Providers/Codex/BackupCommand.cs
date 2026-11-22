@@ -147,57 +147,6 @@ internal static class BackupCommand
         return 0;
     }
 
-    internal static string CommitCanonicalSource(
-        string repository,
-        string commitMessage,
-        string expectedParent,
-        byte[] expectedSource,
-        bool allowEmpty)
-    {
-        ArgumentNullException.ThrowIfNull(expectedSource);
-        ValidateRepository(repository);
-        EnsureNoChangesOutsideSource(repository);
-        EnsureBranchMatches(repository, "refs/heads/main");
-        EnsureHeadMatches(repository, expectedParent);
-
-        EnsureSourceMatchesExpected(repository, expectedSource);
-        StageCanonicalSource(repository);
-        var expectedBlob = EnsureStagedBytesMatchSource(repository);
-        EnsureBlobMatchesExpected(repository, expectedBlob, expectedSource);
-        if (!allowEmpty && !HasStagedSourceChange(repository))
-        {
-            throw new InvalidOperationException("Canonical source has no change to commit.");
-        }
-
-        // Recheck the parent after staging so a concurrent checkout cannot redirect the commit.
-        EnsureBranchMatches(repository, "refs/heads/main");
-        EnsureHeadMatches(repository, expectedParent);
-        CommitStagedIndex(
-            repository,
-            commitMessage,
-            [(AecApplication.SourceRelativePath, expectedBlob)],
-            "refs/heads/main",
-            expectedParent);
-
-        var head = ResolveHead(repository);
-        var actualParent = RunRequired(
-            repository,
-            "Git could not verify the initialization commit parent",
-            "rev-parse",
-            "--verify",
-            "HEAD^").Output.Trim();
-        if (!string.Equals(actualParent, expectedParent, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Initialization commit parent changed during the operation.");
-        }
-
-        VerifyCommit(repository, expectedBlob, commitMessage);
-        EnsureBranchMatches(repository, "refs/heads/main");
-        EnsureNoChangesOutsideSource(repository);
-        return head;
-    }
-
     internal static string CommitCanonicalEnvironment(
         string repository,
         string commitMessage,
@@ -340,26 +289,6 @@ internal static class BackupCommand
         }
     }
 
-    internal static void EnsureNoChangesOutsideSource(string repository)
-    {
-        var status = RunRequired(
-            repository,
-            "Git could not inspect repository changes",
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-            "--",
-            ".",
-            OutsideSourcePathspec);
-
-        if (status.Output.Length != 0)
-        {
-            throw new InvalidOperationException(
-                "Repository has changes outside environment/providers/codex/AGENTS.md.");
-        }
-    }
-
     internal static void EnsureNoChangesOutsideManagedSources(string repository)
     {
         var status = RunRequired(
@@ -379,30 +308,6 @@ internal static class BackupCommand
             throw new InvalidOperationException(
                 "Repository has changes outside the managed Codex environment files.");
         }
-    }
-
-    private static string EnsureStagedBytesMatchSource(string repository)
-    {
-        var sourceHash = RunRequired(
-            repository,
-            "Git could not hash the canonical source",
-            "hash-object",
-            "--no-filters",
-            "--",
-            AecApplication.SourceRelativePath).Output.Trim();
-        var stagedHash = RunRequired(
-            repository,
-            "Git could not inspect the staged canonical source",
-            "rev-parse",
-            $":{AecApplication.SourceRelativePath}").Output.Trim();
-
-        if (!string.Equals(sourceHash, stagedHash, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Git filters changed the canonical source bytes while staging; backup stopped before commit.");
-        }
-
-        return sourceHash;
     }
 
     private static string EnsureStagedBytesMatchWorkingFile(
@@ -432,17 +337,6 @@ internal static class BackupCommand
         return sourceHash;
     }
 
-    private static void StageCanonicalSource(string repository)
-    {
-        RunRequired(
-            repository,
-            "Git could not stage the canonical source",
-            "add",
-            "--force",
-            "--",
-            AecApplication.SourceRelativePath);
-    }
-
     private static void StageManagedSources(string repository)
     {
         RunRequired(
@@ -453,17 +347,6 @@ internal static class BackupCommand
             "--",
             AecApplication.SourceRelativePath,
             AecApplication.ConfigSourceRelativePath);
-    }
-
-    private static void EnsureSourceMatchesExpected(string repository, byte[] expected)
-    {
-        var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
-        var source = AecApplication.ReadRequiredTextFile(sourcePath, "Canonical source");
-        if (!source.AsSpan().SequenceEqual(expected))
-        {
-            throw new InvalidOperationException(
-                "Canonical source changed before the initialization commit.");
-        }
     }
 
     private static void EnsureWorkingFileMatchesExpected(
@@ -479,18 +362,6 @@ internal static class BackupCommand
             throw new InvalidOperationException(
                 $"{label} changed before the initialization commit.");
         }
-    }
-
-    private static void EnsureBlobMatchesExpected(
-        string repository,
-        string blob,
-        byte[] expected)
-    {
-        EnsureBlobMatchesExpected(
-            repository,
-            blob,
-            expected,
-            "canonical source");
     }
 
     private static void EnsureBlobMatchesExpected(
@@ -706,50 +577,6 @@ internal static class BackupCommand
         };
     }
 
-    private static void VerifyCommit(
-        string repository,
-        string expectedBlob,
-        string expectedSubject)
-    {
-        var committedBlob = RunRequired(
-            repository,
-            "Git could not inspect the committed canonical source",
-            "rev-parse",
-            $"HEAD:{AecApplication.SourceRelativePath}").Output.Trim();
-        if (!string.Equals(expectedBlob, committedBlob, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Committed canonical source bytes do not match the expected source.");
-        }
-
-        var subject = RunRequired(
-            repository,
-            "Git could not inspect the canonical source commit message",
-            "log",
-            "-1",
-            "--format=%s").Output.TrimEnd('\r', '\n');
-        if (!string.Equals(subject, expectedSubject, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Canonical source commit subject does not match the required message.");
-        }
-
-        var sourceStatus = RunRequired(
-            repository,
-            "Git could not verify the canonical source after commit",
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-            "--",
-            AecApplication.SourceRelativePath);
-        if (sourceStatus.Output.Length != 0)
-        {
-            throw new InvalidOperationException(
-                "Canonical source is not clean after its commit.");
-        }
-    }
-
     private static void VerifyManagedCommit(
         string repository,
         string expectedSourceBlob,
@@ -823,26 +650,6 @@ internal static class BackupCommand
             1 => false,
             _ => throw new InvalidOperationException(
                 $"Git could not inspect HEAD (exit code {result.ExitCode}).")
-        };
-    }
-
-    private static bool HasStagedSourceChange(string repository)
-    {
-        var result = Run(
-            repository,
-            "diff",
-            "--cached",
-            "--quiet",
-            "--exit-code",
-            "--",
-            AecApplication.SourceRelativePath);
-
-        return result.ExitCode switch
-        {
-            0 => false,
-            1 => true,
-            _ => throw new InvalidOperationException(
-                $"Git could not inspect the staged canonical source (exit code {result.ExitCode}).")
         };
     }
 

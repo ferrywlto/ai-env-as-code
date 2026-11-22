@@ -11,6 +11,11 @@
   Copilot and committer selection passed 19 tests; the combined unit and
   initialization selection passed 436 tests. Production code decreased by
   211 lines and test code by 204 lines.
+- [x] Ferry reviewed the second slice: retire the test-only source-only initialization
+  commit path and its exclusive helpers. The live environment commit test
+  covers stale canonical instruction and configuration content; initialization
+  tests retain legacy-baseline resume and failed-signing recovery coverage.
+  The combined unit, initialization and backup selection passed 442 tests.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor
