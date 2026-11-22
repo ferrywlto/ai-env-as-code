@@ -307,24 +307,7 @@ internal static class CopilotInstructionBlock
             return content;
         }
 
-        var bodyOffset = content.AsSpan().StartsWith(Utf8Bom) ? Utf8Bom.Length : 0;
-        var newLine = Encoding.ASCII.GetBytes(block.NewLine);
-        var suffix = block.End;
-        if (block.Start == bodyOffset &&
-            content.AsSpan(suffix).StartsWith(newLine) &&
-            content.AsSpan(suffix + newLine.Length).StartsWith(newLine))
-        {
-            suffix += newLine.Length * 2;
-        }
-        else if (content.AsSpan(suffix).StartsWith(newLine))
-        {
-            suffix += newLine.Length;
-        }
-
-        var result = new byte[block.Start + content.Length - suffix];
-        content.AsSpan(0, block.Start).CopyTo(result);
-        content.AsSpan(suffix).CopyTo(result.AsSpan(block.Start));
-        return result;
+        return ManagedBlockRemoval.Remove(content, block.Start, block.End, block.NewLine);
     }
 
     private static byte[] Prepend(byte[] content, byte[] block)

@@ -105,6 +105,21 @@ public sealed class CopilotInstructionBlockTests
     }
 
     [Fact]
+    public void InPlaceManagedBlockKeepsTheSurroundingBytesInTargetDigest()
+    {
+        var managed = CopilotInstructionBlock.MergeForPortableTarget(
+            "Tail.\n"u8.ToArray(), Repository, "macos-arm64");
+        var inPlace = "Prefix.\n"u8.ToArray().Concat(managed).ToArray();
+
+        var refreshed = CopilotInstructionBlock.MergeForPortableTarget(
+            inPlace, Repository, "macos-arm64");
+        var binding = CopilotInstructionBlock.ReadManagedBinding(refreshed);
+
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData("Prefix.\n\nTail.\n"u8)),
+            binding?.TargetDigest);
+    }
+
+    [Fact]
     public void EarlierPortableBlockRemainsReadableAndCanUpgradeWithoutChangingTheBody()
     {
         var original = "Authored instructions.\n"u8.ToArray();

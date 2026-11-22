@@ -37,6 +37,10 @@
   wrappers with one repository-based call to the existing path reader. Preserve
   index path, link checks, diagnostics and the timing of each read. The unit
   and focused migration selection passed 353 tests.
+- [x] Ferry reviewed the eighth slice: share managed-block byte removal for Codex and
+  Copilot while preserving provider parsing, byte-order marks and separators.
+  The unit and block/uninstall selection passed 358 tests, including in-place
+  Copilot digest coverage.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

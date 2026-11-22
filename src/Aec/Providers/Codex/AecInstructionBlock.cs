@@ -89,26 +89,7 @@ internal static class AecInstructionBlock
             return new RemovalResult(content, Removed: false);
         }
 
-        var bodyOffset = HasUtf8Bom(content) ? Utf8Bom.Length : 0;
-        var suffixOffset = block.End;
-        var newLine = Encoding.ASCII.GetBytes(block.NewLine);
-
-        // Merge owns the separator after its block. At the top it inserted up to
-        // two line endings; in-place blocks own the one ending their final marker.
-        if (block.Start == bodyOffset &&
-            content.AsSpan(suffixOffset).StartsWith(newLine) &&
-            content.AsSpan(suffixOffset + newLine.Length).StartsWith(newLine))
-        {
-            suffixOffset += newLine.Length * 2;
-        }
-        else if (content.AsSpan(suffixOffset).StartsWith(newLine))
-        {
-            suffixOffset += newLine.Length;
-        }
-
-        var result = new byte[block.Start + content.Length - suffixOffset];
-        content.AsSpan(0, block.Start).CopyTo(result);
-        content.AsSpan(suffixOffset).CopyTo(result.AsSpan(block.Start));
+        var result = ManagedBlockRemoval.Remove(content, block.Start, block.End, block.NewLine);
         return new RemovalResult(result, Removed: true);
     }
 
