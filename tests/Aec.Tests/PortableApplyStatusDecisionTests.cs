@@ -5,24 +5,32 @@ namespace Aec.Tests;
 [Trait("Category", "Unit")]
 public sealed class PortableApplyStatusDecisionTests
 {
+    [Fact]
+    public void FilesystemRootContainsDescendantsForApplySafety()
+    {
+        var root = Path.GetPathRoot(Path.GetFullPath(Path.GetTempPath()))!;
+        var descendant = Path.Combine(root, "aec-test-descendant", "AGENTS.md");
+
+        Assert.True(ApplyCommand.IsPathInsideDirectory(root, descendant));
+    }
+
     [Theory]
-    [InlineData(AecIdentifiers.Codex, false, "in_sync")]
-    [InlineData(AecIdentifiers.Codex, true, "different")]
-    [InlineData(AecIdentifiers.Copilot, false, "in_sync")]
-    [InlineData(AecIdentifiers.Copilot, true, "different")]
+    [InlineData(AecIdentifiers.Codex, false, false, "in_sync")]
+    [InlineData(AecIdentifiers.Codex, false, true, "different")]
+    [InlineData(AecIdentifiers.Codex, true, false, "in_sync")]
+    [InlineData(AecIdentifiers.Copilot, false, false, "in_sync")]
+    [InlineData(AecIdentifiers.Copilot, false, true, "different")]
     public void ApplyAndStatusCompareExactInstructionBytes(
-        string provider, bool hasDrift, string expectedStatus)
+        string provider, bool includeChatGptGuidance, bool hasDrift, string expectedStatus)
     {
         var snapshot = CreateSnapshot(provider);
         var expected = provider == AecIdentifiers.Codex
             ? AecInstructionBlock.MergeForPortableTarget(
-                snapshot.Target, snapshot.Repository, snapshot.Platform, includeChatGptGuidance: false)
+                snapshot.Target, snapshot.Repository, snapshot.Platform, includeChatGptGuidance)
             : CopilotInstructionBlock.MergeForPortableTarget(
                 snapshot.Target, snapshot.Repository, snapshot.Platform);
-        var current = snapshot with
-        {
-            Runtime = hasDrift ? [.. expected, (byte)'\n'] : expected.ToArray()
-        };
+        byte[] runtime = hasDrift ? [.. expected, (byte)'\n'] : expected.ToArray();
+        var current = WithRuntime(snapshot, runtime);
 
         var apply = PortableApplyPreview.PlanInstructions(current);
 
@@ -30,6 +38,72 @@ public sealed class PortableApplyStatusDecisionTests
         Assert.Equal(snapshot.RuntimePath, apply.RuntimePath);
         Assert.Equal(hasDrift, apply.WouldReplace);
         Assert.Equal(expectedStatus, PortableEnvironmentStatus.ClassifyInstructions(current));
+    }
+
+    [Theory]
+    [InlineData(AecIdentifiers.Codex, false, 9)]
+    [InlineData(AecIdentifiers.Codex, true, 10)]
+    [InlineData(AecIdentifiers.Copilot, false, 3)]
+    public void LegacyRuntimeIsDifferentAndUpgradesToThePortableBlock(
+        string provider, bool includeChatGptGuidance, int expectedVersion)
+    {
+        var snapshot = CreateSnapshot(provider);
+        var legacy = provider switch
+        {
+            AecIdentifiers.Codex when includeChatGptGuidance =>
+                AecInstructionBlock.MergeForChatGptProvider(snapshot.Target, snapshot.Repository),
+            AecIdentifiers.Codex => AecInstructionBlock.Merge(snapshot.Target, snapshot.Repository),
+            _ => CopilotInstructionBlock.Merge(snapshot.Target, snapshot.Repository)
+        };
+        var current = WithRuntime(snapshot, legacy);
+
+        var preview = PortableApplyPreview.PlanInstructions(current);
+        var desired = Encoding.UTF8.GetString(preview.DesiredRuntime);
+
+        Assert.True(preview.WouldReplace);
+        Assert.Equal("different", PortableEnvironmentStatus.ClassifyInstructions(current));
+        Assert.Equal(expectedVersion, PortableRuntimeSnapshot.ValidateRuntimeBinding(
+            snapshot.Repository, snapshot.Platform, provider, preview.DesiredRuntime));
+        Assert.True(preview.DesiredRuntime.AsSpan().EndsWith(snapshot.Target));
+        Assert.Equal(includeChatGptGuidance,
+            desired.Contains("Manual ChatGPT instruction backups live under", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(AecIdentifiers.Codex)]
+    [InlineData(AecIdentifiers.Copilot)]
+    public void ApplyStatusRejectsUnboundInstructions(string provider)
+    {
+        var snapshot = CreateSnapshot(provider);
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            WithRuntime(snapshot, "Local text without an AEC block.\n"u8.ToArray()));
+
+        Assert.Contains("not bound to the selected AEC repository", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(AecIdentifiers.Codex)]
+    [InlineData(AecIdentifiers.Copilot)]
+    public void ApplyStatusRejectsInstructionsBoundToAnotherPlatform(string provider)
+    {
+        var snapshot = CreateSnapshot(provider);
+        var runtime = PortableApplyPreview.RenderDesiredRuntime(
+            snapshot with { Platform = "windows-x64" });
+
+        var error = Assert.Throws<InvalidOperationException>(() => WithRuntime(snapshot, runtime));
+
+        Assert.Contains("bound to a different AEC platform", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CodexWriterRejectsCopilotPreview()
+    {
+        var snapshot = CreateSnapshot(AecIdentifiers.Copilot);
+        var preview = PortableApplyPreview.PlanInstructions(
+            WithRuntime(snapshot, PortableApplyPreview.RenderDesiredRuntime(snapshot)));
+
+        Assert.Throws<ArgumentException>(() => PortableCodexWriter.Apply(preview));
     }
 
     [Theory]
@@ -90,6 +164,14 @@ public sealed class PortableApplyStatusDecisionTests
     {
         Assert.Equal(expected, new PortableStatusReport(instructions, config).InSync);
     }
+
+    private static PortableRuntimeSnapshot WithRuntime(PortableRuntimeSnapshot snapshot, byte[] runtime) =>
+        snapshot with
+        {
+            Runtime = runtime,
+            BlockVersion = PortableRuntimeSnapshot.ValidateRuntimeBinding(
+                snapshot.Repository, snapshot.Platform, snapshot.Provider, runtime)
+        };
 
     private static PortableRuntimeSnapshot CreateSnapshot(string provider)
     {

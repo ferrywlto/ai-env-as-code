@@ -13,11 +13,9 @@ public sealed class PortableBackupTargetWriterTests
         string section)
     {
         using var layout = new Layout();
-        layout.EditRuntime(section);
+        var (reviewed, attribution) = layout.SeedReviewedSource(section);
         var runtime = File.ReadAllBytes(layout.RuntimePath);
-        var head = layout.Head();
         var before = layout.Targets.ToDictionary(path => path, File.ReadAllBytes);
-        var (reviewed, attribution) = layout.WriteReviewedSource();
 
         var rendered = PortableBackupTargetWriter.Render(reviewed, attribution);
 
@@ -32,10 +30,10 @@ public sealed class PortableBackupTargetWriterTests
         Assert.Equal(expected.Select(layout.Relative), rendered);
         foreach (var path in layout.Targets)
         {
-            Assert.Equal(expected.Contains(path),
-                !File.ReadAllBytes(path).AsSpan().SequenceEqual(before[path]));
+            var bytes = File.ReadAllBytes(path);
+            Assert.Equal(expected.Contains(path), !bytes.AsSpan().SequenceEqual(before[path]));
             var relative = layout.Relative(path).Split('/');
-            var parts = InstructionSections.Parse(File.ReadAllText(path), true, true);
+            var parts = InstructionSections.Parse(Encoding.UTF8.GetString(bytes), true, true);
             Assert.Equal(section == "shared" ? "Shared revision.\n" : "Shared baseline.\n",
                 parts.Shared);
             Assert.Equal(section == "platform" && relative[2] == layout.LocalPlatform
@@ -47,7 +45,7 @@ public sealed class PortableBackupTargetWriterTests
         }
 
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(head, layout.Head());
+        Assert.Equal(reviewed.Commit, layout.Head());
         Assert.False(Directory.Exists(layout.CopilotHome));
     }
 
@@ -55,11 +53,10 @@ public sealed class PortableBackupTargetWriterTests
     public void CopilotProviderEditRendersOnlyCopilotTargetsAcrossPlatforms()
     {
         using var layout = new Layout(localProvider: "copilot");
-        layout.EditRuntime("provider");
+        var (reviewed, attribution) = layout.SeedReviewedSource("provider");
         var beforeCodex = layout.Targets
             .Where(path => layout.Relative(path).Contains("/codex/", StringComparison.Ordinal))
             .ToDictionary(path => path, File.ReadAllBytes);
-        var (reviewed, attribution) = layout.WriteReviewedSource();
 
         var rendered = PortableBackupTargetWriter.Render(reviewed, attribution);
 
@@ -80,8 +77,7 @@ public sealed class PortableBackupTargetWriterTests
     public void DoesNotCreateAnUnenrolledTarget()
     {
         using var layout = new Layout(enrollRemoteCopilot: false);
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
 
         var rendered = PortableBackupTargetWriter.Render(reviewed, attribution);
 
@@ -93,16 +89,16 @@ public sealed class PortableBackupTargetWriterTests
     public void DirtyAffectedTargetStopsBeforeAnyTargetWrite()
     {
         using var layout = new Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
         var untouched = layout.Targets.Where(path =>
             path != layout.Target(layout.OtherPlatform, "copilot"))
             .ToDictionary(path => path, File.ReadAllBytes);
         File.WriteAllText(layout.Target(layout.OtherPlatform, "copilot"),
             "Concurrent target edit.\n");
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupTargetWriter.Render(reviewed, attribution));
+        Assert.Contains("Rendered target has unstaged changes", error.Message, StringComparison.Ordinal);
 
         foreach (var (path, bytes) in untouched)
         {
@@ -113,14 +109,14 @@ public sealed class PortableBackupTargetWriterTests
     [Fact]
     public void RuntimeChangedAfterSourceWriteStopsBeforeTargetWrite()
     {
-        using var layout = new Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
+        using var layout = new Layout(localEnrollmentOnly: true);
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
         var before = layout.Targets.ToDictionary(path => path, File.ReadAllBytes);
         File.AppendAllText(layout.RuntimePath, "Later runtime edit.\n");
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupTargetWriter.Render(reviewed, attribution));
+        Assert.Contains("Backup inputs changed while rendering targets", error.Message, StringComparison.Ordinal);
 
         foreach (var (path, bytes) in before)
         {
@@ -131,14 +127,14 @@ public sealed class PortableBackupTargetWriterTests
     [Fact]
     public void SourceChangedAfterSourceWriteStopsBeforeTargetWrite()
     {
-        using var layout = new Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
+        using var layout = new Layout(localEnrollmentOnly: true);
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
         var before = layout.Targets.ToDictionary(path => path, File.ReadAllBytes);
         File.WriteAllText(layout.SharedSource, "Later source edit.\n");
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupTargetWriter.Render(reviewed, attribution));
+        Assert.Contains("Authored source differs from the reviewed backup edit", error.Message, StringComparison.Ordinal);
 
         foreach (var (path, bytes) in before)
         {
@@ -149,14 +145,14 @@ public sealed class PortableBackupTargetWriterTests
     [Fact]
     public void HeadChangedAfterSourceWriteStopsBeforeTargetWrite()
     {
-        using var layout = new Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
+        using var layout = new Layout(localEnrollmentOnly: true);
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
         var before = layout.Targets.ToDictionary(path => path, File.ReadAllBytes);
         layout.CommitEmpty();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupTargetWriter.Render(reviewed, attribution));
+        Assert.Contains("Backup inputs changed while rendering targets", error.Message, StringComparison.Ordinal);
 
         foreach (var (path, bytes) in before)
         {
@@ -167,15 +163,15 @@ public sealed class PortableBackupTargetWriterTests
     [Fact]
     public void StagedSourceStopsBeforeTargetWrite()
     {
-        using var layout = new Layout();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
+        using var layout = new Layout(localEnrollmentOnly: true);
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
         var before = layout.Targets.ToDictionary(path => path, File.ReadAllBytes);
         GitProcess.RunRequired(layout.Repository, "Could not stage changed fixture source",
             "add", "--", "environment/shared/instructions.md");
 
-        Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<InvalidOperationException>(() =>
             PortableBackupTargetWriter.Render(reviewed, attribution));
+        Assert.Contains("An authored source or affected target has staged changes", error.Message, StringComparison.Ordinal);
 
         foreach (var (path, bytes) in before)
         {
@@ -188,12 +184,12 @@ public sealed class PortableBackupTargetWriterTests
     {
         using var layout = new Layout();
         layout.CorruptAndCommitRemoteTarget();
-        layout.EditRuntime("shared");
-        var (reviewed, attribution) = layout.WriteReviewedSource();
+        var (reviewed, attribution) = layout.SeedReviewedSource("shared");
         var before = layout.Targets.ToDictionary(path => path, File.ReadAllBytes);
 
-        Assert.Throws<InvalidDataException>(() =>
+        var error = Assert.Throws<InvalidDataException>(() =>
             PortableBackupTargetWriter.Render(reviewed, attribution));
+        Assert.Contains("Committed target does not match its authored sources", error.Message, StringComparison.Ordinal);
 
         foreach (var (path, bytes) in before)
         {
@@ -205,7 +201,8 @@ public sealed class PortableBackupTargetWriterTests
     {
         private readonly string root;
 
-        public Layout(bool enrollRemoteCopilot = true, string localProvider = "codex")
+        public Layout(
+            bool enrollRemoteCopilot = true, string localProvider = "codex", bool localEnrollmentOnly = false)
         {
             root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-backup-target-tests", Guid.NewGuid().ToString("N"));
@@ -220,23 +217,26 @@ public sealed class PortableBackupTargetWriterTests
             OtherPlatform = LocalPlatform == "macos-arm64" ? "windows-x64" : "macos-arm64";
             SharedSource = Path.Combine(Repository, "environment", "shared", "instructions.md");
 
+            var platforms = localEnrollmentOnly ? [LocalPlatform] : Platforms;
+            string[] providers = localEnrollmentOnly ? [localProvider] : ["codex", "copilot"];
+
             Write(SharedSource, "Shared baseline.\n");
-            foreach (var platform in Platforms)
+            foreach (var platform in platforms)
             {
                 Write(Path.Combine(Repository, "environment", "platforms", platform,
                     "policy.md"), $"Policy {platform}.\n");
             }
 
-            foreach (var provider in new[] { "codex", "copilot" })
+            foreach (var provider in providers)
             {
                 Write(Path.Combine(Repository, "environment", "providers", provider,
                     "overlay.md"), $"Overlay {provider}.\n");
             }
 
             Targets = [];
-            foreach (var platform in Platforms)
+            foreach (var platform in platforms)
             {
-                foreach (var provider in new[] { "codex", "copilot" })
+                foreach (var provider in providers)
                 {
                     if (!enrollRemoteCopilot && platform == OtherPlatform && provider == "copilot")
                     {
@@ -244,32 +244,15 @@ public sealed class PortableBackupTargetWriterTests
                     }
 
                     var path = Target(platform, provider);
-                    Write(path, InstructionSections.Render(
-                        "Shared baseline.\n", $"Policy {platform}.\n", $"Overlay {provider}.\n"));
+                    Write(path, BaselineTarget(platform, provider));
                     Targets.Add(path);
                 }
             }
 
-            GitProcess.RunRequired(Repository, "Could not initialize fixture Git", "init", "--quiet");
-            GitProcess.RunRequired(Repository, "Could not set fixture Git author",
-                "config", "--local", "user.name", "AEC Test");
-            GitProcess.RunRequired(Repository, "Could not set fixture Git email",
-                "config", "--local", "user.email", "aec-test@example.invalid");
-            GitProcess.RunRequired(Repository, "Could not disable fixture commit signing",
-                "config", "--local", "commit.gpgsign", "false");
+            GitProcess.RunRequired(Repository, "Could not initialize fixture Git",
+                "init", "--quiet", "--template=", "--initial-branch=main");
             GitProcess.RunRequired(Repository, "Could not stage fixture", "add", "--", "environment");
-            GitProcess.RunRequired(Repository, "Could not commit fixture",
-                "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
-                "-c", "commit.gpgsign=false", "commit", "-m", "Fixture baseline");
-
-            var localTarget = File.ReadAllBytes(Target(LocalPlatform, localProvider));
-            Directory.CreateDirectory(ProviderHome);
-            var runtime = localProvider == "codex"
-                ? AecInstructionBlock.MergeForPortableTarget(
-                    localTarget, Repository, LocalPlatform, includeChatGptGuidance: false)
-                : CopilotInstructionBlock.MergeForPortableTarget(
-                    localTarget, Repository, LocalPlatform);
-            File.WriteAllBytes(RuntimePath, runtime);
+            GitProcess.RunRequired(Repository, "Could not commit fixture", "commit", "-m", "Fixture baseline");
         }
 
         public string Repository { get; }
@@ -293,30 +276,65 @@ public sealed class PortableBackupTargetWriterTests
         public string Relative(string path) =>
             Path.GetRelativePath(Repository, path).Replace('\\', '/');
 
-        public void EditRuntime(string section)
+        public (PortableRuntimeSnapshot, PortableBackupAttributionPreview) SeedReviewedSource(string section)
         {
-            var original = section switch
+            var target = Encoding.UTF8.GetBytes(BaselineTarget(LocalPlatform, LocalProvider));
+            var baseline = LocalProvider == "codex"
+                ? AecInstructionBlock.MergeForPortableTarget(
+                    target, Repository, LocalPlatform, includeChatGptGuidance: false)
+                : CopilotInstructionBlock.MergeForPortableTarget(target, Repository, LocalPlatform);
+            var (original, replacement) = section switch
             {
-                "shared" => "Shared baseline.",
-                "platform" => $"Policy {LocalPlatform}.",
-                "provider" => $"Overlay {LocalProvider}.",
+                "shared" => ("Shared baseline.", "Shared revision."),
+                "platform" => ($"Policy {LocalPlatform}.", $"Revised policy {LocalPlatform}."),
+                "provider" => ($"Overlay {LocalProvider}.", $"Revised overlay {LocalProvider}."),
                 _ => throw new ArgumentOutOfRangeException(nameof(section))
             };
-            File.WriteAllText(RuntimePath, File.ReadAllText(RuntimePath)
-                .Replace(original, original.Replace("baseline", "revision", StringComparison.Ordinal)
-                    .Replace("Policy", "Revised policy", StringComparison.Ordinal)
-                    .Replace("Overlay", "Revised overlay", StringComparison.Ordinal),
-                    StringComparison.Ordinal));
-        }
-
-        public (PortableRuntimeSnapshot, PortableBackupAttributionPreview) WriteReviewedSource()
-        {
-            var reviewed = PortableRuntimeSnapshot.Read(Repository, LocalProvider, ProviderHome);
-            var attribution = PortableBackupAttributionPreview.Create(
-                Repository, LocalProvider, ProviderHome);
-            PortableBackupSourceWriter.Write(reviewed, attribution);
+            var runtime = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(baseline)
+                .Replace(original, replacement, StringComparison.Ordinal));
+            var version = PortableRuntimeSnapshot.ValidateRuntimeBinding(
+                Repository, LocalPlatform, LocalProvider, runtime);
+            var reviewed = new PortableRuntimeSnapshot(
+                Repository, LocalPlatform, LocalProvider, RuntimePath, Head(), target, runtime, version);
+            var attribution = PortableBackupAttributionPreview.Create(reviewed);
+            Assert.Equal(section, attribution.Section);
+            Write(Path.Combine(Repository, attribution.SourceRelativePath!), attribution.ProposedContent!);
+            Directory.CreateDirectory(ProviderHome);
+            File.WriteAllBytes(RuntimePath, runtime);
             return (reviewed, attribution);
         }
+
+        public IReadOnlyList<string> SeedRenderedTargets(PortableBackupAttributionPreview attribution)
+        {
+            var paths = new List<string>();
+            foreach (var path in Targets.Select(Relative).Order(StringComparer.Ordinal))
+            {
+                var parts = path.Split('/');
+                var platform = parts[2];
+                var provider = parts[3];
+                var original = attribution.Section switch
+                {
+                    "shared" => "Shared baseline.\n",
+                    "platform" when platform == LocalPlatform => $"Policy {platform}.\n",
+                    "provider" when provider == LocalProvider => $"Overlay {provider}.\n",
+                    _ => null
+                };
+                if (original is null)
+                {
+                    continue;
+                }
+
+                var rendered = BaselineTarget(platform, provider)
+                    .Replace(original, attribution.ProposedContent!, StringComparison.Ordinal);
+                Write(Path.Combine(Repository, path), rendered);
+                paths.Add(path);
+            }
+
+            return paths;
+        }
+
+        private static string BaselineTarget(string platform, string provider) =>
+            InstructionSections.Render("Shared baseline.\n", $"Policy {platform}.\n", $"Overlay {provider}.\n");
 
         public void CorruptAndCommitRemoteTarget()
         {
@@ -325,17 +343,14 @@ public sealed class PortableBackupTargetWriterTests
             GitProcess.RunRequired(Repository, "Could not stage corrupt fixture target",
                 "add", "--", Relative(path));
             GitProcess.RunRequired(Repository, "Could not commit corrupt fixture target",
-                "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
-                "-c", "commit.gpgsign=false", "commit", "-m", "Corrupt remote target");
+                "commit", "-m", "Corrupt remote target");
         }
 
         public string Head() => GitProcess.RunRequired(Repository, "Could not read HEAD",
             "rev-parse", "HEAD").Output.Trim();
 
         public void CommitEmpty() => GitProcess.RunRequired(Repository,
-            "Could not advance fixture HEAD",
-            "-c", "user.name=AEC Test", "-c", "user.email=aec-test@example.invalid",
-            "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "Advance HEAD");
+            "Could not advance fixture HEAD", "commit", "--allow-empty", "-m", "Advance HEAD");
 
         public void Dispose() => TestDirectoryCleanup.Delete(root);
 

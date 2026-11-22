@@ -4,59 +4,6 @@ namespace Aec.Tests;
 public sealed class PortableCopilotBackupWriterTests
 {
     [Fact]
-    public void OneSectionDriftCommitsOnlyItsSourceAndAffectedTarget()
-    {
-        using var layout = NewLayout();
-        File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
-            .Replace("Shared approval.", "Shared revision.", StringComparison.Ordinal));
-        var oldHead = layout.Head();
-        var runtime = File.ReadAllBytes(layout.RuntimePath);
-        var preview = PortableCopilotBackupPreview.Create(
-            layout.Repository, layout.ProviderHome);
-
-        var commit = PortableCopilotBackupWriter.WriteAndCommit(preview);
-
-        Assert.Equal(commit, layout.Head());
-        Assert.Equal(oldHead, GitProcess.RunRequired(layout.Repository,
-            "Could not inspect backup parent", "rev-parse", "HEAD^").Output.Trim());
-        Assert.Equal(new[]
-        {
-            "environment/shared/instructions.md",
-            Path.GetRelativePath(layout.Repository, layout.TargetPath).Replace('\\', '/')
-        }.OrderBy(path => path, StringComparer.Ordinal), CommittedPaths(layout));
-        Assert.Equal("Shared revision.\n", File.ReadAllText(layout.SharedSource));
-        Assert.Contains("Shared revision.", File.ReadAllText(layout.TargetPath),
-            StringComparison.Ordinal);
-        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
-        Assert.Equal(string.Empty, layout.GitStatus());
-    }
-
-    [Fact]
-    public void ExistingStagedChangesStopBeforeCanonicalWrite()
-    {
-        using var layout = NewLayout();
-        File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
-            .Replace("Shared approval.", "Shared revision.", StringComparison.Ordinal));
-        var preview = PortableCopilotBackupPreview.Create(
-            layout.Repository, layout.ProviderHome);
-        File.WriteAllText(Path.Combine(layout.Repository, "note.txt"), "Keep staged.\n");
-        GitProcess.RunRequired(layout.Repository, "Could not stage fixture note",
-            "add", "--", "note.txt");
-        var oldHead = layout.Head();
-        var oldSource = File.ReadAllBytes(layout.SharedSource);
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            PortableCopilotBackupWriter.WriteAndCommit(preview));
-
-        Assert.Contains("already has staged changes", error.Message,
-            StringComparison.Ordinal);
-        Assert.Equal(oldHead, layout.Head());
-        Assert.Equal(oldSource, File.ReadAllBytes(layout.SharedSource));
-        Assert.Equal("note.txt\n", GitProcess.RunRequired(layout.Repository,
-            "Could not inspect staged paths", "diff", "--cached", "--name-only").Output);
-    }
-
-    [Fact]
     public void RuntimeChangeAfterReviewStopsBeforeCanonicalWrite()
     {
         using var layout = NewLayout();
@@ -151,10 +98,4 @@ public sealed class PortableCopilotBackupWriterTests
         layout.WriteRuntime(portableBlock: true);
         return layout;
     }
-
-    private static string[] CommittedPaths(SharedTargetStatusTests.StatusLayout layout) =>
-        GitProcess.RunRequired(layout.Repository, "Could not inspect backup paths",
-            "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
-            .Output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .OrderBy(path => path, StringComparer.Ordinal).ToArray();
 }

@@ -26,6 +26,11 @@ internal static class CommittedTargetValidator
     public static byte[] Read(
         string repository,
         string platform,
+        string provider) => ReadWithCommit(repository, platform, provider).Target;
+
+    internal static (string Commit, byte[] Target) ReadWithCommit(
+        string repository,
+        string platform,
         string provider)
     {
         if (platform is not (AecIdentifiers.MacOsArm64 or AecIdentifiers.WindowsX64 or AecIdentifiers.LinuxArm64))
@@ -40,16 +45,15 @@ internal static class CommittedTargetValidator
         ApplyCommand.ValidateRepositoryRoot(repository);
         var commit = ApplyCommand.ResolveHeadCommit(repository);
 
-        var shared = ReadSource(repository, commit, "environment/shared/instructions.md",
-            "Authored shared instructions");
-        var policy = ReadSource(repository, commit,
-            $"environment/platforms/{platform}/policy.md", "Authored platform policy");
-        var overlay = ReadSource(repository, commit,
-            $"environment/providers/{provider}/overlay.md", "Authored provider overlay");
-
         var targetRelativePath = $"environment/targets/{platform}/{provider}/{fileName}";
-        var target = ReadCommitted(repository, commit, targetRelativePath, "Committed target");
-        var expected = StrictUtf8.GetBytes(InstructionSections.Render(shared, policy, overlay));
+        var files = ApplyCommand.ReadCommittedFiles(repository, commit,
+            ("environment/shared/instructions.md", "Authored shared instructions"),
+            ($"environment/platforms/{platform}/policy.md", "Authored platform policy"),
+            ($"environment/providers/{provider}/overlay.md", "Authored provider overlay"),
+            (targetRelativePath, "Committed target"));
+        var target = files[3];
+        var expected = StrictUtf8.GetBytes(InstructionSections.Render(
+            StrictUtf8.GetString(files[0]), StrictUtf8.GetString(files[1]), StrictUtf8.GetString(files[2])));
         if (expected.Length > AecApplication.MaximumTextBytes)
         {
             throw new InvalidDataException($"Rendered target exceeds 1 MiB: {targetRelativePath}");
@@ -68,16 +72,7 @@ internal static class CommittedTargetValidator
             throw new InvalidOperationException("Repository HEAD changed during target validation.");
         }
 
-        return target;
-    }
-
-    private static string ReadSource(
-        string repository,
-        string commit,
-        string relativePath,
-        string label)
-    {
-        return StrictUtf8.GetString(ReadCommitted(repository, commit, relativePath, label));
+        return (commit, target);
     }
 
     private static string TargetFileName(string provider) => provider switch
@@ -86,19 +81,4 @@ internal static class CommittedTargetValidator
         AecIdentifiers.Copilot => "copilot-instructions.md",
         _ => throw new ArgumentException($"Unsupported target provider: {provider}")
     };
-
-    private static byte[] ReadCommitted(
-        string repository,
-        string commit,
-        string relativePath,
-        string label)
-    {
-        var directory = Path.GetDirectoryName(Path.Combine(repository, relativePath))
-            ?? throw new InvalidOperationException($"{label} has no parent directory.");
-        AecApplication.EnsureNoLinksInExistingPath(directory, $"{label} path");
-
-        // This shared Git reader checks the HEAD blob, staged and unstaged diffs,
-        // and raw working bytes so Git filters cannot hide an uncommitted edit.
-        return ApplyCommand.ReadCommittedFile(repository, commit, relativePath, label);
-    }
 }

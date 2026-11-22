@@ -40,8 +40,7 @@ internal sealed record PortableRuntimeSnapshot(
             repository, providerHome, fileName, "Provider runtime target");
 
         var platform = RenderCommand.CurrentPlatform();
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
-        var target = CommittedTargetValidator.Read(repository, platform, provider);
+        var (commit, target) = CommittedTargetValidator.ReadWithCommit(repository, platform, provider);
         var runtimePath = Path.Combine(providerHome, fileName);
         var runtime = AecApplication.ReadOptionalTextFile(
             runtimePath, "Provider runtime instructions");
@@ -52,12 +51,15 @@ internal sealed record PortableRuntimeSnapshot(
                 "Repository HEAD changed during portable runtime preflight.");
         }
 
-        if (runtime is null)
-        {
-            return new PortableRuntimeSnapshot(
-                repository, platform, provider, runtimePath, commit, target, null, null);
-        }
+        var blockVersion = runtime is null
+            ? null
+            : ValidateRuntimeBinding(repository, platform, provider, runtime);
+        return new PortableRuntimeSnapshot(
+            repository, platform, provider, runtimePath, commit, target, runtime, blockVersion);
+    }
 
+    internal static int? ValidateRuntimeBinding(string repository, string platform, string provider, byte[] runtime)
+    {
         var codexBinding = provider == AecIdentifiers.Codex
             ? AecInstructionBlock.ReadRepositoryBinding(runtime)
             : null;
@@ -82,14 +84,6 @@ internal sealed record PortableRuntimeSnapshot(
                 "Run ordinary provider init first.");
         }
 
-        return new PortableRuntimeSnapshot(
-            repository,
-            platform,
-            provider,
-            runtimePath,
-            commit,
-            target,
-            runtime,
-            codexBinding?.Version ?? copilotBinding?.Version);
+        return codexBinding?.Version ?? copilotBinding?.Version;
     }
 }

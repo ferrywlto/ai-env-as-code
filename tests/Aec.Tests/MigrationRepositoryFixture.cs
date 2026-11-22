@@ -19,7 +19,8 @@ internal sealed class MigrationRepositoryFixture : IDisposable
         var copilot = Path.Combine(Root, "copilot-home");
         Directory.CreateDirectory(codex);
         Directory.CreateDirectory(copilot);
-        SeedInitializedCodexRepository(codex);
+        TestGit.SeedInitializedCodexRepository(Repository, codex,
+            "Personal instructions.\n", "personality = \"friendly\"\n");
         // Empty Git templates intentionally omit info; cases below create
         // local attributes/ignore rules there without assuming Git made it.
         Directory.CreateDirectory(Path.Combine(Repository, ".git", "info"));
@@ -69,27 +70,6 @@ internal sealed class MigrationRepositoryFixture : IDisposable
         _ = GitProcess.RunRequired(writer, "Writer staging failed", "add", "--all");
         _ = GitProcess.RunRequired(writer, "Writer commit failed", "commit", "--quiet", "-m", "Remote revision");
         _ = GitProcess.RunRequired(writer, "Writer push failed", "push", "--quiet", "shared");
-    }
-
-    private void SeedInitializedCodexRepository(string codexHome)
-    {
-        const string instructions = "Personal instructions.\n";
-        const string config = "personality = \"friendly\"\n";
-        Directory.CreateDirectory(Repository);
-        Git("init", "--quiet", "--template=", "--initial-branch=main");
-        Git("config", "--local", "core.autocrlf", "false");
-        Write(AecApplication.SourceRelativePath, instructions);
-        Write(AecApplication.ConfigSourceRelativePath, config);
-        Git("add", "--", AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath);
-        Git("commit", "--quiet", "-m", "Backup Codex environment");
-
-        // The second commit changes only the managed block. Migration verifies
-        // this history independently when it reads the repository.
-        var initialized = AecInstructionBlock.Merge(Encoding.UTF8.GetBytes(instructions), Repository);
-        File.WriteAllBytes(Path.Combine(Repository, AecApplication.SourceRelativePath), initialized);
-        Git("commit", "--quiet", "-m", "Initialize AEC instructions", "--", AecApplication.SourceRelativePath);
-        File.WriteAllBytes(Path.Combine(codexHome, "AGENTS.md"), initialized);
-        File.WriteAllText(Path.Combine(codexHome, "config.toml"), config);
     }
 
     public (MigrationPreflight Preflight, MigrationFetchPreparation Fetched, IReadOnlyList<MigrationHarness> Harnesses) Prepare()

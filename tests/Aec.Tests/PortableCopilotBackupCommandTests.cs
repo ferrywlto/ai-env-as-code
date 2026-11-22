@@ -29,6 +29,8 @@ public sealed class PortableCopilotBackupCommandTests
             Path.GetRelativePath(layout.Repository, layout.TargetPath).Replace('\\', '/')
         }.OrderBy(path => path, StringComparer.Ordinal), CommittedPaths(layout));
         Assert.Equal("Shared revision.\n", File.ReadAllText(layout.SharedSource));
+        Assert.Equal(InstructionSections.Render("Shared revision.\n", "Local paths.\n", "Provider mechanics.\n"),
+            File.ReadAllText(layout.TargetPath));
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }

@@ -107,43 +107,26 @@ public sealed class SharedEnrollmentTests
         Assert.Equal(runtimeBefore, File.ReadAllBytes(runtimePath));
     }
 
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("copilot")]
-    public void CloneEnrollmentRejectsRuntimeStillBoundToOriginalCheckout(string provider)
+    [Fact]
+    public void EnrollmentRejectsARealRuntimeBoundToAnotherCheckout()
     {
-        using var layout = new EnrollmentLayout();
-        if (provider == "copilot")
-        {
-            layout.InitializeCopilot();
-        }
+        using var layout = new EnrollmentLayout(seedHistory: false);
+        var otherCheckout = Path.Combine(Path.GetDirectoryName(layout.Repository)!, "other-data");
+        layout.WriteCodexRuntime(otherCheckout);
 
-        layout.CommitAuthoredSources(provider);
-        var pulled = Path.Combine(Path.GetDirectoryName(layout.Repository)!, "pulled-data");
-        var secondHome = Path.Combine(Path.GetDirectoryName(layout.Repository)!,
-            $"second-{provider}-home");
-        CloneWithoutConversion(layout.Repository, pulled);
-        Directory.CreateDirectory(secondHome);
-        File.Copy(provider == "codex" ? layout.CodexRuntime : layout.CopilotRuntime,
-            Path.Combine(secondHome, provider == "codex" ? "AGENTS.md" :
-                "copilot-instructions.md"));
-
-        var enrollment = provider == "codex"
-            ? TestApplication.Run("init", "--repo", pulled, "--codex-home", secondHome,
-                "--enroll-shared")
-            : TestApplication.Run("init", "--repo", pulled, "--provider=copilot",
-                "--copilot-home", secondHome, "--enroll-shared");
+        var enrollment = layout.Enroll("codex");
 
         Assert.Equal(1, enrollment.ExitCode);
         Assert.Contains("not bound to the selected AEC repository", enrollment.Error,
             StringComparison.Ordinal);
-        Assert.False(File.Exists(Path.Combine(pulled, layout.TargetRelativePath(provider))));
+        Assert.False(File.Exists(layout.TargetPath("codex")));
     }
 
     [Fact]
     public void MissingSourcesExplainTheSplitWithoutCreatingTargets()
     {
-        using var layout = new EnrollmentLayout();
+        using var layout = new EnrollmentLayout(seedHistory: false);
+        layout.WriteCodexRuntime(layout.Repository);
 
         var result = layout.Enroll("codex");
 
@@ -157,9 +140,7 @@ public sealed class SharedEnrollmentTests
     [Fact]
     public void MissingProviderRuntimeStopsWithoutEnrollment()
     {
-        using var layout = new EnrollmentLayout();
-        layout.CommitAuthoredSources("codex");
-        File.Delete(layout.CodexRuntime);
+        using var layout = new EnrollmentLayout(seedHistory: false);
 
         var result = layout.Enroll("codex");
 
@@ -213,20 +194,6 @@ public sealed class SharedEnrollmentTests
         Assert.Equal("personal target edit\n", File.ReadAllText(layout.TargetPath("codex")));
     }
 
-    [Theory]
-    [InlineData("--provider=chatgpt", "--enroll-shared", "only local Codex or Copilot")]
-    [InlineData("--force-path-change", "--enroll-shared", "cannot be combined")]
-    [InlineData("--enroll-shared", "--enroll-shared", "only once")]
-    public void RejectsUnsupportedEnrollmentArguments(string first, string second, string message)
-    {
-        using var layout = new EnrollmentLayout();
-
-        var result = TestApplication.Run("init", "--repo", layout.Repository, first, second);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains(message, result.Error, StringComparison.Ordinal);
-    }
-
     private static void CloneWithoutConversion(string source, string destination)
     {
         // Clone does not inherit source-local config. Disable conversion before
@@ -241,7 +208,7 @@ public sealed class SharedEnrollmentTests
         private readonly string root;
         private readonly string platform = RenderCommand.CurrentPlatform();
 
-        public EnrollmentLayout()
+        public EnrollmentLayout(bool seedHistory = true)
         {
             root = Path.Combine(TestTemporaryDirectory.Root,
                 "aec-enrollment-tests", Guid.NewGuid().ToString("N"));
@@ -253,13 +220,10 @@ public sealed class SharedEnrollmentTests
             SharedSource = Path.Combine(Repository, "environment", "shared", "instructions.md");
 
             Directory.CreateDirectory(CodexHome);
-            Directory.CreateDirectory(CopilotHome);
-            File.WriteAllText(CodexRuntime, "Personal Codex instructions.\n");
-            File.WriteAllText(Path.Combine(CodexHome, "config.toml"), "personality = \"none\"\n");
-            File.WriteAllText(CopilotRuntime, "Personal Copilot instructions.\n");
-
-            var init = TestApplication.Run("init", "--repo", Repository, "--codex-home", CodexHome);
-            Assert.Equal(0, init.ExitCode);
+            Directory.CreateDirectory(Repository);
+            if (seedHistory)
+                TestGit.SeedInitializedCodexRepository(Repository, CodexHome,
+                    "Personal Codex instructions.\n", "personality = \"none\"\n");
         }
 
         public string Repository { get; }
@@ -269,11 +233,19 @@ public sealed class SharedEnrollmentTests
         public string CopilotRuntime { get; }
         public string SharedSource { get; }
 
+        public void WriteCodexRuntime(string repository) =>
+            File.WriteAllBytes(CodexRuntime, AecInstructionBlock.Merge("Personal Codex instructions.\n"u8.ToArray(), repository));
+
         public void InitializeCopilot()
         {
-            var init = TestApplication.Run(
-                "init", "--repo", Repository, "--provider=copilot", "--copilot-home", CopilotHome);
-            Assert.Equal(0, init.ExitCode);
+            Directory.CreateDirectory(CopilotHome);
+            var source = Path.Combine(Repository, AecApplication.CopilotSourceRelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(source)!);
+            var content = CopilotInstructionBlock.Merge("Personal Copilot instructions.\n"u8.ToArray(), Repository);
+            File.WriteAllBytes(CopilotRuntime, content);
+            File.WriteAllBytes(source, content);
+            GitProcess.RunRequired(Repository, "Could not stage Copilot baseline", "add", "--", AecApplication.CopilotSourceRelativePath);
+            GitProcess.RunRequired(Repository, "Could not commit Copilot baseline", "commit", "--quiet", "-m", "Fixture legacy Copilot enrollment");
         }
 
         public void CommitAuthoredSources(string provider)

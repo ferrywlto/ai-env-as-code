@@ -77,35 +77,8 @@ internal static class ChatGptInitCommand
         AecApplication.EnsureRealDirectory(repository, "Repository");
         AecApplication.EnsureSourceDirectories(repository);
 
-        var insideWorkTree = RunRequired(
-            repository,
-            "Repository is not a Git work tree",
-            "rev-parse",
-            "--is-inside-work-tree").Output.Trim();
-        if (insideWorkTree != "true")
-        {
-            throw new InvalidOperationException($"Repository is not a Git work tree: {repository}");
-        }
-
-        var bare = RunRequired(
-            repository,
-            "Git could not inspect the repository",
-            "rev-parse",
-            "--is-bare-repository").Output.Trim();
-        if (bare != "false")
-        {
-            throw new InvalidOperationException($"Repository must not be bare: {repository}");
-        }
-
-        var prefix = RunRequired(
-            repository,
-            "Git could not locate the repository root",
-            "rev-parse",
-            "--show-prefix").Output;
-        if (prefix.Trim().Length != 0)
-        {
-            throw new InvalidOperationException($"init --provider=chatgpt requires the Git repository root: {repository}");
-        }
+        ApplyCommand.ValidateRepositoryRoot(
+            repository, "init --provider=chatgpt requires the Git repository root");
     }
 
     private static void PreflightProviderDirectory(string path)
@@ -177,16 +150,5 @@ internal static class ChatGptInitCommand
                 throw new IOException($"ChatGPT instruction file was not created empty: {path}");
             }
         }
-    }
-
-    private static GitResult RunRequired(
-        string repository,
-        string failureMessage,
-        params string[] arguments)
-    {
-        return GitProcess.RunRequired(
-            repository,
-            failureMessage,
-            ["--no-replace-objects", .. arguments]);
     }
 }

@@ -536,6 +536,557 @@ marker refusal and the case tagged for both migration categories.
 The full opt-in legacy group and unfiltered Release run remain
 unverified for this checkpoint.
 
+### Routine initialization and enrollment
+
+Replaced full Codex initialization with minimal worktrees or directly
+seeded history when another command is under test. Retained real Git
+for history, clone and checkout binding, and real files for runtime
+writes, collisions, and link handling. Eight Codex skill installer
+checks now call the installer directly with a scratch directory.
+Eleven argument and binding cases are in the Git-free unit group.
+The older Codex block versions remain in the in-memory merge tests.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 129 | 127 |
+| Cases that started Git | 121 | 96 |
+| Git Trace2 process starts | 17,549 | 9,024 |
+| Wall time | 349.98 s | 215.27 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. The revised filter includes the cases moved to unit classes.
+The 274-case unit group passed in 1.24 s with a failing `git` shim that
+recorded zero calls. Seven focused legacy migration cases and both
+two-checkout Git round trips passed in 60.38 s. The full routine figure
+above predates these changes.
+
+Ferry accepted the initialization and enrollment slice.
+
+### Shared target status and preview
+
+- The in-memory apply/status suite exercises block upgrades, including
+  Codex ChatGPT guidance, and missing or wrong-platform bindings.
+  The in-memory backup suite exercises malformed and unstamped blocks
+  and the source writer's missing-attribution guard.
+- Public status, apply, and backup tests cover normal checkout reads,
+  dirty targets, and refusal without writes. Direct writer tests keep
+  real Git and filesystem checks for stale reviews, changed HEAD,
+  write order, and partial updates.
+- Removed the unused pre-cutover `SharedTargetStatus` adapter.
+  The active status path uses `PortableEnvironmentStatus`.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases in `SharedTargetStatusTests` | 92 | 27 |
+| Cases that started Git | 92 | 26 |
+| Git Trace2 process starts | 5,005 | 1,807 |
+| Wall time | 88.22 s | 36.49 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. The full unit group grew from 274 to 295 cases and passed in
+1.16 s with zero calls to the failing `git` shim. All 67 focused
+CLI and committed-target boundary cases passed in 64.75 s.
+The initialization and status groups together saved 11,723 Git starts
+in focused runs. The full routine suite has not been rerun.
+
+Ferry accepted the shared target status and preview slice.
+
+### Portable backup target writer and committer
+
+The fixtures seed the reviewed runtime and authored source directly.
+Committer cases also seed the expected rendered bytes. The production
+target writer and committer still validate real enrollments, HEAD,
+runtime and source changes, rendered bytes, and the index. Tests for
+local refusals use a single enrollment. Scope and missing-enrollment
+checks keep their cross-platform fixtures.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 18 | 18 |
+| Git Trace2 process starts | 3,979 | 863 |
+| Wall time | 56.89 s | 21.28 s |
+
+Both runs used prebuilt binaries, the same filter, and the two-minute
+per-test hang guard. All 25 public Codex and Copilot backup cases
+passed in 29.21 s. All 295 unit cases passed in 1.18 s with zero calls
+to the failing `git` shim.
+
+The first three routine cleanup slices saved 14,839 Git starts across
+non-overlapping focused runs.
+
+Ferry accepted the backup target writer and committer slice.
+
+### Codex completed-checkout attachment and history
+
+Seeded the ordinary two-commit history and optional ChatGPT upgrade
+for 13 attachment, rebinding, and history-refusal cases. Missing-runtime
+fixtures start with empty homes. Clones, moves, altered commits, and
+the production CLI checks remain real. Partial-resume tests still
+exercise a CLI-generated completion followed by a second attachment.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 13 | 13 |
+| Git Trace2 process starts | 2,682 | 922 |
+| Wall time | 57.71 s | 20.97 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. The renamed divergent-runtime test replaces its original row
+in the after filter. All 295 unit cases passed in 1.17 s with zero Git
+calls. All 20 additional fresh initialization, resume, enrollment,
+ChatGPT scaffold, clone, and migration checks passed.
+
+This saves a further 1,760 Git starts after the
+initialization and enrollment checkpoint, bringing the measured
+routine slice savings to 16,599 starts. The full routine suite has
+yet to be rerun after these changes.
+
+Ferry accepted the completed-checkout attachment and history slice.
+
+### Codex partial initialization and recovery
+
+The shared fixture seeds the legacy and managed baseline commits
+directly. Legacy completion cases also seed their second commit.
+The tests retain the real CLI resume after a Git signing failure,
+history and metadata refusals, and concurrent file changes.
+An exact two-entry Git log covers the commit count and subjects.
+The check that public status refuses an unenrolled checkout stays
+with fresh initialization.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 18 | 18 |
+| Git Trace2 process starts | 1,428 | 1,176 |
+| Wall time | 20.11 s | 23.73 s |
+
+The matched runs used prebuilt binaries and the two-minute per-test
+hang guard. The 252 fewer starts bring measured routine slice savings
+to 16,851. The timing pair showed no wall-clock savings for this slice.
+All 295 unit cases passed in 1.15 s with zero Git calls. All 10 fresh
+initialization, attachment, enrollment, and migration checks passed.
+
+Ferry accepted the partial initialization and recovery slice.
+
+### Two-provider Git round trip
+
+Seeded the first checkout's committed canonical history, authored
+sources, enrolled target, and local runtime for both providers.
+The tests still render and publish a subsequent change through a real
+local bare remote. The second checkout runs explicit rebind, checks
+that status and apply leave its old HEAD and remote-tracking ref
+untouched, then fetches, fast-forwards, and applies the new target.
+Both checkouts retain their own runtime binding and local config.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 2 | 2 |
+| Git Trace2 process starts | 2,174 | 1,294 |
+| Wall time | 49.86 s | 26.34 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 295 unit cases passed in 1.17 s with zero Git calls.
+All 10 focused enrollment and apply cases passed in 25.10 s.
+The 880 fewer starts bring measured routine slice savings to 17,731.
+The full routine suite has yet to be rerun.
+
+Ferry accepted the two-provider Git round trip slice.
+
+### Fresh Codex initialization overlap
+
+The fresh checkout test verifies the default provider, absence of a
+ChatGPT scaffold, and installed skill contents. Existing in-memory
+rows verify older block replacement. A new row verifies replacement
+of a stale version-5 template with exact surrounding bytes.
+The real Git cases still verify the exact CRLF baseline bytes and
+an empty second commit for an already managed runtime.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing integration cases | 8 | 4 |
+| Git Trace2 process starts | 1,164 | 594 |
+| Wall time | 23.85 s | 13.25 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 296 unit cases passed in 1.16 s with zero Git calls.
+All eight focused configuration, attachment, and resume cases passed.
+The 570 fewer starts bring measured routine slice savings to 18,301.
+The full routine suite has yet to be rerun.
+
+Ferry accepted the fresh Codex initialization overlap slice.
+
+### Five-minute routine suite profile
+
+The prebuilt Debug run used `Category!=LegacyMigration` and the
+documented two-minute per-test hang guard. It discovered 791 cases.
+The previous completed routine baseline discovered and passed 840
+cases in 678.88 s with 38,385 Git starts.
+
+| Elapsed | Passed | Git starts |
+| --- | ---: | ---: |
+| 1 min | 433 | 3,829 |
+| 2 min | 507 | 7,689 |
+| 3 min | 613 | 11,539 |
+| 4 min | 658 | 15,411 |
+| 5 min | 763 | 19,407 |
+
+No failures or skips were reported. The runner stopped its process
+group at the five-minute cap, and a process check confirmed it had
+exited. All 28 cases without a result were in `ApplyTests`. The
+stopped run did not produce a final TRX and does not give a complete
+suite duration or Git count. The artifacts include the raw Git trace,
+discovery, console output, and results reported before the cap.
+
+Git starts attributed from Trace2 worktree paths were highest in the
+shared portable status, apply, and backup fixtures (7,120), followed
+by Codex initialization (3,813) and Copilot initialization (1,552).
+`rev-parse` accounted for 6,389 starts across the profile.
+
+Ferry accepted the five-minute routine profile and portable apply/status
+cleanup.
+
+### Portable apply and status fixtures
+
+- Four apply/status option cases now exercise the CLI parser without
+  fixtures. The real path-containment guard uses one scratch directory
+  and preserves a runtime sentinel.
+- Apply tests derive expected bytes from fixture content. The public
+  Copilot apply check also verifies unrelated checkout bytes and status.
+- Public status cases cover Codex config matching, drift and absence,
+  committed config provenance, and Copilot home selection and ignored
+  config. These replace overlapping calls to the internal status adapter.
+  Committed target and runtime write checks retain real Git.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing integration cases | 51 | 38 |
+| Cases that started Git | 51 | 37 |
+| Git Trace2 process starts | 2,421 | 1,936 |
+| Wall time | 52.67 s | 42.43 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 300 unit cases passed in 1.22 s with zero Git calls.
+All 46 portable review, writer, and committed-target boundary cases
+passed. The 485 fewer starts bring measured routine slice savings
+to 18,786. The five-minute profile predates this slice.
+
+Ferry accepted the portable apply and status fixture slice.
+
+### Legacy apply and initialization fixtures
+
+- A representative TOML table conflict still checks that neither
+  runtime file is changed. The table syntax variants and runtime lone
+  carriage returns are checked in memory. Version and filesystem
+  root comparisons also run in the unit group.
+- The early runtime containment and link refusals use scratch
+  directories. The fixtures omit missing runtime config instead of
+  creating and deleting it, and the Codex home selection test uses
+  the original fixture bytes for its expected output.
+- The shared test collection supplies Git identity and signing
+  defaults. One local config write preserves fixture line endings,
+  hook isolation, and empty global attributes. Real Git still covers
+  committed bytes, staged index state, and recovery checkpoints.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases in `ApplyTests` | 46 | 38 |
+| Cases that started Git | 42 | 36 |
+| Git Trace2 process starts | 1,183 | 837 |
+| Wall time | 21.06 s | 15.84 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 309 unit cases passed in 1.28 s with zero Git calls.
+All 17 focused portable apply, recovery, and committed-target checks
+passed. The 346 fewer starts bring measured routine slice savings
+to 19,132. The earlier five-minute profile predates both apply slices.
+
+Ferry accepted the legacy apply and initialization fixture slice.
+
+### Second five-minute routine suite profile
+
+The same prebuilt Debug selection and two-minute per-test hang guard
+discovered 783 routine cases after the apply slices.
+
+| Elapsed | Passed | Git starts |
+| --- | ---: | ---: |
+| 1 min | 404 | 1,818 |
+| 2 min | 433 | 3,449 |
+| 3 min | 466 | 5,062 |
+| 4 min | 501 | 6,641 |
+| 5 min | 521 | 8,208 |
+
+The cap stopped the runner after 300.04 s. The process group was
+confirmed gone. No failures or skips were reported, and 262 cases
+had no result, including all 38 `ApplyTests` cases. The run produced
+no final TRX. The raw trace and progress are in
+`artifacts/routine-profile-capped.0dOVmy`.
+
+The first capped run passed 763 of 791 in the same time budget.
+The unchanged 38-case `StatusTests` group made 922 Git starts in
+both runs. Its reported test durations summed to 14.26 s in the
+first run and 27.17 s in the second. The second cap recorded fewer
+starts while completing fewer cases. Full routine timing and total
+Git starts remain unverified for the current checkout.
+
+The shared portable fixtures accounted for 6,422 starts in the
+second profile. Ferry accepted the portable backup overlap slice.
+
+### Portable backup CLI, preview, and writer coverage
+
+The public CLI cases verify the exact commit, rendered target,
+unchanged runtime, and home selection. They also check both forms of
+missing runtime personality and multi-section refusal. The Codex
+preview retains the combined read-only plan and dirty committed
+config checks. Direct writer tests retain revalidation after review,
+no-change refusal, and independent branch and index guards.
+Unsafe paths use disposable directories and sentinel bytes without
+initializing Git.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 45 | 33 |
+| Cases that started Git | 45 | 30 |
+| Git Trace2 process starts | 2,679 | 1,718 |
+| Wall time | 70.46 s | 58.37 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 309 unit cases passed in 1.52 s with zero Git calls.
+All 30 portable review, target writer, and committer cases passed.
+The 961 fewer starts bring measured routine slice savings to 20,093.
+The capped routine profiles predate this slice.
+
+Ferry accepted the portable backup overlap slice.
+
+### Legacy Codex backup and initialization capture
+
+The fixtures seed committed baselines directly when setup was the
+only reason to invoke backup. The tests exercise the initializer's
+capture entry point and the shared commit helper. First and config-only
+commits retain their exact path and byte checks. Standalone legacy
+missing-config warning tests are covered by current portable CLI tests;
+initialization retains its own default-personality coverage.
+
+Interrupted backup, retry, hooks, staged blobs, replacement trees,
+and raw Git byte checks still run against real repositories. Git
+identity and signing come from the shared test collection. The
+fixture uses one local config write for hooks and line endings.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 28 | 24 |
+| Git Trace2 process starts | 1,320 | 646 |
+| Wall time | 39.74 s | 20.77 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 309 unit cases passed in 1.59 s with zero Git calls.
+All 17 focused initialization and commit cases passed. The 674 fewer
+starts bring measured routine slice savings to 20,767. The capped
+routine profiles predate this slice.
+
+Ferry accepted the legacy Codex backup fixture slice.
+
+### Codex status options, syntax, and filesystem checks
+
+Option checks and config syntax variants run in memory. The four
+early path refusals use scratch directories without Git. The real
+checkout tests still exercise leaf symlinks, size limits, committed
+config refusal, independent runtime absence, and exact CRLF drift
+without writes. Home selection and explicit-path precedence remain
+through the CLI.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases in `StatusTests` | 38 | 15 |
+| Cases that started Git | 35 | 11 |
+| Git Trace2 process starts | 922 | 267 |
+| Wall time | 27.44 s | 9.98 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 326 unit cases passed in 1.75 s with zero Git calls.
+All 16 focused portable status and config provenance cases passed.
+The 655 fewer starts bring measured routine slice savings to 21,422.
+The capped routine profiles predate this slice.
+
+Ferry accepted the Codex status options and syntax slice.
+
+### Copilot checkout attachment fixtures
+
+The first checkout's committed Codex history, canonical Copilot
+instructions, and optional portable target are seeded directly.
+The tests still clone, rebind, and refuse dirty or incorrectly bound
+checkouts through the CLI. The implicit-home conflict checks use
+local bindings and scratch directories without Git. Fresh Copilot
+initialization and repeated installation tests retain normal CLI setup.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 18 | 18 |
+| Cases that started Git | 18 | 16 |
+| Git Trace2 process starts | 1,558 | 461 |
+| Wall time | 43.74 s | 11.36 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 326 unit cases passed in 1.43 s with zero Git calls.
+All five focused enrollment and two-checkout round-trip cases passed.
+The 1,097 fewer starts bring measured routine slice savings to 22,519.
+The capped routine profiles predate this slice.
+
+Ferry accepted the Copilot checkout attachment slice.
+
+### Direct portable writer review fixtures
+
+Direct writer cases build reviewed snapshots from fixture bytes
+and the real HEAD. The writers still revalidate the checkout and
+runtime at their real write boundaries. Real preview cases retain
+committed reads and config provenance. Stale-input cases assert the
+specific diagnostic before checking the files stayed intact.
+
+| Focused Debug run | Before | After |
+| --- | ---: | ---: |
+| Passing cases | 27 | 27 |
+| Git Trace2 process starts | 1,807 | 1,273 |
+| Wall time | 55.39 s | 44.55 s |
+
+Both runs used prebuilt binaries and the two-minute per-test hang
+guard. All 326 unit cases passed in 1.64 s with zero Git calls.
+All 30 portable review, target writer, and committer cases passed.
+The 534 fewer starts bring measured routine slice savings to 23,053.
+The capped routine profiles predate this slice.
+
+Ferry accepted the direct portable writer review fixture slice.
+
+### Grouped routine verification
+
+The prebuilt Debug selection uses `Category!=LegacyMigration` and
+the two-minute per-test hang guard. Each group runs alone with a
+five-minute total cap. Discovery found 761 cases across six disjoint
+groups. Exact test names, including theory rows, are compared against
+each group's TRX and the complete routine discovery list.
+
+| Group | Passed | Git starts | Wall time |
+| --- | ---: | ---: | ---: |
+| Unit | 326 | 0 | 1.68 s |
+| Codex initialization | 80 | 4,450 | 92.87 s |
+| Provider lifecycle | 49 | 2,742 | 82.23 s |
+| Portable apply and status | 65 | 3,209 | 106.37 s |
+| Portable backup | 51 | 2,581 | 87.79 s |
+| Other integration | 190 | 2,327 | 83.95 s |
+| Total | 761 | 15,309 | 454.89 s |
+
+All 761 cases passed, with zero failures or skips. Every TRX matched
+its group discovery, and the result union matched routine discovery.
+All groups completed below their cap. The logs, discovery lists, TRX
+files and Git traces are in `artifacts/routine-grouped.XZFYwv`.
+
+The prior completed routine baseline passed 840 cases with
+38,385 Git starts. The revised routine selection used 23,076 fewer
+starts (60.1%). The grouped wall times add to 7m 35s. The current
+single-invocation routine duration remains unverified.
+
+By TRX test windows, the largest remaining class was `InitTests`
+with 3,874 starts, then `GitRoundTripTests` with 1,282 and
+`SharedTargetStatusTests` with 1,271.
+
+### Five-minute routine regression
+
+The three follow-up changes preserve Git checks at repository boundaries
+and reuse data within a command while it is still current.
+
+| Change | Focused coverage | Git starts in the same test windows |
+| --- | ---: | ---: |
+| Batch the four committed portable inputs, including staged changes, raw bytes, and file modes | 128 passed | 4,501 → 3,330 |
+| Reuse validated input snapshots and the first-parent history pinned to the inspected commit | 108 passed | 7,796 → 6,134 across batching and revalidation |
+| Trim repeated reads from the Codex and Copilot transport scenarios | 2 passed | 742 → 620 after revalidation |
+
+The transport cases still exercise push, clone, fetch, fast-forward, and
+apply for both providers. Status verifies the pre-fetch and post-merge
+states. The final checks compare local runtime and committed content.
+
+The single prebuilt Debug run selected `Category!=LegacyMigration`
+with a two-minute per-test hang guard and a five-minute process cap.
+All 761 cases passed in 294.01 s, with zero failures or skips. The TRX
+matched discovery case for case. The run recorded 12,118 Git starts,
+3,191 fewer (20.8%) than the previous six-group run of the same 761
+cases. The prior grouped wall times totalled 454.89 s. Build and
+discovery were outside the timed test run. Logs, minute checkpoints,
+TRX, and Git trace are in `artifacts/five-minute-acceptance.MHRZ09`.
+
+### Batched Git metadata and initialization inputs
+
+Apply, backup, and ChatGPT init use one Git query for worktree, bare,
+and root metadata. Backup resolves seven operation paths in one query
+and checks each sentinel in the original order. The batch falls back
+to individual lookups if output cannot be mapped to the requested paths.
+All 111 focused cases passed. Across the 110 matching cases, Git starts
+fell from 2,754 to 2,291. The new case checks that an active sequencer
+blocks backup before a write.
+
+Invalid initialization arguments and provider-home selection have
+fixture-free unit coverage. Conflicting implicit Codex and Copilot
+bindings still use runtime instruction files, with no Git fixture.
+Successful initialization, commit and recovery checks retain Git.
+All 340 unit cases passed in 1.28 s with zero Git starts.
+
+The single prebuilt Debug routine run (`Category!=LegacyMigration`)
+passed all 762 discovered cases in 207.80 s, with zero failures or
+skips. The TRX matched discovery. Git starts fell from 12,118 to
+10,092 (2,026 fewer, 16.7%). The previous routine run took 294.01 s.
+The new run finished 92 starts above 10,000. Logs, TRX, and Git trace
+are in `artifacts/five-minute-metadata-routine.SFGobM`.
+
+### Reuse the pinned commit in portable runtime checks
+
+The previous trace showed 203 portable target reads with an adjacent
+pair of initial HEAD reads. The target validator now returns the exact
+commit alongside the validated target bytes. The runtime snapshot
+reuses that commit. Both HEAD checks after reading target and runtime
+content remain in place.
+
+All 66 focused cases passed in 35.43 s, including stale HEAD refusal
+and a check that each provider's target bytes are returned with their
+exact commit. Git starts within those same test cases fell from
+1,844 to 1,744.
+
+The capped prebuilt Debug routine run passed the same 762 exact cases
+in 224.35 s, with zero failures or skips. The Trace2 count fell from
+10,092 to 9,904, below the 10,000-start target. All 188 fewer starts
+were `rev-parse` queries for `HEAD^{commit}`. The run stayed below
+five minutes and took 16.55 s longer than the previous run. Evidence
+is in `artifacts/five-minute-pinned-routine.dfMrIu`.
+
+### Consolidate initialization fixtures
+
+The 762-case baseline had 302 Git-using cases. Those cases averaged
+32.8 Git starts each. The other 460 cases recorded zero. The three
+provider initialization classes accounted for 3,485 starts and
+78.68 s of cumulative test time.
+
+- Keep real fresh initialization for both a missing target and an
+  existing empty target. The existing-target fixture also verifies
+  exact CRLF and whitespace preservation and managed config capture.
+- Check baseline preservation and refusal to enroll missing personality
+  in one unsupported-block fixture. Keep clean and failed-commit
+  recovery scenarios for both initialization history formats.
+- Seed the recognized two-commit Codex history for ChatGPT init tests.
+  Verify provider-first option order, unchanged runtime, and preservation
+  of staged, unstaged, and untracked content.
+- Compare exact runtime bytes in both checkout attachment tests.
+  Dedicated status cases and the transport round trips retain public
+  status checks for both providers.
+
+The revised selection passed all 96 cases. Compared with the previous
+100 cases from the same classes, Git starts in test windows fell from
+3,485 to 2,944. Cumulative case time fell from 78.68 s to 69.93 s.
+Evidence is in `artifacts/five-minute-init-fixtures-focused.QFMyt1`.
+
+The capped prebuilt Debug routine run (`Category!=LegacyMigration`)
+passed all 758 discovered cases in 200.98 s, with zero failures or
+skips. The TRX matched discovery. Compared with the previous routine
+run, wall time fell by 23.37 s (10.4%) and Git starts fell from 9,904
+to 9,364. The consolidated initialization classes accounted for 15.90 s
+of the observed decrease in cumulative case time. In the new run,
+298 cases started Git and 460 did not. Evidence is in
+`artifacts/five-minute-init-fixtures-routine.iIu1Wc`.
+
 ## Portable integration test cleanup
 
 [Ticket #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) was accepted
@@ -546,7 +1097,7 @@ the real-Git refusal for a Copilot v1 runtime without a target digest.
 | Removed preview cases | Retained coverage |
 | --- | --- |
 | Unchanged runtime | `PortableBackupAttributionTests.UnchangedRuntimeProducesNoProposal` and `PortableCopilotBackupWriterTests.NoChangeDoesNotCreateAnEmptyCommit`, which now also checks the reviewed provider, HEAD, no proposal, and unchanged runtime bytes |
-| Shared, platform, and provider edits | `PortableBackupAttributionTests.OneEditedSectionProposesItsAuthoredSource` and `SharedTargetStatusTests.BackupAttributionPreviewIdentifiesOneAuthoredSection` retain the three paths, proposed bytes, and proof the preview leaves the checkout and runtime unchanged |
+| Shared, platform, and provider edits | `PortableBackupAttributionTests.OneEditedSectionProposesItsAuthoredSource` covers all six path and byte combinations. `SharedTargetStatusTests.BackupAttributionPreviewIdentifiesOneAuthoredSection` checks that the preview leaves the checkout and runtime unchanged for each provider. |
 | Multiple section edits | `PortableBackupAttributionTests.EditsToMultipleSectionsAreRejected` and `PortableCopilotBackupCommandTests.MultipleEditedSectionsStopWithoutCommit`, which now also checks unchanged runtime bytes |
 
 Measured the same `FullyQualifiedName~PortableCopilotBackup` filter before
@@ -579,10 +1130,10 @@ tests in 52.70 seconds. Ferry accepted the Git setup slice on 19 November 2026.
 
 | Original cases | Change | Retained coverage |
 | --- | --- | --- |
-| `SharedTargetStatusTests.ApplyPreviewReportsRuntimeEditsWithoutWriting` | Retired one overlapping case | `PortableApplyStatusDecisionTests.ApplyAndStatusCompareExactInstructionBytes` checks the replacement decision and exact desired bytes. `ApplyPreviewWouldUpgradeOnlyTheLocalBlock` checks a changed preview leaves runtime and checkout intact. |
-| `PortableEnvironmentStatusTests.InstructionDriftIsDifferent` | Retired two overlapping cases | The apply/status unit suite checks drift for both providers. `StatusTests.ReportsDifferentForDifferentFiles`, `StatusDoesNotChangeSourceOrTargetContent`, and `PortableCopilotStatusCommandTests.ReportsRuntimeDriftWithoutWrites` cover both CLI paths, exit codes, and file preservation. |
-| `PortableEnvironmentStatusTests.UnmanagedCodexConfigValuesDoNotCountAsDrift` | Retired one overlapping case | `PortableEnvironmentStatusTests.MatchingManagedRuntimeIsInSyncWithoutWrites` exercises unmanaged model settings, exact config bytes, and unchanged HEAD. |
-| Seven `StatusTests` cases from `AcceptsAQuotedManagedKey` through `IgnoresAnUnrelatedLiteralKeyContainingABackslash` | Moved seven cases to `CodexRuntimeConfigParsingTests` with direct TOML bytes | Includes both key escape forms, multiline string and nested array handling, decoded values, ambiguous multiline values, and literal keys. `StatusTests.ReportsInSyncForEqualFiles` and `FailsWhenRuntimeConfigDeclaresPersonalityTwice` retain the representative CLI success and refusal. |
+| `SharedTargetStatusTests.ApplyPreviewReportsRuntimeEditsWithoutWriting` | Retired one overlapping case | `PortableApplyStatusDecisionTests.ApplyAndStatusCompareExactInstructionBytes` checks the replacement decision and exact desired bytes. `LegacyRuntimeIsDifferentAndUpgradesToThePortableBlock` covers supported older blocks, and the focused read-only apply previews cover unchanged checkout and runtime bytes. |
+| `PortableEnvironmentStatusTests.InstructionDriftIsDifferent` | Retired two overlapping cases | The apply/status unit suite checks drift for both providers. `StatusTests.ComparesExactBytesWithoutNormalizingLineEndings` and `PortableCopilotStatusCommandTests.ReportsRuntimeDriftWithoutWrites` cover both CLI paths, exit codes, and file preservation. |
+| `PortableEnvironmentStatusTests.UnmanagedCodexConfigValuesDoNotCountAsDrift` | Retired one overlapping case | `PortableCodexStatusCommandTests.ReportsConfigStatusWithoutWriting` exercises unmanaged model settings, exact config bytes, and unchanged HEAD through the CLI. |
+| Seven `StatusTests` cases from `AcceptsAQuotedManagedKey` through `IgnoresAnUnrelatedLiteralKeyContainingABackslash` | Moved seven cases to `CodexRuntimeConfigParsingTests` with direct TOML bytes | Includes both key escape forms, multiline string and nested array handling, decoded values, ambiguous multiline values, and literal keys. `StatusTests.ReportsInSyncForEqualFiles` and `PortableCodexStatusCommandTests.InvalidConfigStopsEvenWhenRuntimeInstructionsAreMissing` retain the representative CLI success and refusal. |
 
 Measured the same case filter before and after on macOS ARM64 with a prior
 Debug build, `--no-build --no-restore`, TRX, Git Trace2, and identical workspace

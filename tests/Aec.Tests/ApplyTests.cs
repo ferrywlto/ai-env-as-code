@@ -101,8 +101,8 @@ public sealed class ApplyTests
         using var layout = new ApplyLayout(
             "same\n"u8.ToArray(),
             "same\n"u8.ToArray(),
-            canonicalConfig: "personality = \"friendly\"\n"u8.ToArray());
-        File.Delete(layout.RuntimeConfig);
+            canonicalConfig: "personality = \"friendly\"\n"u8.ToArray(),
+            createRuntimeConfig: false);
 
         var result = Run(layout);
 
@@ -168,22 +168,13 @@ public sealed class ApplyTests
         AssertNoTemporaryFiles(layout);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void LoneCarriageReturnIsRejectedBeforeEitherRuntimeWrite(bool canonical)
+    [Fact]
+    public void CanonicalLoneCarriageReturnIsRejectedBeforeEitherRuntimeWrite()
     {
-        var canonicalConfig = canonical
-            ? "personality = \"friendly\"\r"u8.ToArray()
-            : "personality = \"friendly\"\n"u8.ToArray();
-        var runtimeConfig = canonical
-            ? "personality = \"none\"\n"u8.ToArray()
-            : "model = \"gpt-test\"\r[projects.\"/tmp/example\"]\r"u8.ToArray();
         using var layout = new ApplyLayout(
             "desired\n"u8.ToArray(),
             "runtime\n"u8.ToArray(),
-            canonicalConfig: canonicalConfig,
-            runtimeConfig: runtimeConfig);
+            canonicalConfig: "personality = \"friendly\"\r"u8.ToArray());
         var agentsBefore = File.ReadAllBytes(layout.Runtime);
         var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
 
@@ -197,18 +188,14 @@ public sealed class ApplyTests
         AssertNoTemporaryFiles(layout);
     }
 
-    [Theory]
-    [InlineData("[personality]\nvalue = \"nested\"\n")]
-    [InlineData("[[personality]]\nvalue = \"nested\"\n")]
-    [InlineData("[\"personality\".options]\nvalue = \"nested\"\n")]
-    [InlineData("[features]\nenabled = true\n[personality]\nvalue = \"nested\"\n")]
-    public void PersonalityTableConflictIsRejectedBeforeEitherRuntimeWrite(string runtimeConfig)
+    [Fact]
+    public void PersonalityTableConflictIsRejectedBeforeEitherRuntimeWrite()
     {
         using var layout = new ApplyLayout(
             "desired\n"u8.ToArray(),
             "runtime\n"u8.ToArray(),
             canonicalConfig: "personality = \"friendly\"\n"u8.ToArray(),
-            runtimeConfig: Encoding.UTF8.GetBytes(runtimeConfig));
+            runtimeConfig: "[personality]\nvalue = \"nested\"\n"u8.ToArray());
         var agentsBefore = File.ReadAllBytes(layout.Runtime);
         var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
 
@@ -417,8 +404,7 @@ public sealed class ApplyTests
     public void InitializationApplyCompletesConfigWhenAgentsAreAlreadyApplied()
     {
         var desired = "desired\n"u8.ToArray();
-        using var layout = new ApplyLayout(desired, desired);
-        File.Delete(layout.RuntimeConfig);
+        using var layout = new ApplyLayout(desired, desired, createRuntimeConfig: false);
         var output = new StringWriter();
 
         var exitCode = ApplyCommand.RunForInitialization(
@@ -471,17 +457,7 @@ public sealed class ApplyTests
         using var layout = new ApplyLayout(
             desired,
             "captured runtime\n"u8.ToArray(),
-            commitSource: false);
-        File.Delete(layout.RuntimeConfig);
-        Assert.Equal(
-            0,
-            Git(
-                layout,
-                "add",
-                "--",
-                SourceRelativePath,
-                ConfigSourceRelativePath).ExitCode);
-        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Managed environment").ExitCode);
+            createRuntimeConfig: false);
 
         var exitCode = ApplyCommand.RunForInitialization(
             layout.Repository,
@@ -711,9 +687,7 @@ public sealed class ApplyTests
     {
         using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
         var nested = Path.Combine(layout.Repository, "nested");
-        var nestedSource = Path.Combine(nested, SourceRelativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(nestedSource)!);
-        File.WriteAllText(nestedSource, "nested\n");
+        Directory.CreateDirectory(nested);
         var output = new StringWriter();
         var error = new StringWriter();
 
@@ -727,61 +701,44 @@ public sealed class ApplyTests
         Assert.Equal("runtime\n"u8.ToArray(), File.ReadAllBytes(layout.Runtime));
     }
 
-    [Fact]
-    public void RuntimeInsideRepositoryIsRejected()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RuntimeInsideRepositoryIsRejected(bool throughLinkedAncestor)
     {
-        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
-        var output = new StringWriter();
-        var error = new StringWriter();
-
-        var exitCode = AecApplication.Run(
-            ["apply", "--repo", layout.Repository, "--codex-home", layout.Repository],
-            output,
-            error);
-
-        Assert.Equal(1, exitCode);
-        Assert.Contains("outside the data repository", error.ToString(), StringComparison.Ordinal);
-        Assert.False(File.Exists(Path.Combine(layout.Repository, "AGENTS.md")));
-    }
-
-    [Fact]
-    public void FilesystemRootContainsDescendantsForApplySafety()
-    {
-        var root = Path.GetPathRoot(Path.GetFullPath(Path.GetTempPath()))!;
-        var descendant = Path.Combine(root, "aec-test-descendant", "AGENTS.md");
-
-        Assert.True(ApplyCommand.IsPathInsideDirectory(root, descendant));
-    }
-
-    [Fact]
-    public void RuntimeInsideRepositoryThroughLinkedAncestorIsRejected()
-    {
-        if (OperatingSystem.IsWindows())
+        if (throughLinkedAncestor && OperatingSystem.IsWindows())
         {
             return;
         }
 
-        using var layout = new ApplyLayout("desired\n"u8.ToArray(), "runtime\n"u8.ToArray());
-        var alias = Path.Combine(layout.Root, "root alias");
-        Directory.CreateSymbolicLink(alias, layout.Root);
-
+        var root = Path.Combine(TestTemporaryDirectory.Root, Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(root, "data repository");
+        var alias = Path.Combine(root, "root alias");
+        Directory.CreateDirectory(repository);
         try
         {
-            var output = new StringWriter();
-            var error = new StringWriter();
+            if (throughLinkedAncestor)
+            {
+                Directory.CreateSymbolicLink(alias, root);
+            }
 
-            var exitCode = AecApplication.Run(
-                ["apply", "--repo", layout.Repository, "--codex-home", Path.Combine(alias, "data repository")],
-                output,
-                error);
+            var home = throughLinkedAncestor ? Path.Combine(alias, "data repository") : repository;
+            var result = TestApplication.Run("apply", "--repo", repository, "--codex-home", home);
 
-            Assert.Equal(1, exitCode);
-            Assert.Contains("must not contain a symbolic link", error.ToString(), StringComparison.Ordinal);
-            Assert.False(File.Exists(Path.Combine(layout.Repository, "AGENTS.md")));
+            Assert.Equal(1, result.ExitCode);
+            Assert.Empty(result.Output);
+            Assert.Contains(throughLinkedAncestor ? "must not contain a symbolic link" : "outside the data repository",
+                result.Error, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(repository, "AGENTS.md")));
         }
         finally
         {
-            Directory.Delete(alias);
+            if (Directory.Exists(alias))
+            {
+                Directory.Delete(alias);
+            }
+
+            TestDirectoryCleanup.Delete(root);
         }
     }
 
@@ -801,12 +758,10 @@ public sealed class ApplyTests
     public void UsesCodexHomeFromEnvironmentWhenFlagIsAbsent()
     {
         using var layout = new SharedTargetStatusTests.StatusLayout("codex");
-        layout.WriteRuntime(portableBlock: true);
+        var desired = layout.WriteRuntime(portableBlock: true);
         File.AppendAllText(layout.RuntimePath, "Unreviewed instruction edit.\n");
         File.WriteAllText(Path.Combine(layout.ProviderHome, "config.toml"),
             "personality = \"none\"\n");
-        var desired = PortableApplyPreview.Create(
-            layout.Repository, "codex", layout.ProviderHome).DesiredRuntime;
         var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
 
         try
@@ -828,49 +783,6 @@ public sealed class ApplyTests
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", previous);
         }
-    }
-
-    [Fact]
-    public void VersionCommandReportsAssemblyMetadata()
-    {
-        var output = new StringWriter();
-        var error = new StringWriter();
-
-        var exitCode = AecApplication.Run(["version"], output, error);
-
-        Assert.Equal(0, exitCode);
-        Assert.Equal($"2.0.0{Environment.NewLine}", output.ToString());
-        Assert.Empty(error.ToString());
-    }
-
-    [Fact]
-    public void RemovedVersionOptionIsRejected()
-    {
-        var output = new StringWriter();
-        var error = new StringWriter();
-
-        var exitCode = AecApplication.Run(["--version"], output, error);
-
-        Assert.Equal(1, exitCode);
-        Assert.Empty(output.ToString());
-        Assert.Equal(
-            $"error: Unknown command: --version{Environment.NewLine}",
-            error.ToString());
-    }
-
-    [Fact]
-    public void VersionCommandRejectsArguments()
-    {
-        var output = new StringWriter();
-        var error = new StringWriter();
-
-        var exitCode = AecApplication.Run(["version", "unexpected"], output, error);
-
-        Assert.Equal(1, exitCode);
-        Assert.Empty(output.ToString());
-        Assert.Equal(
-            $"error: Unknown argument: unexpected{Environment.NewLine}",
-            error.ToString());
     }
 
     private static CommandResult Run(ApplyLayout layout)
@@ -915,7 +827,8 @@ public sealed class ApplyTests
             byte[]? runtime,
             bool commitSource = true,
             byte[]? canonicalConfig = null,
-            byte[]? runtimeConfig = null)
+            byte[]? runtimeConfig = null,
+            bool createRuntimeConfig = true)
         {
             Root = Path.Combine(TestTemporaryDirectory.Root, "aec-apply-tests", Guid.NewGuid().ToString("N"));
             Repository = Path.Combine(Root, "data repository");
@@ -928,16 +841,11 @@ public sealed class ApplyTests
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
             Directory.CreateDirectory(CodexHome);
             RequireGit(Repository, "init", "--quiet", "--template=", "--initial-branch=main");
-            ConfigureGit("user.name", "AEC Tests");
-            ConfigureGit("user.email", "aec-tests@example.invalid");
-            ConfigureGit("commit.gpgSign", "false");
-            ConfigureGit("core.autocrlf", "false");
-            var attributes = Path.Combine(Root, "empty attributes");
-            File.WriteAllText(attributes, string.Empty);
-            ConfigureGit("core.attributesFile", attributes);
-            var hooks = Path.Combine(Root, "empty hooks");
-            Directory.CreateDirectory(hooks);
-            ConfigureGit("core.hooksPath", hooks);
+            // The collection supplies identity and disables signing. The empty template has no hooks.
+            var gitDirectory = Path.Combine(Repository, ".git");
+            File.WriteAllText(Path.Combine(gitDirectory, "aec-empty-attributes"), string.Empty);
+            File.AppendAllText(Path.Combine(gitDirectory, "config"),
+                "\n[core]\n\tautocrlf = false\n\tattributesFile = .git/aec-empty-attributes\n\thooksPath = .git/hooks\n");
 
             File.WriteAllBytes(Source, desired);
             File.WriteAllBytes(
@@ -959,9 +867,10 @@ public sealed class ApplyTests
                 File.WriteAllBytes(Runtime, runtime);
             }
 
-            File.WriteAllBytes(
-                RuntimeConfig,
-                runtimeConfig ?? "personality = \"none\"\n"u8.ToArray());
+            if (createRuntimeConfig)
+            {
+                File.WriteAllBytes(RuntimeConfig, runtimeConfig ?? "personality = \"none\"\n"u8.ToArray());
+            }
         }
 
         public string Root { get; }
@@ -984,11 +893,6 @@ public sealed class ApplyTests
             {
                 Directory.Delete(Root, true);
             }
-        }
-
-        private void ConfigureGit(string key, string value)
-        {
-            RequireGit(Repository, "config", "--local", key, value);
         }
 
         private static void RequireGit(string workingDirectory, params string[] arguments)

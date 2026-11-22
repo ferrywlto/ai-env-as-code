@@ -27,12 +27,13 @@ internal static class InitCommand
         var runtimePath = Path.Combine(codexHome, "AGENTS.md");
         EnsureGitIsAvailable();
 
-        if (!isFreshTarget && HasCompletedInitializationHistory(directoryPath))
+        var history = isFreshTarget ? null : FindCompletedInitializationHistory(directoryPath);
+        if (history is not null)
         {
             CompletedSnapshot completed;
             try
             {
-                completed = LoadCompletedRepository(directoryPath);
+                completed = LoadCompletedRepository(directoryPath, history: history);
             }
             catch (Exception exception)
             {
@@ -451,7 +452,8 @@ internal static class InitCommand
 
     private static CompletedSnapshot LoadCompletedRepository(
         string repository,
-        string? allowedEnrollmentTarget = null)
+        string? allowedEnrollmentTarget = null,
+        InitializationHistory? history = null)
     {
         AecApplication.EnsureRealDirectory(repository, "Repository");
         var gitDirectory = Path.Combine(repository, ".git");
@@ -481,8 +483,11 @@ internal static class InitCommand
         }
 
         var commit = ApplyCommand.ResolveHeadCommit(repository);
-        var content = ApplyCommand.ReadCommittedSource(repository, commit);
-        var config = ApplyCommand.ReadCommittedConfig(repository, commit);
+        var files = ApplyCommand.ReadCommittedFiles(repository, commit,
+            (AecApplication.SourceRelativePath, "Canonical source"),
+            (AecApplication.ConfigSourceRelativePath, "Canonical config"));
+        var content = files[0];
+        var config = files[1];
         _ = CodexPersonalityConfig.ReadCanonical(
             config,
             Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
@@ -490,7 +495,14 @@ internal static class InitCommand
             ?? throw new InvalidDataException(
                 "Canonical instructions do not contain a supported initialized AEC block.");
 
-        ValidateInitializationHistory(repository);
+        history ??= ReadInitializationHistory(repository, required: true);
+        if (history.Commits.Length != 0 &&
+            !string.Equals(history.Commits[^1], commit, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Repository HEAD changed while completed initialization was inspected.");
+        }
+        ValidateInitializationHistory(repository, history);
 
         // Pin the inspected snapshot after all history checks so a concurrent checkout
         // cannot silently redirect the later attachment apply.
@@ -509,30 +521,40 @@ internal static class InitCommand
     {
         // Migration needs the original history proof without init's main-branch
         // or clean-worktree requirements: interrupted section edits are separate.
-        var history = ReadFirstParentHistory(repository, required: true);
-        var rootSubject = history.Length == 0 ? null : ReadCommitSubject(repository, history[0]);
-        if (rootSubject == LegacyInitializedRootSubject)
+        ValidateInitializationHistory(repository, ReadInitializationHistory(repository, required: true));
+    }
+
+    private static void ValidateInitializationHistory(string repository, InitializationHistory history)
+    {
+        if (history.RootSubject == LegacyInitializedRootSubject)
         {
-            ValidateLegacyInitializedRoot(repository, history[0]);
+            ValidateLegacyInitializedRoot(repository, history.Commits[0]);
             return;
         }
-        if (history.Length < 2 || !IsBackupRootSubject(rootSubject))
+        if (history.Commits.Length < 2 || !IsBackupRootSubject(history.RootSubject))
         {
             throw new InvalidOperationException(
                 "Repository does not contain the expected AEC initialization history.");
         }
 
-        ValidateInitializationHistory(repository, history[0], history[1]);
+        ValidateInitializationHistory(
+            repository, history.Commits[0], history.Commits[1], history.RootSubject);
     }
 
-    private static bool HasCompletedInitializationHistory(string repository)
+    private static InitializationHistory? FindCompletedInitializationHistory(string repository)
     {
-        var history = ReadFirstParentHistory(repository, required: false);
-        if (history.Length == 0) return false;
+        var history = ReadInitializationHistory(repository, required: false);
+        return history.RootSubject == LegacyInitializedRootSubject ||
+            (history.Commits.Length >= 2 && IsBackupRootSubject(history.RootSubject))
+            ? history
+            : null;
+    }
 
-        var rootSubject = ReadCommitSubject(repository, history[0]);
-        return rootSubject == LegacyInitializedRootSubject ||
-            (history.Length >= 2 && IsBackupRootSubject(rootSubject));
+    private static InitializationHistory ReadInitializationHistory(string repository, bool required)
+    {
+        var commits = ReadFirstParentHistory(repository, required);
+        var subject = commits.Length == 0 ? null : ReadCommitSubject(repository, commits[0]);
+        return new InitializationHistory(commits, subject);
     }
 
     private static bool IsBackupRootSubject(string? subject) =>
@@ -604,7 +626,8 @@ internal static class InitCommand
     private static void ValidateInitializationHistory(
         string repository,
         string baselineCommit,
-        string initializationCommit)
+        string initializationCommit,
+        string? baselineSubject)
     {
         var baselineObject = GitProcess.RunRequiredBytes(
             repository,
@@ -614,7 +637,6 @@ internal static class InitCommand
             "commit",
             baselineCommit);
         EnsureRootCommit(baselineObject);
-        var baselineSubject = ReadCommitSubject(repository, baselineCommit);
         var baselineFormat = baselineSubject switch
         {
             BackupCommand.CommitMessage => BaselineFormat.LegacyAgentsOnly,
@@ -1398,6 +1420,8 @@ internal static class InitCommand
         byte[] Content,
         byte[] Config,
         AecInstructionBlock.RepositoryBinding Binding);
+
+    private sealed record InitializationHistory(string[] Commits, string? RootSubject);
 
     private sealed record GitTreeEntry(string ObjectId);
 

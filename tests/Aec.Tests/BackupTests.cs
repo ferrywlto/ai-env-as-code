@@ -18,10 +18,11 @@ public sealed class LegacyBackupCommandTests
         using var layout = new BackupLayout("runtime\n", runtimeConfig);
         var runtimeConfigBefore = File.ReadAllBytes(layout.RuntimeConfig);
 
-        var result = Run(layout);
+        var result = Run(layout, CodexPersonality.Friendly);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
+        var head = Git(layout, "rev-parse", "--verify", "HEAD").Output.Trim();
+        Assert.Equal($"committed {head}{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
         Assert.Equal("runtime\n", File.ReadAllText(layout.Source));
         Assert.Equal("personality = \"friendly\"\n", File.ReadAllText(layout.ConfigSource));
@@ -41,70 +42,11 @@ public sealed class LegacyBackupCommandTests
     }
 
     [Fact]
-    public void MissingRuntimePersonalityWarnsAndStopsWithoutRepositoryMutation()
-    {
-        using var layout = new BackupLayout("runtime\n", "model = \"gpt-test\"\n");
-        var sourceBefore = File.ReadAllBytes(layout.Source);
-
-        var result = Run(layout);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
-        Assert.Contains("personality", result.Error, StringComparison.Ordinal);
-        Assert.Contains("stopped", result.Error, StringComparison.Ordinal);
-        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
-        Assert.False(File.Exists(layout.ConfigSource));
-        Assert.NotEqual(0, Git(layout, "rev-parse", "--verify", "HEAD").ExitCode);
-        Assert.Equal(string.Empty, Git(layout, "diff", "--cached", "--name-only").Output);
-    }
-
-    [Fact]
-    public void MissingRuntimeConfigWarnsAndStopsWithoutRepositoryMutation()
-    {
-        using var layout = new BackupLayout("runtime\n", runtimeConfig: null);
-        var sourceBefore = File.ReadAllBytes(layout.Source);
-
-        var result = Run(layout);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("warning:", result.Error, StringComparison.Ordinal);
-        Assert.Contains("personality", result.Error, StringComparison.Ordinal);
-        Assert.Contains("stopped", result.Error, StringComparison.Ordinal);
-        Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
-        Assert.False(File.Exists(layout.ConfigSource));
-        Assert.NotEqual(0, Git(layout, "rev-parse", "--verify", "HEAD").ExitCode);
-        Assert.Equal(string.Empty, Git(layout, "diff", "--cached", "--name-only").Output);
-    }
-
-    [Fact]
-    public void ConfigOnlyChangeCreatesACommitForOnlyCanonicalConfig()
-    {
-        using var layout = new BackupLayout("same\n");
-        Assert.Equal(0, Run(layout).ExitCode);
-        File.WriteAllText(
-            layout.RuntimeConfig,
-            "model = \"gpt-test\"\npersonality = \"friendly\"\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.StartsWith("committed ", result.Output, StringComparison.Ordinal);
-        Assert.Empty(result.Error);
-        Assert.Equal("same\n", File.ReadAllText(layout.Source));
-        Assert.Equal("personality = \"friendly\"\n", File.ReadAllText(layout.ConfigSource));
-        Assert.Equal(
-            ConfigSourceRelativePath,
-            Git(layout, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").Output.Trim());
-        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
-    }
-
-    [Fact]
     public void ConfigUpdatePreservesCanonicalFormattingAndRuntimeBytes()
     {
         using var layout = new BackupLayout("same\n");
-        Assert.Equal(0, Run(layout).ExitCode);
+        layout.SeedBaseline("same\n");
+        var baseline = Git(layout, "rev-parse", "HEAD").Output.Trim();
         byte[] canonicalBefore =
         [
             0xEF, 0xBB, 0xBF,
@@ -120,22 +62,26 @@ public sealed class LegacyBackupCommandTests
             .. "# keep this comment\r\npersonality\t = \"pragmatic\" # keep this too\r\n"u8.ToArray()
         ];
 
-        var result = Run(layout);
+        var result = Run(layout, CodexPersonality.Pragmatic);
 
         Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"committed {Git(layout, "rev-parse", "HEAD").Output.Trim()}{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
+        Assert.Equal("same\n", File.ReadAllText(layout.Source));
         Assert.Equal(expectedCanonical, File.ReadAllBytes(layout.ConfigSource));
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.RuntimeConfig));
         Assert.Equal(
             ConfigSourceRelativePath,
             Git(layout, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").Output.Trim());
+        Assert.Equal(baseline, Git(layout, "rev-parse", "HEAD^").Output.Trim());
+        Assert.Empty(Git(layout, "status", "--porcelain").Output);
     }
 
     [Fact]
     public void InvalidRuntimeConfigStopsBeforeCapturingAgents()
     {
         using var layout = new BackupLayout("first\n");
-        Assert.Equal(0, Run(layout).ExitCode);
+        layout.SeedBaseline("first\n");
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
         File.WriteAllText(layout.Runtime, "second\n");
         File.WriteAllText(
@@ -155,7 +101,7 @@ public sealed class LegacyBackupCommandTests
     public void InvalidCanonicalConfigStopsBeforeCapturingAgents()
     {
         using var layout = new BackupLayout("first\n");
-        Assert.Equal(0, Run(layout).ExitCode);
+        layout.SeedBaseline("first\n");
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
         File.WriteAllText(layout.Runtime, "second\n");
         File.WriteAllText(
@@ -175,17 +121,15 @@ public sealed class LegacyBackupCommandTests
     public void GitFiltersThatChangeCanonicalConfigBytesStopBeforeCommit()
     {
         using var layout = new BackupLayout("same\n");
-        Assert.Equal(0, Run(layout).ExitCode);
         File.WriteAllText(
             Path.Combine(layout.Repository, ".gitattributes"),
             $"{ConfigSourceRelativePath} text eol=lf\n");
-        Assert.Equal(0, Git(layout, "add", "--", ".gitattributes").ExitCode);
-        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Test attributes").ExitCode);
+        layout.SeedBaseline("same\n", ".gitattributes");
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
         File.WriteAllBytes(layout.ConfigSource, "personality = \"friendly\"\r\n"u8.ToArray());
         File.WriteAllText(layout.RuntimeConfig, "personality = \"friendly\"\n");
 
-        var result = Run(layout);
+        var result = Run(layout, CodexPersonality.Friendly);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("filters changed", result.Error, StringComparison.Ordinal);
@@ -197,29 +141,10 @@ public sealed class LegacyBackupCommandTests
     }
 
     [Fact]
-    public void FirstBackupCommitsTheRuntimeManagedFiles()
-    {
-        using var layout = new BackupLayout("runtime\n");
-
-        var result = Run(layout);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Empty(result.Error);
-        var head = Git(layout, "rev-parse", "--verify", "HEAD").Output.Trim();
-        Assert.Equal($"committed {head}{Environment.NewLine}", result.Output);
-        Assert.Equal("runtime\n", File.ReadAllText(layout.Source));
-        Assert.Equal(
-            $"{SourceRelativePath}{Environment.NewLine}{ConfigSourceRelativePath}",
-            Git(layout, "ls-tree", "-r", "--name-only", "HEAD").Output.Trim());
-        Assert.Equal("Backup Codex environment", Git(layout, "log", "-1", "--format=%s").Output.Trim());
-        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
-    }
-
-    [Fact]
     public void ChangedRuntimeCreatesASecondCommit()
     {
         using var layout = new BackupLayout("first\n");
-        Assert.Equal(0, Run(layout).ExitCode);
+        layout.SeedBaseline("first\n");
         File.WriteAllText(layout.Runtime, "second\n");
 
         var result = Run(layout);
@@ -238,7 +163,7 @@ public sealed class LegacyBackupCommandTests
     public void EqualCommittedFilesAreUnchanged()
     {
         using var layout = new BackupLayout("same\n");
-        Assert.Equal(0, Run(layout).ExitCode);
+        layout.SeedBaseline("same\n");
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
 
         var result = Run(layout);
@@ -329,7 +254,7 @@ public sealed class LegacyBackupCommandTests
     [Fact]
     public void CommitUsesStagedSnapshotInsteadOfRereadingWorkingFiles()
     {
-        using var layout = new BackupLayout("unused\n");
+        using var layout = new BackupLayout(runtimeContent: null, runtimeConfig: null);
         File.WriteAllText(layout.Source, "staged\n");
         File.WriteAllText(layout.ConfigSource, "personality = \"none\"\n");
         Assert.Equal(
@@ -342,21 +267,11 @@ public sealed class LegacyBackupCommandTests
                 ConfigSourceRelativePath).ExitCode);
         File.WriteAllText(layout.Source, "changed after staging\n");
 
-        var stagedSource = Git(
-            layout,
-            "rev-parse",
-            $":{SourceRelativePath}").Output.Trim();
-        var stagedConfig = Git(
-            layout,
-            "rev-parse",
-            $":{ConfigSourceRelativePath}").Output.Trim();
+        var stagedFiles = ReviewStagedManagedFiles(layout);
         BackupCommand.CommitStagedIndex(
             layout.Repository,
             "Pinned test commit",
-            [
-                (SourceRelativePath, stagedSource),
-                (ConfigSourceRelativePath, stagedConfig)
-            ]);
+            stagedFiles);
 
         Assert.Equal("staged\n", Git(layout, "show", $"HEAD:{SourceRelativePath}").Output);
         Assert.Equal("changed after staging\n", File.ReadAllText(layout.Source));
@@ -371,7 +286,7 @@ public sealed class LegacyBackupCommandTests
     [Fact]
     public void CommitRejectsAnUnrelatedIndexChangeAfterManagedVerification()
     {
-        using var layout = new BackupLayout("unused\n");
+        using var layout = new BackupLayout(runtimeContent: null, runtimeConfig: null);
         File.WriteAllText(layout.Source, "staged\n");
         File.WriteAllText(layout.ConfigSource, "personality = \"none\"\n");
         Assert.Equal(
@@ -382,14 +297,7 @@ public sealed class LegacyBackupCommandTests
                 "--",
                 SourceRelativePath,
                 ConfigSourceRelativePath).ExitCode);
-        var stagedSource = Git(
-            layout,
-            "rev-parse",
-            $":{SourceRelativePath}").Output.Trim();
-        var stagedConfig = Git(
-            layout,
-            "rev-parse",
-            $":{ConfigSourceRelativePath}").Output.Trim();
+        var stagedFiles = ReviewStagedManagedFiles(layout);
         File.WriteAllText(Path.Combine(layout.Repository, "unrelated.txt"), "unexpected\n");
         Assert.Equal(0, Git(layout, "add", "--", "unrelated.txt").ExitCode);
 
@@ -397,10 +305,7 @@ public sealed class LegacyBackupCommandTests
             () => BackupCommand.CommitStagedIndex(
                 layout.Repository,
                 "Must not commit",
-                [
-                    (SourceRelativePath, stagedSource),
-                    (ConfigSourceRelativePath, stagedConfig)
-                ]));
+                stagedFiles));
 
         Assert.Contains("outside the approved", exception.Message, StringComparison.Ordinal);
         Assert.NotEqual(0, Git(layout, "rev-parse", "--verify", "HEAD").ExitCode);
@@ -409,7 +314,7 @@ public sealed class LegacyBackupCommandTests
     [Fact]
     public void CommitRejectsAnUnrelatedIndexChangeHiddenByAReplacementTree()
     {
-        using var layout = new BackupLayout("unused\n");
+        using var layout = new BackupLayout(runtimeContent: null, runtimeConfig: null);
         File.WriteAllText(layout.Source, "staged\n");
         File.WriteAllText(layout.ConfigSource, "personality = \"none\"\n");
         Assert.Equal(
@@ -420,8 +325,7 @@ public sealed class LegacyBackupCommandTests
                 "--",
                 SourceRelativePath,
                 ConfigSourceRelativePath).ExitCode);
-        var stagedSource = Git(layout, "rev-parse", $":{SourceRelativePath}").Output.Trim();
-        var stagedConfig = Git(layout, "rev-parse", $":{ConfigSourceRelativePath}").Output.Trim();
+        var stagedFiles = ReviewStagedManagedFiles(layout);
         var approvedTree = Git(layout, "write-tree").Output.Trim();
 
         File.WriteAllText(Path.Combine(layout.Repository, "unrelated.txt"), "unexpected\n");
@@ -456,10 +360,7 @@ public sealed class LegacyBackupCommandTests
             () => BackupCommand.CommitStagedIndex(
                 layout.Repository,
                 "Must not commit",
-                [
-                    (SourceRelativePath, stagedSource),
-                    (ConfigSourceRelativePath, stagedConfig)
-                ]));
+                stagedFiles));
 
         Assert.Contains("outside the approved", exception.Message, StringComparison.Ordinal);
         Assert.NotEqual(
@@ -490,11 +391,9 @@ public sealed class LegacyBackupCommandTests
     public void RejectsATrackedChangeOutsideTheCanonicalSourceBeforeWriting()
     {
         using var layout = new BackupLayout("first\n");
-        Assert.Equal(0, Run(layout).ExitCode);
         var unrelated = Path.Combine(layout.Repository, "unrelated.txt");
         File.WriteAllText(unrelated, "committed\n");
-        Assert.Equal(0, Git(layout, "add", "--", "unrelated.txt").ExitCode);
-        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Test setup").ExitCode);
+        layout.SeedBaseline("first\n", "unrelated.txt");
         File.WriteAllText(unrelated, "dirty\n");
         File.WriteAllText(layout.Runtime, "second\n");
         var sourceBefore = File.ReadAllBytes(layout.Source);
@@ -513,7 +412,7 @@ public sealed class LegacyBackupCommandTests
     public void RejectsAStagedChangeOutsideTheCanonicalSourceBeforeWriting()
     {
         using var layout = new BackupLayout("first\n");
-        Assert.Equal(0, Run(layout).ExitCode);
+        layout.SeedBaseline("first\n");
         File.WriteAllText(Path.Combine(layout.Repository, "staged.txt"), "pending\n");
         Assert.Equal(0, Git(layout, "add", "--", "staged.txt").ExitCode);
         File.WriteAllText(layout.Runtime, "second\n");
@@ -532,8 +431,7 @@ public sealed class LegacyBackupCommandTests
     [Fact]
     public void MissingRuntimeFileIsAnErrorWithoutRepositoryChanges()
     {
-        using var layout = new BackupLayout("unused\n");
-        File.Delete(layout.Runtime);
+        using var layout = new BackupLayout(runtimeContent: null);
 
         var result = Run(layout);
 
@@ -547,8 +445,7 @@ public sealed class LegacyBackupCommandTests
     [Fact]
     public void RuntimeDirectoryIsRejectedWithoutRepositoryChanges()
     {
-        using var layout = new BackupLayout("unused\n");
-        File.Delete(layout.Runtime);
+        using var layout = new BackupLayout(runtimeContent: null);
         Directory.CreateDirectory(layout.Runtime);
 
         var result = Run(layout);
@@ -561,7 +458,7 @@ public sealed class LegacyBackupCommandTests
     [Fact]
     public void RuntimeFilesOverOneMiBAreRejectedWithoutRepositoryChanges()
     {
-        using var layout = new BackupLayout("unused\n");
+        using var layout = new BackupLayout(runtimeContent: null);
         File.WriteAllBytes(layout.Runtime, new byte[(1024 * 1024) + 1]);
 
         var result = Run(layout);
@@ -579,10 +476,9 @@ public sealed class LegacyBackupCommandTests
             return;
         }
 
-        using var layout = new BackupLayout("unused\n");
+        using var layout = new BackupLayout(runtimeContent: null);
         var referent = Path.Combine(layout.Root, "runtime referent.md");
         File.WriteAllText(referent, "external\n");
-        File.Delete(layout.Runtime);
         File.CreateSymbolicLink(layout.Runtime, referent);
 
         var result = Run(layout);
@@ -597,7 +493,7 @@ public sealed class LegacyBackupCommandTests
     public void DetachedHeadIsRejectedBeforeWriting()
     {
         using var layout = new BackupLayout("first\n");
-        Assert.Equal(0, Run(layout).ExitCode);
+        layout.SeedBaseline("first\n");
         Assert.Equal(0, Git(layout, "checkout", "--detach", "--quiet").ExitCode);
         File.WriteAllText(layout.Runtime, "second\n");
         var sourceBefore = File.ReadAllBytes(layout.Source);
@@ -624,10 +520,24 @@ public sealed class LegacyBackupCommandTests
     }
 
     [Fact]
+    public void ActiveSequencerStopsBeforeWriting()
+    {
+        using var layout = new BackupLayout("runtime\n");
+        Directory.CreateDirectory(Path.Combine(layout.Repository, ".git", "sequencer"));
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Git operation sequencer is active", result.Error, StringComparison.Ordinal);
+        Assert.Empty(File.ReadAllBytes(layout.Source));
+        Assert.NotEqual(0, Git(layout, "rev-parse", "--verify", "HEAD").ExitCode);
+    }
+
+    [Fact]
     public void OrdinaryRefNamedLikeAnOperationDoesNotBlockBackup()
     {
         using var layout = new BackupLayout("first\n");
-        Assert.Equal(0, Run(layout).ExitCode);
+        layout.SeedBaseline("first\n");
         Assert.Equal(0, Git(layout, "branch", "MERGE_HEAD").ExitCode);
         File.WriteAllText(layout.Runtime, "second\n");
 
@@ -642,12 +552,10 @@ public sealed class LegacyBackupCommandTests
     public void GitFiltersThatChangeBytesStopBeforeCommit()
     {
         using var layout = new BackupLayout("first\n");
-        Assert.Equal(0, Run(layout).ExitCode);
         File.WriteAllText(
             Path.Combine(layout.Repository, ".gitattributes"),
             $"{SourceRelativePath} text eol=lf\n");
-        Assert.Equal(0, Git(layout, "add", "--", ".gitattributes").ExitCode);
-        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Test attributes").ExitCode);
+        layout.SeedBaseline("first\n", ".gitattributes");
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
         File.WriteAllBytes(layout.Runtime, "second\r\n"u8.ToArray());
 
@@ -660,18 +568,15 @@ public sealed class LegacyBackupCommandTests
         Assert.Equal(SourceRelativePath, Git(layout, "diff", "--cached", "--name-only").Output.Trim());
     }
 
-    private static CommandResult Run(BackupLayout layout)
-    {
-        return Run(layout.Repository, layout.CodexHome);
-    }
-
-    private static CommandResult Run(string repository, string codexHome)
+    private static CommandResult Run(
+        BackupLayout layout, CodexPersonality expectedPersonality = CodexPersonality.None)
     {
         var output = new StringWriter();
         var warning = new StringWriter();
         try
         {
-            var exitCode = BackupCommand.Run(repository, codexHome, output, warning);
+            var exitCode = BackupCommand.RunForInitialization(
+                layout.Repository, layout.CodexHome, expectedPersonality, output);
             return new CommandResult(exitCode, output.ToString(), warning.ToString());
         }
         catch (Exception error)
@@ -679,6 +584,15 @@ public sealed class LegacyBackupCommandTests
             warning.WriteLine($"error: {error.Message}");
             return new CommandResult(1, output.ToString(), warning.ToString());
         }
+    }
+
+    private static (string RelativePath, string Blob)[] ReviewStagedManagedFiles(BackupLayout layout)
+    {
+        var blobs = GitProcess.RunRequired(layout.Repository, "Could not read staged fixture blobs",
+                "rev-parse", $":{SourceRelativePath}", $":{ConfigSourceRelativePath}")
+            .Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Assert.Equal(2, blobs.Length);
+        return [(SourceRelativePath, blobs[0]), (ConfigSourceRelativePath, blobs[1])];
     }
 
     private static GitResult Git(BackupLayout layout, params string[] arguments)
@@ -689,7 +603,7 @@ public sealed class LegacyBackupCommandTests
     private sealed class BackupLayout : IDisposable
     {
         public BackupLayout(
-            string runtimeContent,
+            string? runtimeContent,
             string? runtimeConfig = "personality = \"none\"\n")
         {
             Root = Path.Combine(TestTemporaryDirectory.Root, "aec-backup-tests", Guid.NewGuid().ToString("N"));
@@ -702,7 +616,10 @@ public sealed class LegacyBackupCommandTests
 
             Directory.CreateDirectory(Root);
             Directory.CreateDirectory(CodexHome);
-            File.WriteAllText(Runtime, runtimeContent);
+            if (runtimeContent is not null)
+            {
+                File.WriteAllText(Runtime, runtimeContent);
+            }
             if (runtimeConfig is not null)
             {
                 File.WriteAllText(RuntimeConfig, runtimeConfig);
@@ -720,12 +637,9 @@ public sealed class LegacyBackupCommandTests
             }
             File.WriteAllBytes(Source, []);
 
-            ConfigureGit("user.name", "AEC Tests");
-            ConfigureGit("user.email", "aec-tests@example.invalid");
-            ConfigureGit("commit.gpgSign", "false");
-            var hooks = Path.Combine(Root, "empty hooks");
-            Directory.CreateDirectory(hooks);
-            ConfigureGit("core.hooksPath", hooks);
+            // Identity and signing come from the collection. The empty Git template supplies no hooks.
+            File.AppendAllText(Path.Combine(Repository, ".git", "config"),
+                "\n[core]\n\thooksPath = .git/hooks\n\tautocrlf = false\n");
         }
 
         public string Root { get; }
@@ -750,13 +664,14 @@ public sealed class LegacyBackupCommandTests
             }
         }
 
-        private void ConfigureGit(string key, string value)
+        public void SeedBaseline(string instructions, params string[] extraPaths)
         {
-            var result = TestGit.Run(Repository, "config", "--local", key, value);
-            if (result.ExitCode != 0)
-            {
-                throw new InvalidOperationException(result.Error);
-            }
+            File.WriteAllText(Source, instructions);
+            File.WriteAllText(ConfigSource, "personality = \"none\"\n");
+            _ = GitProcess.RunRequired(Repository, "Could not stage backup baseline",
+                ["add", "--", SourceRelativePath, ConfigSourceRelativePath, .. extraPaths]);
+            _ = GitProcess.RunRequired(Repository, "Could not commit backup baseline",
+                "commit", "--quiet", "-m", BackupCommand.OrdinaryCommitMessage);
         }
     }
 }

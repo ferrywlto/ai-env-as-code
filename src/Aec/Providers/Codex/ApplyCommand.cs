@@ -264,36 +264,35 @@ internal static class ApplyCommand
         return 0;
     }
 
-    internal static void ValidateRepositoryRoot(string repository)
+    internal static void ValidateRepositoryRoot(
+        string repository,
+        string rootRequirement = "--repo must identify the Git repository root")
     {
-        var insideWorkTree = RunRequired(
+        var metadata = RunRequired(
             repository,
             "Repository is not a Git work tree",
             "rev-parse",
-            "--is-inside-work-tree").Output.Trim();
-        if (!string.Equals(insideWorkTree, "true", StringComparison.Ordinal))
+            "--is-inside-work-tree",
+            "--is-bare-repository",
+            "--show-prefix").Output.Split('\n', 3);
+        if (metadata.Length != 3 || !metadata[2].EndsWith('\n'))
+        {
+            throw new InvalidOperationException("Git returned incomplete repository metadata.");
+        }
+
+        if (!string.Equals(metadata[0].Trim(), "true", StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Repository is not a Git work tree: {repository}");
         }
 
-        var bare = RunRequired(
-            repository,
-            "Git could not inspect the repository",
-            "rev-parse",
-            "--is-bare-repository").Output.Trim();
-        if (!string.Equals(bare, "false", StringComparison.Ordinal))
+        if (!string.Equals(metadata[1].Trim(), "false", StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Repository must not be bare: {repository}");
         }
 
-        var prefix = RunRequired(
-            repository,
-            "Git could not locate the repository root",
-            "rev-parse",
-            "--show-prefix").Output;
-        if (prefix.Trim().Length != 0)
+        if (metadata[2].Trim().Length != 0)
         {
-            throw new InvalidOperationException($"--repo must identify the Git repository root: {repository}");
+            throw new InvalidOperationException($"{rootRequirement}: {repository}");
         }
     }
 
@@ -333,6 +332,119 @@ internal static class ApplyCommand
             commit,
             AecApplication.ConfigSourceRelativePath,
             "Canonical config");
+    }
+
+    internal static byte[][] ReadCommittedFiles(
+        string repository, string commit, params (string Path, string Label)[] files)
+    {
+        byte[] ReadWorkingFile((string Path, string Label) file)
+        {
+            var path = Path.Combine(repository, file.Path);
+            AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!, $"{file.Label} path");
+            return AecApplication.ReadRequiredTextFile(path, file.Label);
+        }
+
+        byte[][] ReadIndividually() => files.Select(file =>
+        {
+            var path = Path.Combine(repository, file.Path);
+            AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!, $"{file.Label} path");
+            return ReadCommittedFile(repository, commit, file.Path, file.Label);
+        }).ToArray();
+
+        byte[][] before;
+        try
+        {
+            before = files.Select(ReadWorkingFile).ToArray();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+            InvalidOperationException or InvalidDataException)
+        {
+            _ = ReadIndividually();
+            throw;
+        }
+
+        var paths = files.Select(file => file.Path).ToArray();
+        var tree = Run(repository, ["ls-tree", "-z", commit, "--", .. paths]);
+        var staged = Run(repository, ["--no-optional-locks", "diff", "--cached", "--quiet",
+            "--exit-code", "--no-ext-diff", "--no-textconv", commit, "--", .. paths]);
+        var modes = Run(repository, ["--no-optional-locks", "diff-files", "--raw", "-z",
+            "--no-renames", "--no-ext-diff", "--no-textconv", "--", .. paths]);
+        var hashes = Run(repository, ["hash-object", "--no-filters", "--", .. paths]);
+        if (tree.ExitCode != 0 || staged.ExitCode != 0 || modes.ExitCode != 0 || hashes.ExitCode != 0 ||
+            !BatchedBlobsMatch(tree.Output, hashes.Output, paths) || !BatchedModesMatch(modes.Output, paths))
+        {
+            // Preserve the single-path diagnostic. A transient mismatch remains a refusal.
+            _ = ReadIndividually();
+            throw new InvalidOperationException("Committed files changed while Git provenance was checked.");
+        }
+
+        for (var index = 0; index < files.Length; index++)
+        {
+            if (!before[index].AsSpan().SequenceEqual(ReadWorkingFile(files[index])))
+            {
+                throw new InvalidOperationException($"{files[index].Label} changed while its Git provenance was checked.");
+            }
+        }
+
+        return before;
+    }
+
+    private static bool BatchedBlobsMatch(string tree, string hashes, string[] paths)
+    {
+        if (!tree.EndsWith('\0'))
+        {
+            return false;
+        }
+
+        var blobs = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in tree[..^1].Split('\0'))
+        {
+            var tab = entry.IndexOf('\t');
+            if (tab < 0)
+            {
+                return false;
+            }
+
+            var fields = entry[..tab].Split(' ');
+            if (fields.Length != 3 || fields[0] is not ("100644" or "100755") ||
+                fields[1] != "blob" || fields[2].Length == 0 || !blobs.TryAdd(entry[(tab + 1)..], fields[2]))
+            {
+                return false;
+            }
+        }
+
+        var working = hashes.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return blobs.Count == paths.Length && working.Length == paths.Length &&
+            paths.Select((path, index) => blobs.TryGetValue(path, out var blob) && blob == working[index])
+                .All(matches => matches);
+    }
+
+    private static bool BatchedModesMatch(string output, string[] paths)
+    {
+        if (output.Length == 0)
+        {
+            return true;
+        }
+
+        var records = output.Split('\0');
+        if (records.Length % 2 != 1 || records[^1].Length != 0)
+        {
+            return false;
+        }
+
+        var unmatched = paths.ToHashSet(StringComparer.Ordinal);
+        for (var index = 0; index < records.Length - 1; index += 2)
+        {
+            var fields = records[index].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            // A stat-only modification retains the regular file mode. Raw bytes are checked separately.
+            if (!unmatched.Remove(records[index + 1]) || fields.Length != 5 ||
+                fields[0] is not (":100644" or ":100755") || fields[4] != "M" || fields[0][1..] != fields[1])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     internal static byte[] ReadCommittedFile(

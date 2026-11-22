@@ -3,6 +3,66 @@ namespace Aec.Tests;
 [Collection(ProcessStateTestGroup.Name)]
 public sealed class PortableCodexStatusCommandTests
 {
+    [Theory]
+    [InlineData("none", "in_sync", 0)]
+    [InlineData("friendly", "different", 2)]
+    public void ReportsConfigStatusWithoutWriting(
+        string runtimePersonality, string expectedStatus, int expectedExit)
+    {
+        using var layout = new SharedTargetStatusTests.StatusLayout("codex");
+        var runtime = layout.WriteRuntime(portableBlock: true);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        var config = $"personality = \"{runtimePersonality}\"\nmodel = \"keep-me\"\n";
+        File.WriteAllText(configPath, config);
+        var head = layout.Head();
+
+        var result = Run(layout);
+
+        Assert.Equal(expectedExit, result.ExitCode);
+        Assert.Equal(StatusOutput("in_sync", expectedStatus), result.Output);
+        Assert.Empty(result.Error);
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(config, File.ReadAllText(configPath));
+        Assert.Equal(head, layout.Head());
+        Assert.Empty(layout.GitStatus());
+    }
+
+    [Fact]
+    public void ReportsMissingRuntimeInstructionsAndConfig()
+    {
+        using var layout = new SharedTargetStatusTests.StatusLayout("codex");
+
+        var result = Run(layout);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal(StatusOutput("missing", "missing"), result.Output);
+        Assert.Empty(result.Error);
+        Assert.False(File.Exists(layout.RuntimePath));
+        Assert.False(File.Exists(Path.Combine(layout.ProviderHome, "config.toml")));
+        Assert.Empty(layout.GitStatus());
+    }
+
+    [Fact]
+    public void DirtyCanonicalCodexConfigStopsWithoutWrites()
+    {
+        using var layout = new SharedTargetStatusTests.StatusLayout("codex");
+        var runtime = layout.WriteRuntime(portableBlock: true);
+        var configPath = Path.Combine(layout.ProviderHome, "config.toml");
+        const string runtimeConfig = "personality = \"none\"\n";
+        const string dirtyConfig = "personality = \"friendly\"\n";
+        File.WriteAllText(configPath, runtimeConfig);
+        File.WriteAllText(layout.CanonicalConfigPath, dirtyConfig);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("unstaged changes", result.Error, StringComparison.Ordinal);
+        Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(runtimeConfig, File.ReadAllText(configPath));
+        Assert.Equal(dirtyConfig, File.ReadAllText(layout.CanonicalConfigPath));
+    }
+
     [Fact]
     public void MissingEnrollmentDoesNotFallBackToLegacySource()
     {
@@ -94,12 +154,14 @@ public sealed class PortableCodexStatusCommandTests
         var result = Run(layout);
 
         Assert.Equal(2, result.ExitCode);
-        Assert.Equal($"codex/AGENTS.md   different{Environment.NewLine}" +
-            $"codex/config.toml in_sync{Environment.NewLine}", result.Output);
+        Assert.Equal(StatusOutput("different", "in_sync"), result.Output);
         Assert.Empty(result.Error);
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
+
+    private static string StatusOutput(string instructions, string config) =>
+        $"codex/AGENTS.md   {instructions}{Environment.NewLine}codex/config.toml {config}{Environment.NewLine}";
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>
         TestApplication.Run("status", "--repo", layout.Repository,
