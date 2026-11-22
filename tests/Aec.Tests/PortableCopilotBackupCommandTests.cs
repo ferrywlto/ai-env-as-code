@@ -11,6 +11,8 @@ public sealed class PortableCopilotBackupCommandTests
         File.WriteAllText(layout.RuntimePath, File.ReadAllText(layout.RuntimePath)
             .Replace("Shared approval.", "Shared revision.", StringComparison.Ordinal));
         var runtime = File.ReadAllBytes(layout.RuntimePath);
+        File.SetLastWriteTimeUtc(layout.RuntimePath, new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc));
+        var runtimeTimestamp = File.GetLastWriteTimeUtc(layout.RuntimePath);
         var oldHead = layout.Head();
 
         var result = Run(layout);
@@ -32,6 +34,7 @@ public sealed class PortableCopilotBackupCommandTests
         Assert.Equal(InstructionSections.Render("Shared revision.\n", "Local paths.\n", "Provider mechanics.\n"),
             File.ReadAllText(layout.TargetPath));
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(runtimeTimestamp, File.GetLastWriteTimeUtc(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
@@ -121,6 +124,36 @@ public sealed class PortableCopilotBackupCommandTests
         Assert.Contains("older target", result.Error, StringComparison.Ordinal);
         Assert.Equal(head, layout.Head());
         Assert.Equal(runtime, File.ReadAllBytes(layout.RuntimePath));
+        Assert.Equal(string.Empty, layout.GitStatus());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void MissingOrUnmanagedRuntimeStopsWithoutMutation(bool missing)
+    {
+        using var layout = NewLayout();
+        if (missing)
+            File.Delete(layout.RuntimePath);
+        else
+            File.WriteAllText(layout.RuntimePath, "Unmanaged runtime.\n");
+        var head = layout.Head();
+        var source = File.ReadAllBytes(layout.SharedSource);
+        var target = File.ReadAllBytes(layout.TargetPath);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains(missing ? "Provider runtime instructions are missing" :
+            "not bound to the selected AEC repository", result.Error, StringComparison.Ordinal);
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(source, File.ReadAllBytes(layout.SharedSource));
+        Assert.Equal(target, File.ReadAllBytes(layout.TargetPath));
+        if (missing)
+            Assert.False(File.Exists(layout.RuntimePath));
+        else
+            Assert.Equal("Unmanaged runtime.\n", File.ReadAllText(layout.RuntimePath));
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 

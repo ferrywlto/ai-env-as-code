@@ -1,5 +1,18 @@
 # Implementation Checklist
 
+## Production refactoring (#21)
+
+- [x] Ferry reviewed the first slice: retire the test-only legacy Copilot backup path.
+  The public portable command remains in use. Seven old direct-command cases
+  map to live success, unchanged and binding tests; missing and unmanaged
+  runtime refusals and runtime timestamp preservation are now covered there.
+  Committed enrollment replaces the old untracked-source behavior, and
+  unrelated untracked files are preserved by portable backup. The targeted
+  Copilot and committer selection passed 19 tests; the combined unit and
+  initialization selection passed 436 tests. Production code decreased by
+  211 lines and test code by 204 lines.
+- [ ] After review, choose the next bounded slice against the current code.
+
 ## Routine regression refactor
 
 [Issue #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) is in review in
