@@ -12,6 +12,13 @@ internal sealed record PortableRuntimeSnapshot(
     byte[]? Runtime,
     int? BlockVersion)
 {
+    internal bool HasSameBackupInputs(PortableRuntimeSnapshot other) =>
+        string.Equals(Repository, other.Repository, StringComparison.Ordinal) &&
+        string.Equals(RuntimePath, other.RuntimePath, StringComparison.Ordinal) &&
+        string.Equals(Commit, other.Commit, StringComparison.Ordinal) &&
+        Runtime is not null && other.Runtime is not null &&
+        Runtime.AsSpan().SequenceEqual(other.Runtime);
+
     public static PortableRuntimeSnapshot Read(
         string repository,
         string provider,

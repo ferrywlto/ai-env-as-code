@@ -45,11 +45,7 @@ internal static class PortableCopilotBackupWriter
         // Attribution is derived from the reviewed snapshot. Compare the
         // underlying inputs, then use the fresh plan instead of trusting
         // mutable fields in the caller's proposal.
-        if (!string.Equals(original.Repository, fresh.Repository, StringComparison.Ordinal) ||
-            !string.Equals(original.RuntimePath, fresh.RuntimePath, StringComparison.Ordinal) ||
-            !string.Equals(original.Commit, fresh.Commit, StringComparison.Ordinal) ||
-            original.Runtime is null || fresh.Runtime is null ||
-            !original.Runtime.AsSpan().SequenceEqual(fresh.Runtime))
+        if (!original.HasSameBackupInputs(fresh))
         {
             throw new InvalidOperationException(
                 "Copilot backup inputs changed after review; no canonical file was replaced.");

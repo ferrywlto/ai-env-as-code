@@ -64,11 +64,7 @@ internal static class PortableCodexBackupWriter
 
         // The preview's plan is derived from these inputs. Use the fresh plan
         // after comparing them, instead of trusting or comparing every derived field.
-        if (!string.Equals(original.Repository, fresh.Repository, StringComparison.Ordinal) ||
-            !string.Equals(original.RuntimePath, fresh.RuntimePath, StringComparison.Ordinal) ||
-            !string.Equals(original.Commit, fresh.Commit, StringComparison.Ordinal) ||
-            original.Runtime is null || fresh.Runtime is null ||
-            !original.Runtime.AsSpan().SequenceEqual(fresh.Runtime) ||
+        if (!original.HasSameBackupInputs(fresh) ||
             !reviewed.RuntimeConfig.AsSpan().SequenceEqual(current.RuntimeConfig))
         {
             throw new InvalidOperationException(

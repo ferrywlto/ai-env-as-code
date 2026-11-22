@@ -64,6 +64,10 @@
   diagnostics, no-op order, provenance rereads and distinct write guards.
   Unit, apply, initialization, provenance and portable checks passed 494 tests
   in 5m 25s.
+- [x] Ferry reviewed the fourteenth slice: share the reviewed backup snapshot input
+  comparison while retaining fresh preview creation, provider-specific errors
+  and Codex runtime configuration comparison. Unit and focused portable
+  backup checks passed 382 tests.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor
