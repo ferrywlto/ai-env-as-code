@@ -20,6 +20,10 @@
   and its unreachable personality branch. Initialization retains the preflight
   comparison; ordinary backup uses the portable command and its warning test.
   The combined unit, initialization and Codex backup selection passed 474 tests.
+- [x] Ferry reviewed the fourth slice: remove unused application helpers for byte
+  comparison, legacy argument parsing and managed-root validation, including
+  the parser-only options record. Live parsing and path checks remain in use.
+  The combined unit and focused CLI selection passed 369 tests.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor
