@@ -35,7 +35,7 @@ internal static class MigrationTargetCommitter
             // Reuse signing and verified-tree publication; never let Git reread
             // mutable working files as the content authority for this commit.
             BackupCommand.CommitStagedIndex(repository, CommitMessage, staged, branch, parent, modes);
-            var commit = ApplyCommand.ResolveHeadCommit(repository);
+            var commit = GitRepository.ResolveHeadCommit(repository);
             MigrationCommitProof.VerifyCommit(repository, parent, commit, staged, modes);
 
             // write-tree can refresh index cache extensions legitimately. Prove

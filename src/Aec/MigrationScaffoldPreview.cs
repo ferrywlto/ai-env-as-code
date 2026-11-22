@@ -253,7 +253,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
 
     private static void VerifyHeadAndBranch(MigrationPreflight expected, string branch)
     {
-        if (ApplyCommand.ResolveHeadCommit(expected.Repository) != expected.Commit)
+        if (GitRepository.ResolveHeadCommit(expected.Repository) != expected.Commit)
         {
             throw new InvalidOperationException("HEAD changed during scaffold preview.");
         }

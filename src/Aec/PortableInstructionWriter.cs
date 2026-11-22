@@ -46,7 +46,7 @@ internal static class PortableInstructionWriter
         // compare-before-replace helper separately rechecks the runtime file.
         var finalTarget = CommittedTargetValidator.Read(
             current.Repository, current.Platform, current.Provider);
-        if (!string.Equals(current.Commit, ApplyCommand.ResolveHeadCommit(current.Repository),
+        if (!string.Equals(current.Commit, GitRepository.ResolveHeadCommit(current.Repository),
                 StringComparison.Ordinal) ||
             !finalTarget.AsSpan().SequenceEqual(current.Target))
         {

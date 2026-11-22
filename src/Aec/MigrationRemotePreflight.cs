@@ -95,7 +95,7 @@ internal sealed record MigrationRemotePreflight(string Remote, string BranchRef,
 
     internal static void EnsureSnapshot(MigrationPreflight preflight, string branch)
     {
-        if (!string.Equals(preflight.Commit, ApplyCommand.ResolveHeadCommit(preflight.Repository), StringComparison.Ordinal) ||
+        if (!string.Equals(preflight.Commit, GitRepository.ResolveHeadCommit(preflight.Repository), StringComparison.Ordinal) ||
             !string.Equals(branch, ReadBranch(preflight.Repository), StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD or branch changed during migration remote preflight.");

@@ -42,8 +42,8 @@ internal static class CommittedTargetValidator
 
         AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
         AecApplication.EnsureRealDirectory(repository, "Repository");
-        ApplyCommand.ValidateRepositoryRoot(repository);
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        GitRepository.ValidateRepositoryRoot(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
 
         var targetRelativePath = $"environment/targets/{platform}/{provider}/{fileName}";
         var files = CommittedFileReader.ReadCommittedFiles(repository, commit,
@@ -66,7 +66,7 @@ internal static class CommittedTargetValidator
                 "Run `aec render`, review, and commit the regenerated target.");
         }
 
-        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
+        if (!string.Equals(commit, GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during target validation.");

@@ -42,7 +42,7 @@ internal static class MigrationSourceCommitter
             // and refusing a concurrent branch move. No working-file reread for commit.
             BackupCommand.CommitStagedIndex(repository, CommitMessage, stagedFiles,
                 fresh.Branch, parent, modes);
-            var commit = ApplyCommand.ResolveHeadCommit(repository);
+            var commit = GitRepository.ResolveHeadCommit(repository);
             MigrationCommitProof.VerifyCommit(repository, parent, commit, stagedFiles, modes);
 
             // write-tree may legitimately refresh index cache extensions. Verify

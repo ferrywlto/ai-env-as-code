@@ -44,7 +44,7 @@ internal sealed record PortableRuntimeSnapshot(
         var runtimePath = Path.Combine(providerHome, fileName);
         var runtime = AecApplication.ReadOptionalTextFile(
             runtimePath, "Provider runtime instructions");
-        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
+        if (!string.Equals(commit, GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(

@@ -13,8 +13,8 @@ internal static class RenderCommand
     {
         AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
         AecApplication.EnsureRealDirectory(repository, "Repository");
-        ApplyCommand.ValidateRepositoryRoot(repository);
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        GitRepository.ValidateRepositoryRoot(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
 
         var platform = CurrentPlatform();
         var targetRoot = Path.Combine(repository, "environment", "targets", platform);

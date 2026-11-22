@@ -132,7 +132,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             throw new InvalidOperationException("Dirty paths changed during source validation.");
         if (!index.AsSpan().SequenceEqual(MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository)))
             throw new InvalidOperationException("Git index changed during source validation.");
-        if (ApplyCommand.ResolveHeadCommit(repository) != expected.Preflight.Commit)
+        if (GitRepository.ResolveHeadCommit(repository) != expected.Preflight.Commit)
             throw new InvalidOperationException("HEAD changed during source validation.");
         if (MigrationLegacyCapturePreview.ReadBranch(repository) != branch)
             throw new InvalidOperationException("Branch changed during source validation.");

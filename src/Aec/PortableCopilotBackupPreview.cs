@@ -11,7 +11,7 @@ internal sealed record PortableCopilotBackupPreview(
     {
         var snapshot = PortableRuntimeSnapshot.Read(repository, AecIdentifiers.Copilot, copilotHome);
         var instructions = PortableBackupAttributionPreview.Create(snapshot);
-        if (!string.Equals(snapshot.Commit, ApplyCommand.ResolveHeadCommit(snapshot.Repository),
+        if (!string.Equals(snapshot.Commit, GitRepository.ResolveHeadCommit(snapshot.Repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(

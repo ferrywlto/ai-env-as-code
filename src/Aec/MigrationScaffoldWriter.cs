@@ -125,7 +125,7 @@ internal static class MigrationScaffoldWriter
     private static void VerifyGitState(MigrationScaffoldPreview baseline, byte[] originalIndex)
     {
         var repository = baseline.Preparation.Preflight.Repository;
-        if (ApplyCommand.ResolveHeadCommit(repository) != baseline.Preparation.Preflight.Commit)
+        if (GitRepository.ResolveHeadCommit(repository) != baseline.Preparation.Preflight.Commit)
             throw new InvalidOperationException("HEAD changed during scaffold creation.");
         VerifyBranch(baseline.Branch, MigrationLegacyCapturePreview.ReadBranch(repository));
         var currentIndex = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));

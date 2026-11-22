@@ -180,7 +180,7 @@ internal static class BackupCommand
 
     internal static void ValidateRepository(string repository)
     {
-        ApplyCommand.ValidateRepositoryRoot(repository);
+        GitRepository.ValidateRepositoryRoot(repository);
 
         var branch = Run(repository, "symbolic-ref", "--quiet", "HEAD");
         if (branch.ExitCode == 1)

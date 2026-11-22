@@ -63,7 +63,7 @@ internal static class MigrationHarnessSelection
             selected.Add(new MigrationHarness(provider, home, runtimePath));
         }
 
-        if (!string.Equals(preflight.Commit, ApplyCommand.ResolveHeadCommit(preflight.Repository),
+        if (!string.Equals(preflight.Commit, GitRepository.ResolveHeadCommit(preflight.Repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during migration harness selection.");

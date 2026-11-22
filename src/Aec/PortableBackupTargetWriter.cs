@@ -48,7 +48,7 @@ internal static class PortableBackupTargetWriter
         }
 
         AecApplication.EnsureNoLinksInExistingPath(reviewed.Repository, "Repository path");
-        ApplyCommand.ValidateRepositoryRoot(reviewed.Repository);
+        GitRepository.ValidateRepositoryRoot(reviewed.Repository);
         var providerHome = Path.GetDirectoryName(reviewed.RuntimePath)
             ?? throw new InvalidOperationException("Provider runtime target has no parent directory.");
         AecApplication.EnsureNoLinksInExistingPath(providerHome, "Provider home path");
@@ -212,7 +212,7 @@ internal static class PortableBackupTargetWriter
         void VerifyInputs(IReadOnlyList<TargetChange> previousWrites)
         {
             if (!string.Equals(reviewed.Commit,
-                    ApplyCommand.ResolveHeadCommit(reviewed.Repository), StringComparison.Ordinal) ||
+                    GitRepository.ResolveHeadCommit(reviewed.Repository), StringComparison.Ordinal) ||
                 !AecApplication.ReadRequiredTextFile(
                     reviewed.RuntimePath, "Provider runtime instructions")
                     .AsSpan().SequenceEqual(reviewed.Runtime))

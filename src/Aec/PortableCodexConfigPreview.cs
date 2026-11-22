@@ -35,7 +35,7 @@ internal sealed record PortableCodexConfigPreview(
 
         // The target and config must be derived from one HEAD. This preview is
         // still stale as soon as it returns; the writer will revalidate later.
-        if (!string.Equals(snapshot.Commit, ApplyCommand.ResolveHeadCommit(snapshot.Repository),
+        if (!string.Equals(snapshot.Commit, GitRepository.ResolveHeadCommit(snapshot.Repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(

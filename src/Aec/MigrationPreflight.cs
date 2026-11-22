@@ -27,7 +27,7 @@ internal sealed record MigrationPreflight(
         AecApplication.EnsureRealDirectory(gitDirectory, "Git directory");
         InitCommand.EnsureContainedGitMetadata(repository, gitDirectory);
         BackupCommand.ValidateRepository(repository);
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
         InitCommand.ValidateInitializationHistory(repository);
 
         var markerPath = Path.Combine(repository, FormatRelativePath);
@@ -69,7 +69,7 @@ internal sealed record MigrationPreflight(
         var binaryVersion = typeof(AecApplication).Assembly.GetName().Version
             ?? throw new InvalidOperationException("Application version could not be resolved.");
         ValidateVersions(current, target, binaryVersion);
-        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository), StringComparison.Ordinal))
+        if (!string.Equals(commit, GitRepository.ResolveHeadCommit(repository), StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during migration preflight.");
         }

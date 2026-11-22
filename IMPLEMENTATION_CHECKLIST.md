@@ -46,6 +46,11 @@
   adapters are unchanged; callers in both providers and migration use it. The
   unit, provenance, initialization, apply and focused review selection passed
   521 tests in 2m 20s.
+- [x] Ferry approved the tenth slice: move shared repository-root and committed-HEAD
+  checks from Codex apply into GitRepository. Their implementations, including
+  detached-HEAD behavior and diagnostics, are unchanged. The focused run
+  passed 367 tests with local socket access; the earlier sandboxed run aborted
+  before execution when its local socket bind was denied.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

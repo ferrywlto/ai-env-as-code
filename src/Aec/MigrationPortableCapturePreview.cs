@@ -81,7 +81,7 @@ internal sealed record MigrationPortableCapturePreview(MigrationPreparation Prep
             }
         }
         if (copilot is not null) VerifyTarget(copilot.Snapshot);
-        if (ApplyCommand.ResolveHeadCommit(repository) != expected.Commit ||
+        if (GitRepository.ResolveHeadCommit(repository) != expected.Commit ||
             MigrationLegacyCapturePreview.ReadBranch(repository) != branch)
         {
             throw new InvalidOperationException("Migration HEAD or branch changed during portable capture preview.");

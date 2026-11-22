@@ -134,7 +134,7 @@ internal static class PortableBackupCommitter
         BackupCommand.CommitStagedIndex(
             repository, codex is null ? CommitMessage : CodexCommitMessage,
             expected, branch, reviewed.Commit);
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
         var parent = GitProcess.RunRequired(repository,
             "Could not inspect backup commit parent", "rev-parse", "HEAD^").Output.Trim();
         if (!string.Equals(parent, reviewed.Commit, StringComparison.Ordinal))
@@ -204,7 +204,7 @@ internal static class PortableBackupCommitter
 
         void EnsureHeadAndRuntime()
         {
-            if (!string.Equals(ApplyCommand.ResolveHeadCommit(repository), reviewed.Commit,
+            if (!string.Equals(GitRepository.ResolveHeadCommit(repository), reviewed.Commit,
                     StringComparison.Ordinal) ||
                 !AecApplication.ReadRequiredTextFile(
                     reviewed.RuntimePath, "Provider runtime instructions")

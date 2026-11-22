@@ -49,7 +49,7 @@ internal static class MigrationPortableCaptureCommitter
             BackupCommand.CommitStagedIndex(
                 repository, CommitMessage, stagedFiles, capturePlan.Branch, parent, baselineModes);
 
-            var commit = ApplyCommand.ResolveHeadCommit(repository);
+            var commit = GitRepository.ResolveHeadCommit(repository);
             MigrationCommitProof.VerifyCommit(
                 repository, parent, commit, stagedFiles, baselineModes, portableCapture: true);
             targetWriter.VerifyForCommit(commit);

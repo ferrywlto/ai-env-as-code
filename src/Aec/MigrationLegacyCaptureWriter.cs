@@ -45,7 +45,7 @@ internal static class MigrationLegacyCaptureWriter
         {
             AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
             AecApplication.EnsureNoLinksInExistingPath(Path.Combine(repository, ".git"), "Git metadata path");
-            if (ApplyCommand.ResolveHeadCommit(repository) != head || MigrationLegacyCapturePreview.ReadBranch(repository) != branch ||
+            if (GitRepository.ResolveHeadCommit(repository) != head || MigrationLegacyCapturePreview.ReadBranch(repository) != branch ||
                 !ReadIndex(indexPath).AsSpan().SequenceEqual(index))
             {
                 throw new InvalidOperationException("Git HEAD, branch or index changed; no further capture files will be replaced.");

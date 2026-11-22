@@ -37,7 +37,7 @@ internal static class MigrationCompletionCommitter
             // Respect configured signing and publish the verified staged blobs,
             // not a new read of mutable working files.
             BackupCommand.CommitStagedIndex(repository, CommitMessage, staged, branch, parent, modes);
-            var commit = ApplyCommand.ResolveHeadCommit(repository);
+            var commit = GitRepository.ResolveHeadCommit(repository);
             MigrationCommitProof.VerifyCommit(repository, parent, commit, staged, modes);
             afterCommitForTests?.Invoke();
             MigrationPortableCaptureWriter.EnsureEmptyIndex(repository);

@@ -40,7 +40,7 @@ internal sealed record PortableCodexBackupPreview(
 
         var update = CodexPersonalityConfig.PlanCanonicalUpdate(
             canonical, canonicalPath, personality);
-        if (!string.Equals(snapshot.Commit, ApplyCommand.ResolveHeadCommit(snapshot.Repository),
+        if (!string.Equals(snapshot.Commit, GitRepository.ResolveHeadCommit(snapshot.Repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(

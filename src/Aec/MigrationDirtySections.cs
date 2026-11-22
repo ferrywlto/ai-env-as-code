@@ -97,7 +97,7 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
             dirty.Add(path);
         }
 
-        if (!string.Equals(preflight.Commit, ApplyCommand.ResolveHeadCommit(preflight.Repository), StringComparison.Ordinal))
+        if (!string.Equals(preflight.Commit, GitRepository.ResolveHeadCommit(preflight.Repository), StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during migration section preflight.");
         }

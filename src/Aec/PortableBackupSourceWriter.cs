@@ -70,7 +70,7 @@ internal static class PortableBackupSourceWriter
             }
 
             var actual = PortableBackupAttributionPreview.Create(current);
-            if (!string.Equals(current.Commit, ApplyCommand.ResolveHeadCommit(current.Repository),
+            if (!string.Equals(current.Commit, GitRepository.ResolveHeadCommit(current.Repository),
                     StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(

@@ -252,7 +252,7 @@ internal static class InitCommand
             // The path was already confirmed on this machine. Preserve its
             // possibly newer portable runtime block; status/apply own drift.
             AecSkillInstaller.Install(codexHome);
-            if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
+            if (!string.Equals(completed.Commit, GitRepository.ResolveHeadCommit(repository),
                     StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
@@ -429,7 +429,7 @@ internal static class InitCommand
         string platform,
         byte[] expectedTarget)
     {
-        if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
+        if (!string.Equals(completed.Commit, GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal) ||
             !CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Codex)
                 .AsSpan().SequenceEqual(expectedTarget) ||
@@ -482,7 +482,7 @@ internal static class InitCommand
             }
         }
 
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
         var files = CommittedFileReader.ReadCommittedFiles(repository, commit,
             (AecApplication.SourceRelativePath, "Canonical source"),
             (AecApplication.ConfigSourceRelativePath, "Canonical config"));
@@ -506,7 +506,7 @@ internal static class InitCommand
 
         // Pin the inspected snapshot after all history checks so a concurrent checkout
         // cannot silently redirect the later attachment apply.
-        var currentCommit = ApplyCommand.ResolveHeadCommit(repository);
+        var currentCommit = GitRepository.ResolveHeadCommit(repository);
         if (!string.Equals(commit, currentCommit, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(

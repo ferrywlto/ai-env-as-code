@@ -45,7 +45,7 @@ internal static class SharedEnrollmentCommand
         };
         EnsureSourcesExist(repository, sourcePaths);
 
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
         var shared = ReadCommittedSource(repository, commit, sourcePaths[0]);
         var policy = ReadCommittedSource(repository, commit, sourcePaths[1]);
         var overlay = ReadCommittedSource(repository, commit, sourcePaths[2]);
@@ -98,7 +98,7 @@ internal static class SharedEnrollmentCommand
         // change during preflight must not produce an unreviewed composition.
         if (!string.Equals(
                 commit,
-                ApplyCommand.ResolveHeadCommit(repository),
+                GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during enrollment.");

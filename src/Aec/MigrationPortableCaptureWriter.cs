@@ -63,7 +63,7 @@ internal static class MigrationPortableCaptureWriter
         {
             AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
             AecApplication.EnsureNoLinksInExistingPath(Path.Combine(repository, ".git"), "Git metadata path");
-            if (ApplyCommand.ResolveHeadCommit(repository) != expectedHead ||
+            if (GitRepository.ResolveHeadCommit(repository) != expectedHead ||
                 MigrationLegacyCapturePreview.ReadBranch(repository) != fresh.Branch ||
                 AecApplication.ReadOptionalTextFile(Path.Combine(repository, MigrationPreflight.FormatRelativePath), "Repository format marker") is not null ||
                 !MigrationHarnessSelection.Read(fresh.Preparation.Preflight with { Commit = expectedHead })

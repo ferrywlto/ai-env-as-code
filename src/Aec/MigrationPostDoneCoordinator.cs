@@ -13,7 +13,7 @@ internal static class MigrationPostDoneCoordinator
         ApplyProviders,
         current => MigrationCompletionPreview.Read(current),
         completion => MigrationCompletionCommitter.WriteAndCommit(completion),
-        ApplyCommand.ResolveHeadCommit);
+        GitRepository.ResolveHeadCommit);
 
     public static MigrationPostDoneResult? WaitAndComplete(MigrationScaffoldResult scaffold,
         TextReader input, TextWriter output, CancellationToken cancellationToken = default)

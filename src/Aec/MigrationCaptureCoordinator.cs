@@ -50,7 +50,7 @@ internal static class MigrationCaptureCoordinator
         // Each committer proves its child and exact paths. At the handoff, do
         // not adopt an unrelated HEAD or refresh the operator's section choice.
         var expected = commit ?? preflight.Commit;
-        if (ApplyCommand.ResolveHeadCommit(repository) != expected ||
+        if (GitRepository.ResolveHeadCommit(repository) != expected ||
             MigrationLegacyCapturePreview.ReadBranch(repository) != branch)
         {
             throw new InvalidOperationException($"Migration HEAD or branch changed at the capture handoff. " +

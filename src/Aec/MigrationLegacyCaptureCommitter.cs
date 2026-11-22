@@ -65,7 +65,7 @@ internal static class MigrationLegacyCaptureCommitter
             BackupCommand.CommitStagedIndex(repository, CommitMessage,
                 expected, reviewed.Branch, parent, modes);
 
-            var commit = ApplyCommand.ResolveHeadCommit(repository);
+            var commit = GitRepository.ResolveHeadCommit(repository);
             var actualParent = GitProcess.RunRequired(repository, "Could not inspect capture parent",
                 "rev-parse", $"{commit}^").Output.Trim();
             if (actualParent != parent) throw new InvalidOperationException("Capture commit parent changed.");
@@ -95,7 +95,7 @@ internal static class MigrationLegacyCaptureCommitter
             AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
             AecApplication.EnsureNoLinksInExistingPath(Path.Combine(repository, ".git"), "Git metadata path");
             MigrationFastForward.EnsureSafeGitConfiguration(repository);
-            if (ApplyCommand.ResolveHeadCommit(repository) != expectedHead ||
+            if (GitRepository.ResolveHeadCommit(repository) != expectedHead ||
                 MigrationLegacyCapturePreview.ReadBranch(repository) != reviewed.Branch ||
                 AecApplication.ReadOptionalTextFile(Path.Combine(repository, MigrationPreflight.FormatRelativePath),
                     "Repository format marker") is not null ||

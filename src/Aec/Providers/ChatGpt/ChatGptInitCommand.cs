@@ -77,7 +77,7 @@ internal static class ChatGptInitCommand
         AecApplication.EnsureRealDirectory(repository, "Repository");
         AecApplication.EnsureSourceDirectories(repository);
 
-        ApplyCommand.ValidateRepositoryRoot(
+        GitRepository.ValidateRepositoryRoot(
             repository, "init --provider=chatgpt requires the Git repository root");
     }
 
