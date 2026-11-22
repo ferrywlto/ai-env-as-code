@@ -21,13 +21,8 @@ internal static class ApplyCommand
             codexHome,
             output,
             TextWriter.Null,
-            initialization: new InitializationExpectation(
-                expectedRuntime,
-                expectedRuntimePersonality,
-                expectedCommit,
-                expectedSource,
-                expectedConfig),
-            repositoryExpectation: null);
+            new ApplyExpectation(expectedRuntime, expectedRuntimePersonality,
+                expectedCommit, expectedSource, expectedConfig, null, IsInitialization: true));
     }
 
     internal static int RunForAttachment(
@@ -50,14 +45,9 @@ internal static class ApplyCommand
             codexHome,
             output,
             warning,
-            initialization: null,
-            repositoryExpectation: new RepositoryExpectation(
-                expectedRuntime,
-                expectedRuntimePersonality,
-                expectedCommit,
-                expectedSource,
-                expectedConfig,
-                expectedLocalRuntimeSource));
+            new ApplyExpectation(expectedRuntime, expectedRuntimePersonality,
+                expectedCommit, expectedSource, expectedConfig, expectedLocalRuntimeSource,
+                IsInitialization: false));
     }
 
     private static int Run(
@@ -65,38 +55,25 @@ internal static class ApplyCommand
         string codexHome,
         TextWriter output,
         TextWriter warning,
-        InitializationExpectation? initialization,
-        RepositoryExpectation? repositoryExpectation)
+        ApplyExpectation expected)
     {
         EnsureRuntimeOutsideRepository(repository, codexHome);
         GitRepository.ValidateRepositoryRoot(repository);
 
         var commit = GitRepository.ResolveHeadCommit(repository);
-        if (initialization is not null &&
-            !string.Equals(commit, initialization.Commit, StringComparison.Ordinal))
+        if (!string.Equals(commit, expected.Commit, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                "Repository HEAD changed after the initialization commit.");
-        }
-        if (repositoryExpectation is not null &&
-            !string.Equals(commit, repositoryExpectation.Commit, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Repository HEAD changed before attachment apply.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Repository HEAD changed after the initialization commit."
+                : "Repository HEAD changed before attachment apply.");
         }
 
         var source = CodexCanonicalFiles.ReadCommittedSource(repository, commit);
-        if (initialization is not null &&
-            !source.AsSpan().SequenceEqual(initialization.Source))
+        if (!source.AsSpan().SequenceEqual(expected.Source))
         {
-            throw new InvalidOperationException(
-                "Committed source does not match the expected initialization content.");
-        }
-        if (repositoryExpectation is not null &&
-            !source.AsSpan().SequenceEqual(repositoryExpectation.Source))
-        {
-            throw new InvalidOperationException(
-                "Committed source changed before attachment apply.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Committed source does not match the expected initialization content."
+                : "Committed source changed before attachment apply.");
         }
 
         var binding = AecInstructionBlock.ReadRepositoryBinding(source);
@@ -106,7 +83,7 @@ internal static class ApplyCommand
         {
             // Only confirmed init attachment may substitute a machine-local
             // binding. The committed bytes remain pinned and are never edited.
-            var localSource = repositoryExpectation?.LocalRuntimeSource;
+            var localSource = expected.LocalRuntimeSource;
             if (localSource is null ||
                 !AecInstructionBlock.RebindRepository(source, repository)
                     .AsSpan().SequenceEqual(localSource))
@@ -122,17 +99,11 @@ internal static class ApplyCommand
         }
 
         var canonicalConfig = CodexCanonicalFiles.ReadCommittedConfig(repository, commit);
-        if (initialization is not null &&
-            !canonicalConfig.AsSpan().SequenceEqual(initialization.Config))
+        if (!canonicalConfig.AsSpan().SequenceEqual(expected.Config))
         {
-            throw new InvalidOperationException(
-                "Committed config does not match the expected initialization content.");
-        }
-        if (repositoryExpectation is not null &&
-            !canonicalConfig.AsSpan().SequenceEqual(repositoryExpectation.Config))
-        {
-            throw new InvalidOperationException(
-                "Committed config changed before attachment apply.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Committed config does not match the expected initialization content."
+                : "Committed config changed before attachment apply.");
         }
 
         var desiredPersonality = CodexPersonalityConfig.ReadCanonical(
@@ -179,43 +150,21 @@ internal static class ApplyCommand
             return 0;
         }
 
-        // Init may overwrite only the exact runtime bytes captured by its baseline commit.
-        if (initialization is not null &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(initialization.Runtime)) &&
+        // Both routes permit the reviewed runtime or an already-applied target.
+        if (!MatchesOptionalBytes(runtime, expected.Runtime) &&
             (runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource)))
         {
-            throw new InvalidOperationException(
-                "Runtime target changed after the initialization backup; committed source was not applied.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Runtime target changed after the initialization backup; committed source was not applied."
+                : "Runtime target changed during AEC attachment; the committed environment was not applied.");
         }
 
-        if (initialization is not null &&
-            runtimePersonality != initialization.RuntimePersonality &&
+        if (runtimePersonality != expected.RuntimePersonality &&
             runtimePersonality != desiredPersonality)
         {
-            throw new InvalidOperationException(
-                "Runtime personality changed after the initialization backup; " +
-                "the committed environment was not applied.");
-        }
-
-        // Attachment uses the runtime snapshot taken before skill installation or
-        // a local path rebind. The already-desired state is also accepted so a
-        // previously interrupted apply remains safely repeatable.
-        if (repositoryExpectation is not null &&
-            !MatchesOptionalBytes(runtime, repositoryExpectation.Runtime) &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource)))
-        {
-            throw new InvalidOperationException(
-                "Runtime target changed during AEC attachment; " +
-                "the committed environment was not applied.");
-        }
-
-        if (repositoryExpectation is not null &&
-            runtimePersonality != repositoryExpectation.RuntimePersonality &&
-            runtimePersonality != desiredPersonality)
-        {
-            throw new InvalidOperationException(
-                "Runtime personality changed during AEC attachment; " +
-                "the committed environment was not applied.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Runtime personality changed after the initialization backup; the committed environment was not applied."
+                : "Runtime personality changed during AEC attachment; the committed environment was not applied.");
         }
 
         if (configUpdate.Changed)
@@ -241,7 +190,7 @@ internal static class ApplyCommand
         {
             AtomicFile.ReplaceIfUnchanged(
                 runtimePath,
-                initialization?.Runtime ?? runtime,
+                expected.IsInitialization ? expected.Runtime : runtime,
                 desiredRuntimeSource);
         }
 
@@ -291,13 +240,6 @@ internal static class ApplyCommand
         return candidate.StartsWith(directoryPrefix, comparison);
     }
 
-    private sealed record InitializationExpectation(
-        byte[] Runtime,
-        CodexPersonality? RuntimePersonality,
-        string Commit,
-        byte[] Source,
-        byte[] Config);
-
     private static bool MatchesOptionalBytes(byte[]? left, byte[]? right)
     {
         return left is null
@@ -305,11 +247,12 @@ internal static class ApplyCommand
             : right is not null && left.AsSpan().SequenceEqual(right);
     }
 
-    private sealed record RepositoryExpectation(
+    private sealed record ApplyExpectation(
         byte[]? Runtime,
         CodexPersonality? RuntimePersonality,
         string Commit,
         byte[] Source,
         byte[] Config,
-        byte[]? LocalRuntimeSource);
+        byte[]? LocalRuntimeSource,
+        bool IsInitialization);
 }

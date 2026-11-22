@@ -59,6 +59,11 @@
   its writer cases through attachment checkpoints. Preserve foreign-binding
   precedence and real Git provenance coverage. Unit, apply, initialization,
   provenance and portable review selection passed 494 tests in 1m 32s.
+- [x] Ferry reviewed the thirteenth slice: combine the initialization and attachment
+  checkpoint representation and shared comparisons while preserving their
+  diagnostics, no-op order, provenance rereads and distinct write guards.
+  Unit, apply, initialization, provenance and portable checks passed 494 tests
+  in 5m 25s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor
