@@ -74,7 +74,7 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         var originalValue = CodexPersonalityConfig.ReadCanonical(before, canonicalPath);
         var currentValue = CodexPersonalityConfig.ReadCanonical(canonical, canonicalPath);
         AecApplication.EnsureNoLinksInExistingPath(harness.Home, "Runtime config home path");
-        ApplyCommand.EnsureRuntimeOutsideRepository(current.Repository, harness.Home,
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(current.Repository, harness.Home,
             "config.toml", "Codex runtime config");
         var runtimePath = Path.Combine(harness.Home, "config.toml");
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime config");

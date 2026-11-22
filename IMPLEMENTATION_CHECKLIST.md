@@ -68,6 +68,10 @@
   comparison while retaining fresh preview creation, provider-specific errors
   and Codex runtime configuration comparison. Unit and focused portable
   backup checks passed 382 tests.
+- [x] Ferry reviewed the fifteenth slice: move the shared runtime path containment
+  checks from Codex apply into RuntimePathGuard. The implementation and each
+  caller's link-validation order and diagnostic labels are unchanged. The unit
+  and focused path-safety selection passed 383 tests.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

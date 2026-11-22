@@ -11,7 +11,7 @@ public sealed class PortableApplyStatusDecisionTests
         var root = Path.GetPathRoot(Path.GetFullPath(Path.GetTempPath()))!;
         var descendant = Path.Combine(root, "aec-test-descendant", "AGENTS.md");
 
-        Assert.True(ApplyCommand.IsPathInsideDirectory(root, descendant));
+        Assert.True(RuntimePathGuard.IsPathInsideDirectory(root, descendant));
     }
 
     [Theory]

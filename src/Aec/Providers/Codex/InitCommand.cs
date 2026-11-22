@@ -16,7 +16,7 @@ internal static class InitCommand
         var isFreshTarget = IsFreshTarget(directoryPath);
         AecApplication.EnsureNoLinksInExistingPath(codexHome, "Codex home path");
         AecApplication.EnsureRealDirectory(codexHome, "Codex home");
-        ApplyCommand.EnsureRuntimeOutsideRepository(directoryPath, codexHome);
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(directoryPath, codexHome);
 
         if (isFreshTarget && forcePathChange)
         {

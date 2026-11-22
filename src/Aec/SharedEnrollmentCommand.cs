@@ -30,7 +30,7 @@ internal static class SharedEnrollmentCommand
         AecApplication.EnsureRealDirectory(repository, "Repository");
         AecApplication.EnsureNoLinksInExistingPath(providerHome, "Provider home path");
         AecApplication.EnsureRealDirectory(providerHome, "Provider home");
-        ApplyCommand.EnsureRuntimeOutsideRepository(
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(
             repository, providerHome, fileName, "Provider runtime target");
         AecApplication.EnsureNoLinksInExistingPath(targetDirectory, "Enrollment target path");
         var runtime = AecApplication.ReadRequiredTextFile(Path.Combine(providerHome, fileName),

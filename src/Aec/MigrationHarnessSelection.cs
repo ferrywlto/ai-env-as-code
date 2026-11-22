@@ -22,7 +22,7 @@ internal static class MigrationHarnessSelection
 
             AecApplication.EnsureRealDirectory(home, $"{provider} home");
             var fileName = provider == AecIdentifiers.Codex ? "AGENTS.md" : "copilot-instructions.md";
-            ApplyCommand.EnsureRuntimeOutsideRepository(
+            RuntimePathGuard.EnsureRuntimeOutsideRepository(
                 preflight.Repository, home, fileName, $"{provider} runtime target");
             var runtimePath = Path.Combine(home, fileName);
             var runtime = AecApplication.ReadOptionalTextFile(runtimePath,

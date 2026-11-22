@@ -43,7 +43,7 @@ internal sealed record PortableRuntimeSnapshot(
         AecApplication.EnsureRealDirectory(repository, "Repository");
         AecApplication.EnsureNoLinksInExistingPath(providerHome, "Provider home path");
         AecApplication.EnsureRealDirectory(providerHome, "Provider home");
-        ApplyCommand.EnsureRuntimeOutsideRepository(
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(
             repository, providerHome, fileName, "Provider runtime target");
 
         var platform = RenderCommand.CurrentPlatform();

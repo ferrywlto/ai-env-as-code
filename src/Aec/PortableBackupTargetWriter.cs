@@ -52,7 +52,7 @@ internal static class PortableBackupTargetWriter
         var providerHome = Path.GetDirectoryName(reviewed.RuntimePath)
             ?? throw new InvalidOperationException("Provider runtime target has no parent directory.");
         AecApplication.EnsureNoLinksInExistingPath(providerHome, "Provider home path");
-        ApplyCommand.EnsureRuntimeOutsideRepository(
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(
             reviewed.Repository, providerHome, Path.GetFileName(reviewed.RuntimePath),
             "Provider runtime target");
         var sources = new Dictionary<string, Source>(StringComparer.Ordinal);

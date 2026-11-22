@@ -26,7 +26,7 @@ internal sealed record PortableCodexConfigPreview(
 
         var providerHome = Path.GetDirectoryName(snapshot.RuntimePath)
             ?? throw new InvalidOperationException("Codex runtime target has no parent directory.");
-        ApplyCommand.EnsureRuntimeOutsideRepository(
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(
             snapshot.Repository, providerHome, "config.toml", "Codex runtime config");
         var runtimePath = Path.Combine(providerHome, "config.toml");
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime config");
