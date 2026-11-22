@@ -75,7 +75,7 @@ internal sealed record MigrationPortableCapturePreview(MigrationPreparation Prep
             AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(codex.RuntimeConfigPath)!, "Runtime config path");
             if (!AecApplication.ReadRequiredTextFile(codex.RuntimeConfigPath, "Runtime config")
                     .AsSpan().SequenceEqual(codex.RuntimeConfig) ||
-                !ApplyCommand.ReadCommittedConfig(repository, expected.Commit).AsSpan().SequenceEqual(codex.CanonicalConfig))
+                !CodexCanonicalFiles.ReadCommittedConfig(repository, expected.Commit).AsSpan().SequenceEqual(codex.CanonicalConfig))
             {
                 throw new InvalidOperationException("Codex config changed during portable capture preview.");
             }

@@ -100,7 +100,7 @@ internal static class ApplyCommand
                 "Repository HEAD changed before attachment apply.");
         }
 
-        var source = ReadCommittedSource(repository, commit);
+        var source = CodexCanonicalFiles.ReadCommittedSource(repository, commit);
         if (initialization is not null &&
             !source.AsSpan().SequenceEqual(initialization.Source))
         {
@@ -136,7 +136,7 @@ internal static class ApplyCommand
             desiredRuntimeSource = localSource;
         }
 
-        var canonicalConfig = ReadCommittedConfig(repository, commit);
+        var canonicalConfig = CodexCanonicalFiles.ReadCommittedConfig(repository, commit);
         if (initialization is not null &&
             !canonicalConfig.AsSpan().SequenceEqual(initialization.Config))
         {
@@ -175,13 +175,13 @@ internal static class ApplyCommand
             throw new InvalidOperationException("Repository HEAD changed during apply.");
         }
 
-        var refreshedSource = ReadCommittedSource(repository, commit);
+        var refreshedSource = CodexCanonicalFiles.ReadCommittedSource(repository, commit);
         if (!refreshedSource.AsSpan().SequenceEqual(source))
         {
             throw new InvalidOperationException("Canonical source changed during apply.");
         }
 
-        var refreshedConfig = ReadCommittedConfig(repository, commit);
+        var refreshedConfig = CodexCanonicalFiles.ReadCommittedConfig(repository, commit);
         if (!refreshedConfig.AsSpan().SequenceEqual(canonicalConfig))
         {
             throw new InvalidOperationException("Canonical config changed during apply.");
@@ -262,24 +262,6 @@ internal static class ApplyCommand
 
         output.WriteLine("applied");
         return 0;
-    }
-
-    internal static byte[] ReadCommittedSource(string repository, string commit)
-    {
-        return CommittedFileReader.ReadCommittedFile(
-            repository,
-            commit,
-            AecApplication.SourceRelativePath,
-            "Canonical source");
-    }
-
-    internal static byte[] ReadCommittedConfig(string repository, string commit)
-    {
-        return CommittedFileReader.ReadCommittedFile(
-            repository,
-            commit,
-            AecApplication.ConfigSourceRelativePath,
-            "Canonical config");
     }
 
     internal static void EnsureRuntimeOutsideRepository(string repository, string codexHome)

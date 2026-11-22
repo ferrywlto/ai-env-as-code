@@ -51,6 +51,10 @@
   detached-HEAD behavior and diagnostics, are unchanged. The focused run
   passed 367 tests with local socket access; the earlier sandboxed run aborted
   before execution when its local socket bind was denied.
+- [x] Ferry reviewed the eleventh slice: move the Codex source/config committed-file
+  delegates out of the apply writer; callers retain their pinned commits, byte
+  reads and diagnostics. The unit, apply, initialization, portable backup and
+  migration selection passed 553 tests in 4m 55s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

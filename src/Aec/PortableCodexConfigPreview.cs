@@ -21,7 +21,7 @@ internal sealed record PortableCodexConfigPreview(
             snapshot.Repository, AecApplication.ConfigSourceRelativePath);
         AecApplication.EnsureNoLinksInExistingPath(
             Path.GetDirectoryName(canonicalPath)!, "Canonical config path");
-        var canonical = ApplyCommand.ReadCommittedConfig(snapshot.Repository, snapshot.Commit);
+        var canonical = CodexCanonicalFiles.ReadCommittedConfig(snapshot.Repository, snapshot.Commit);
         var desiredPersonality = CodexPersonalityConfig.ReadCanonical(canonical, canonicalPath);
 
         var providerHome = Path.GetDirectoryName(snapshot.RuntimePath)

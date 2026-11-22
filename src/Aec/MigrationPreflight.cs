@@ -57,11 +57,11 @@ internal sealed record MigrationPreflight(
             // Historical initialization alone cannot prove later commits left a
             // usable legacy environment. Validate today's committed managed files
             // without rejecting unrelated draft section edits.
-            var source = ApplyCommand.ReadCommittedSource(repository, commit);
+            var source = CodexCanonicalFiles.ReadCommittedSource(repository, commit);
             _ = AecInstructionBlock.ReadRepositoryBinding(source)
                 ?? throw new InvalidDataException(
                     "Canonical instructions do not contain a supported initialized AEC block.");
-            var config = ApplyCommand.ReadCommittedConfig(repository, commit);
+            var config = CodexCanonicalFiles.ReadCommittedConfig(repository, commit);
             _ = CodexPersonalityConfig.ReadCanonical(config,
                 Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
         }

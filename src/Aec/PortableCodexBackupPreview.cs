@@ -22,7 +22,7 @@ internal sealed record PortableCodexBackupPreview(
             snapshot.Repository, AecApplication.ConfigSourceRelativePath);
         AecApplication.EnsureNoLinksInExistingPath(
             Path.GetDirectoryName(canonicalPath)!, "Canonical config path");
-        var canonical = ApplyCommand.ReadCommittedConfig(snapshot.Repository, snapshot.Commit);
+        var canonical = CodexCanonicalFiles.ReadCommittedConfig(snapshot.Repository, snapshot.Commit);
 
         var providerHome = Path.GetDirectoryName(snapshot.RuntimePath)
             ?? throw new InvalidOperationException("Codex runtime target has no parent directory.");

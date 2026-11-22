@@ -433,7 +433,7 @@ internal static class InitCommand
                 StringComparison.Ordinal) ||
             !CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Codex)
                 .AsSpan().SequenceEqual(expectedTarget) ||
-            !ApplyCommand.ReadCommittedConfig(repository, completed.Commit)
+            !CodexCanonicalFiles.ReadCommittedConfig(repository, completed.Commit)
                 .AsSpan().SequenceEqual(completed.Config))
         {
             throw new InvalidOperationException(
