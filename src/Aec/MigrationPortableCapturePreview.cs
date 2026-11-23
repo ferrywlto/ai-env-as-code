@@ -13,6 +13,8 @@ internal sealed record MigrationPortableCapturePreview(MigrationPreparation Prep
         ArgumentNullException.ThrowIfNull(preparation);
         var expected = preparation.Preflight;
         var repository = expected.Repository;
+        // Only immutable objects from this pinned commit are shared between providers.
+        var historicalFiles = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         ValidateContext();
         var branch = MigrationLegacyCapturePreview.ReadBranch(repository);
         MigrationLegacyCapturePreview.EnsureOriginalCommit(repository, preparation.OriginalCommit, expected.Commit);
@@ -116,7 +118,11 @@ internal sealed record MigrationPortableCapturePreview(MigrationPreparation Prep
                 $"environment/targets/{snapshot.Platform}/{snapshot.Provider}/{Path.GetFileName(snapshot.RuntimePath)}"];
             foreach (var path in paths)
             {
-                var actual = MigrationLegacyCapturePreview.ReadHistoricalFile(repository, expected.Commit, path);
+                if (!historicalFiles.TryGetValue(path, out var actual))
+                {
+                    actual = MigrationLegacyCapturePreview.ReadHistoricalFile(repository, expected.Commit, path);
+                    historicalFiles.Add(path, actual);
+                }
                 var absolute = Path.Combine(repository, path);
                 AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(absolute)!, "Portable canonical path");
                 var working = AecApplication.ReadRequiredTextFile(absolute, "Portable canonical file");

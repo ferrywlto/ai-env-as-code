@@ -95,6 +95,11 @@
   scaffold writing and source validation while retaining their separate file
   readers, diagnostic labels and validation checkpoints. Unit and focused
   migration checks passed 373 tests in 3m 16s.
+- [x] Ferry reviewed the twenty-second slice: reuse immutable historical source blobs
+  within a single portable migration preview. Per-provider working-file and
+  final drift checks remain. A matched dual-provider test passed before and
+  after, with Git starts falling from 207 to 201; both ran in about four seconds.
+  Unit and focused migration checks passed 358 tests in 2m 10s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor
