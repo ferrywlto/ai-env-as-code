@@ -72,6 +72,10 @@
   checks from Codex apply into RuntimePathGuard. The implementation and each
   caller's link-validation order and diagnostic labels are unchanged. The unit
   and focused path-safety selection passed 383 tests.
+- [x] Ferry reviewed the sixteenth slice: share protected-target snapshot enumeration
+  between migration source commits and target writes. Preserve required versus
+  optional missing targets, path diagnostics and existing snapshot timing.
+  Unit and focused migration checks passed 358 tests in 1m 30s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

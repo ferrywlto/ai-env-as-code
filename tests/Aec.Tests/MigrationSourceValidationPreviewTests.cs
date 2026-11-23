@@ -32,6 +32,26 @@ public sealed class MigrationSourceValidationPreviewTests
     }
 
     [Fact]
+    public void ProtectedTargetSnapshotDistinguishesMissingFromRequired()
+    {
+        using var layout = new Layout("codex", "copilot");
+        var context = layout.Context();
+        var path = Path.Combine(layout.Repository, layout.Target("codex"));
+        File.Delete(path);
+        var head = layout.Files.Head();
+
+        var optional = MigrationSourceValidationPreview.ReadProtectedFilesWithTargets(
+            context, requireTargets: false);
+        var error = Assert.Throws<FileNotFoundException>(() =>
+            MigrationSourceValidationPreview.ReadProtectedFilesWithTargets(context, requireTargets: true));
+
+        Assert.Null(optional[path]);
+        Assert.Contains("Protected migration target does not exist", error.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(path));
+        Assert.Equal(head, layout.Files.Head());
+    }
+
+    [Fact]
     public void CleanSourcesReturnExactCommittedAndWorkingSnapshots()
     {
         using var layout = new Layout("codex", "copilot");

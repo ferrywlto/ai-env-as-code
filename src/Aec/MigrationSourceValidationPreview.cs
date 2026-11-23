@@ -177,6 +177,27 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
     }
 
 
+    internal static Dictionary<string, byte[]?> ReadProtectedFilesWithTargets(
+        MigrationPreparation expected, bool requireTargets)
+    {
+        var files = ReadProtectedFiles(expected);
+        var repository = expected.Preflight.Repository;
+        var targets = GitProcess.RunRequired(repository, "Could not list protected migration targets",
+            "--no-replace-objects", "ls-tree", "-r", "--name-only", "-z",
+            expected.Preflight.Commit, "--", "environment/targets").Output;
+        foreach (var relative in targets.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            _ = MigrationPortableTargetWriter.ReadEnrollment(relative);
+            var path = Path.Combine(repository, relative);
+            AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!,
+                requireTargets ? "Protected target path" : "Protected migration target path");
+            files.Add(path, requireTargets
+                ? AecApplication.ReadRequiredTextFile(path, "Protected migration target")
+                : AecApplication.ReadOptionalTextFile(path, "Protected migration target"));
+        }
+        return files;
+    }
+
     private static byte[]? ReadFile(string path)
     {
         AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!, "Source validation input path");

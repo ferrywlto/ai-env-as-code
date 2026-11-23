@@ -28,7 +28,8 @@ internal sealed class MigrationTargetWriter
         var repository = fresh.Preparation.Preflight.Repository;
         var path = Path.Combine(repository, fresh.TargetRelativePath);
         var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
-        var protectedFiles = ReadProtectedFiles(fresh);
+        var protectedFiles = MigrationSourceValidationPreview.ReadProtectedFilesWithTargets(
+            fresh.Preparation, requireTargets: false);
         var mode = ReadExpectedMode(path, fresh.WorkingContent);
         return new MigrationTargetWriter(fresh, index, protectedFiles, mode);
     }
@@ -181,23 +182,6 @@ internal sealed class MigrationTargetWriter
             if (!before.WorkingContent.AsSpan().SequenceEqual(current.WorkingContent))
                 throw new InvalidOperationException($"Migration source working bytes differ: {current.RelativePath}.");
         }
-    }
-
-    private static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationTargetPreview fresh)
-    {
-        var files = MigrationSourceValidationPreview.ReadProtectedFiles(fresh.Preparation);
-        var repository = fresh.Preparation.Preflight.Repository;
-        var targets = GitProcess.RunRequired(repository, "Could not list protected migration targets",
-            "--no-replace-objects", "ls-tree", "-r", "--name-only", "-z",
-            fresh.Preparation.Preflight.Commit, "--", "environment/targets").Output;
-        foreach (var relative in targets.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            _ = MigrationPortableTargetWriter.ReadEnrollment(relative);
-            var path = Path.Combine(repository, relative);
-            AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!, "Protected migration target path");
-            files.Add(path, AecApplication.ReadOptionalTextFile(path, "Protected migration target"));
-        }
-        return files;
     }
 
     private static UnixFileMode? ReadExpectedMode(string path, byte[]? working)
