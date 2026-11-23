@@ -3,7 +3,6 @@ namespace Aec;
 internal static class InitCommand
 {
     private const string LegacyInitializedRootSubject = "Initialize AEC data repository";
-    private const string InitializationCommitMessage = "Initialize AEC instructions";
 
     public static int Run(
         string directoryPath,
@@ -174,11 +173,9 @@ internal static class InitCommand
 
         var initializationCommit = BackupCommand.CommitCanonicalEnvironment(
             directoryPath,
-            InitializationCommitMessage,
             baseline.Commit,
             merged,
-            baseline.Config,
-            allowEmpty: true);
+            baseline.Config);
         ApplyCommand.RunForInitialization(
             directoryPath,
             codexHome,

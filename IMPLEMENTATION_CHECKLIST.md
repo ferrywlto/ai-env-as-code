@@ -84,6 +84,10 @@
   migration scaffold source blobs. Preserve missing-file handling, regular-file
   validation, bounded reads, LFS rejection and no-replacement-object checks.
   Unit and focused migration preview checks passed 364 tests in 39s.
+- [x] Ferry reviewed the nineteenth slice: remove the unused non-empty-only option
+  from the initialization commit and keep its fixed commit message and required
+  empty second commit behavior. Unit, initialization and backup checks passed
+  461 tests in 52s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

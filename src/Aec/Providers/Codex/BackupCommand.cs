@@ -4,6 +4,7 @@ internal static class BackupCommand
 {
     internal const string CommitMessage = "Backup Codex AGENTS.md";
     internal const string OrdinaryCommitMessage = "Backup Codex environment";
+    private const string InitializationCommitMessage = "Initialize AEC instructions";
     private const string OutsideSourcePathspec =
         ":(top,exclude,literal)environment/providers/codex/AGENTS.md";
     private const string OutsideConfigSourcePathspec =
@@ -105,11 +106,9 @@ internal static class BackupCommand
 
     internal static string CommitCanonicalEnvironment(
         string repository,
-        string commitMessage,
         string expectedParent,
         byte[] expectedSource,
-        byte[] expectedConfig,
-        bool allowEmpty)
+        byte[] expectedConfig)
     {
         ArgumentNullException.ThrowIfNull(expectedSource);
         ArgumentNullException.ThrowIfNull(expectedConfig);
@@ -147,18 +146,12 @@ internal static class BackupCommand
             expectedConfigBlob,
             expectedConfig,
             "canonical config");
-        if (!allowEmpty && !HasStagedManagedChange(repository))
-        {
-            throw new InvalidOperationException(
-                "Canonical environment has no change to commit.");
-        }
-
         EnsureNoChangesOutsideManagedSources(repository);
         EnsureBranchMatches(repository, "refs/heads/main");
         EnsureHeadMatches(repository, expectedParent);
         CommitStagedIndex(
             repository,
-            commitMessage,
+            InitializationCommitMessage,
             [
                 (AecApplication.SourceRelativePath, expectedSourceBlob),
                 (AecApplication.ConfigSourceRelativePath, expectedConfigBlob)
@@ -172,7 +165,7 @@ internal static class BackupCommand
             repository,
             expectedSourceBlob,
             expectedConfigBlob,
-            commitMessage);
+            InitializationCommitMessage);
         EnsureBranchMatches(repository, "refs/heads/main");
         EnsureNoChangesOutsideManagedSources(repository);
         return head;

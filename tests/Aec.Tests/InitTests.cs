@@ -1251,11 +1251,9 @@ public sealed class InitTests
         var exception = Assert.Throws<InvalidOperationException>(() =>
             BackupCommand.CommitCanonicalEnvironment(
                 layout.Target,
-                "Initialize AEC instructions",
                 baseline,
                 expectedSource,
-                expectedConfig,
-                allowEmpty: true));
+                expectedConfig));
 
         Assert.Contains("changed before", exception.Message, StringComparison.Ordinal);
         Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
