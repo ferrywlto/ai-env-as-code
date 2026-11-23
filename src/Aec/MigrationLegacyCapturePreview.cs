@@ -153,6 +153,12 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         // links, oversized blobs and replacement objects as if they were files.
         var tree = GitProcess.RunRequired(repository, "Git could not inspect historical migration source",
             "--no-replace-objects", "ls-tree", "-z", commit, "--", relative).Output;
+        return ReadHistoricalBlob(repository, relative, tree).Content;
+    }
+
+    internal static (byte[] Content, string Mode, string Blob) ReadHistoricalBlob(
+        string repository, string relative, string tree)
+    {
         var tab = tree.IndexOf('\t');
         if (tab < 0 || !tree.EndsWith('\0') || tree[..^1].Contains('\0') || tree[(tab + 1)..^1] != relative)
         {
@@ -172,6 +178,6 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         var content = GitProcess.RunRequiredBytes(repository, "Git could not read historical migration source",
             "--no-replace-objects", "cat-file", "blob", fields[2]);
         MigrationLfsPointer.Reject(content, $"Historical migration source {relative}");
-        return content;
+        return (content, fields[0], fields[2]);
     }
 }

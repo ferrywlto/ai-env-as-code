@@ -154,12 +154,10 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
         var treeEntry = result.Output;
         if (treeEntry.Length == 0) return (null, null, "");
 
-        // Reuse the bounded regular-blob validator before reading its metadata.
-        // The pinned commit is read without replacement objects in both calls.
-        var content = MigrationLegacyCapturePreview.ReadHistoricalFile(preflight.Repository, preflight.Commit, relativePath);
-        var metadata = treeEntry[..treeEntry.IndexOf('\t')].Split(' ');
-        var mode = metadata[0];
-        var blob = metadata[2];
+        // Validate and read the immutable blob using the tree entry already
+        // obtained from the pinned commit, without a second tree query.
+        var (content, mode, blob) = MigrationLegacyCapturePreview.ReadHistoricalBlob(
+            preflight.Repository, relativePath, treeEntry);
         return (content, mode, $"{mode} {blob} 0\t{relativePath}\0");
     }
 

@@ -80,6 +80,10 @@
   portable capture and the other migration committers. Keep per-file proofs,
   diagnostic text and verification order unchanged. Unit and focused migration
   checks passed 360 tests in 2m 50s.
+- [x] Ferry reviewed the eighteenth slice: reuse the pinned tree entry when validating
+  migration scaffold source blobs. Preserve missing-file handling, regular-file
+  validation, bounded reads, LFS rejection and no-replacement-object checks.
+  Unit and focused migration preview checks passed 364 tests in 39s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor
