@@ -154,7 +154,11 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             throw new InvalidOperationException("Local harness enrollment changed during source validation.");
     }
 
-    internal static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationPreparation expected)
+    internal static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationPreparation expected) =>
+        ReadProtectedFiles(expected, ReadFile);
+
+    internal static Dictionary<string, byte[]?> ReadProtectedFiles(
+        MigrationPreparation expected, Func<string, byte[]?> readFile)
     {
         var files = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         string[] legacy = [AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath,
@@ -162,15 +166,15 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
         foreach (var relative in legacy)
         {
             var path = Path.Combine(expected.Preflight.Repository, relative);
-            files.Add(path, ReadFile(path));
+            files.Add(path, readFile(path));
         }
         foreach (var harness in expected.Harnesses)
         {
-            files.Add(harness.RuntimePath, ReadFile(harness.RuntimePath));
+            files.Add(harness.RuntimePath, readFile(harness.RuntimePath));
             if (harness.Provider == AecIdentifiers.Codex)
             {
                 var path = Path.Combine(harness.Home, "config.toml");
-                files.Add(path, ReadFile(path));
+                files.Add(path, readFile(path));
             }
         }
         return files;

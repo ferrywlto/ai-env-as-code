@@ -91,6 +91,10 @@
 - [x] Ferry reviewed the twentieth slice: share historical-target pinning logic between
   status and completion, retaining independent reads and final drift checks.
   Unit and status/completion preview checks passed 362 tests in 2m 14s.
+- [x] Ferry reviewed the twenty-first slice: share the protected-file inventory between
+  scaffold writing and source validation while retaining their separate file
+  readers, diagnostic labels and validation checkpoints. Unit and focused
+  migration checks passed 373 tests in 3m 16s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

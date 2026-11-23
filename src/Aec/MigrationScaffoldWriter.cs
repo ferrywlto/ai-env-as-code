@@ -4,10 +4,6 @@ namespace Aec;
 // commit, instruction classification or deployment.
 internal static class MigrationScaffoldWriter
 {
-    private static readonly string[] ProtectedSourcePaths =
-    [AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath,
-        AecApplication.CopilotSourceRelativePath];
-
     public static IReadOnlyList<string> Write(MigrationScaffoldPreview reviewed)
     {
         ArgumentNullException.ThrowIfNull(reviewed);
@@ -299,28 +295,9 @@ internal static class MigrationScaffoldWriter
         return missing;
     }
 
-    internal static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationScaffoldPreview fresh)
-    {
-        var files = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
-        var repository = fresh.Preparation.Preflight.Repository;
-        foreach (var relative in ProtectedSourcePaths)
-        {
-            var path = Path.Combine(repository, relative);
-            files.Add(path, ReadFile(path));
-        }
-        // These snapshots protect this operation, not runtime equality with an
-        // earlier preview: runtime bytes are not stored in that advisory record.
-        foreach (var harness in fresh.Preparation.Harnesses)
-        {
-            files.Add(harness.RuntimePath, ReadFile(harness.RuntimePath));
-            if (harness.Provider == AecIdentifiers.Codex)
-            {
-                var path = Path.Combine(harness.Home, "config.toml");
-                files.Add(path, ReadFile(path));
-            }
-        }
-        return files;
-    }
+    // Runtime snapshots protect this operation, not an earlier advisory preview.
+    internal static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationScaffoldPreview fresh) =>
+        MigrationSourceValidationPreview.ReadProtectedFiles(fresh.Preparation, ReadFile);
 
     private static byte[]? ReadFile(string path)
     {
