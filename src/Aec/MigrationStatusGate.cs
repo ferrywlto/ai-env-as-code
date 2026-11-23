@@ -17,21 +17,7 @@ internal static class MigrationStatusGate
         var repository = current.Preflight.Repository;
         var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
         var protectedFiles = MigrationSourceValidationPreview.ReadProtectedFiles(current);
-        foreach (var harness in current.Harnesses)
-        {
-            var relative = $"environment/targets/{RenderCommand.CurrentPlatform()}/{harness.Provider}/" +
-                Path.GetFileName(harness.RuntimePath);
-            // Pin actual committed target bytes, not a replacement Git object
-            // or an independently edited working target.
-            protectedFiles.Add(Path.Combine(repository, relative),
-                MigrationLegacyCapturePreview.ReadHistoricalFile(repository, current.Preflight.Commit, relative));
-            if (harness.Provider == AecIdentifiers.Codex)
-            {
-                var configPath = AecApplication.ConfigSourceRelativePath;
-                protectedFiles[Path.Combine(repository, configPath)] =
-                    MigrationLegacyCapturePreview.ReadHistoricalFile(repository, current.Preflight.Commit, configPath);
-            }
-        }
+        PinHistoricalFiles(current, protectedFiles);
 
         var reports = new List<MigrationProviderStatus>();
         foreach (var harness in current.Harnesses)
@@ -55,4 +41,26 @@ internal static class MigrationStatusGate
         }
         return reports.ToArray();
     }
+    internal static void PinHistoricalFiles(MigrationPreparation current,
+        IDictionary<string, byte[]?> protectedFiles)
+    {
+        var repository = current.Preflight.Repository;
+        foreach (var harness in current.Harnesses)
+        {
+            var relative = $"environment/targets/{RenderCommand.CurrentPlatform()}/{harness.Provider}/" +
+                Path.GetFileName(harness.RuntimePath);
+            // Pin actual committed target bytes, not a replacement Git object
+            // or an independently edited working target.
+            protectedFiles.Add(Path.Combine(repository, relative),
+                MigrationLegacyCapturePreview.ReadHistoricalFile(repository, current.Preflight.Commit, relative));
+            if (harness.Provider == AecIdentifiers.Codex)
+            {
+                var configPath = AecApplication.ConfigSourceRelativePath;
+                protectedFiles[Path.Combine(repository, configPath)] =
+                    MigrationLegacyCapturePreview.ReadHistoricalFile(repository, current.Preflight.Commit, configPath);
+            }
+        }
+
+    }
+
 }

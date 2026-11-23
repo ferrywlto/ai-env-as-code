@@ -25,19 +25,7 @@ internal sealed record MigrationCompletionPreview(
         var repository = current.Preflight.Repository;
         var index = MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
         var protectedFiles = MigrationSourceValidationPreview.ReadProtectedFiles(current);
-        foreach (var harness in current.Harnesses)
-        {
-            var relative = $"environment/targets/{RenderCommand.CurrentPlatform()}/{harness.Provider}/" +
-                Path.GetFileName(harness.RuntimePath);
-            protectedFiles.Add(Path.Combine(repository, relative),
-                MigrationLegacyCapturePreview.ReadHistoricalFile(repository, current.Preflight.Commit, relative));
-            if (harness.Provider == AecIdentifiers.Codex)
-            {
-                var config = AecApplication.ConfigSourceRelativePath;
-                protectedFiles[Path.Combine(repository, config)] =
-                    MigrationLegacyCapturePreview.ReadHistoricalFile(repository, current.Preflight.Commit, config);
-            }
-        }
+        MigrationStatusGate.PinHistoricalFiles(current, protectedFiles);
 
         var providers = MigrationStatusGate.Verify(current);
         beforeFinalCheckForTests?.Invoke();

@@ -88,6 +88,9 @@
   from the initialization commit and keep its fixed commit message and required
   empty second commit behavior. Unit, initialization and backup checks passed
   461 tests in 52s.
+- [x] Ferry reviewed the twentieth slice: share historical-target pinning logic between
+  status and completion, retaining independent reads and final drift checks.
+  Unit and status/completion preview checks passed 362 tests in 2m 14s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor
