@@ -10,8 +10,7 @@ internal static class MigrationCommitProof
         string parent, Dictionary<string, byte[]> expectedFiles,
         Dictionary<string, string> modes)
     {
-        VerifyPaths(repository, expectedFiles.Keys.ToArray(), false,
-            "diff", "--cached", "--no-renames", "--name-only", "-z", parent, "--");
+        VerifyStagedPaths(repository, parent, expectedFiles.Keys.ToArray());
         var staged = new List<(string RelativePath, string Blob)>();
         foreach (var (relative, expectedContent) in expectedFiles)
         {
@@ -34,6 +33,11 @@ internal static class MigrationCommitProof
         }
         return staged;
     }
+
+    internal static void VerifyStagedPaths(string repository, string parent,
+        string[] expected, bool portableCapture = false) =>
+        VerifyPaths(repository, expected, portableCapture,
+            "diff", "--cached", "--no-renames", "--name-only", "-z", parent, "--");
 
     internal static void VerifyCommit(string repository, string parent, string commit,
         IReadOnlyList<(string RelativePath, string Blob)> files, Dictionary<string, string> modes,

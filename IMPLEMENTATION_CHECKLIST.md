@@ -76,6 +76,10 @@
   between migration source commits and target writes. Preserve required versus
   optional missing targets, path diagnostics and existing snapshot timing.
   Unit and focused migration checks passed 358 tests in 1m 30s.
+- [x] Ferry reviewed the seventeenth slice: share exact staged-path verification for
+  portable capture and the other migration committers. Keep per-file proofs,
+  diagnostic text and verification order unchanged. Unit and focused migration
+  checks passed 360 tests in 2m 50s.
 - [ ] After review, choose the next bounded slice against the current code.
 
 ## Routine regression refactor

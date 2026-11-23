@@ -90,8 +90,8 @@ internal static class MigrationPortableCaptureCommitter
         Dictionary<string, string> baselineModes,
         Dictionary<string, byte[]> proposedFiles)
     {
-        VerifyPaths(repository, changedPaths,
-            "diff", "--cached", "--no-renames", "--name-only", "-z", parent, "--");
+        MigrationCommitProof.VerifyStagedPaths(
+            repository, parent, changedPaths.ToArray(), portableCapture: true);
         var stagedFiles = new List<(string RelativePath, string Blob)>();
         foreach (var relativePath in changedPaths)
         {
@@ -134,16 +134,4 @@ internal static class MigrationPortableCaptureCommitter
         return stagedFiles;
     }
 
-    private static void VerifyPaths(
-        string repository, IReadOnlyList<string> expectedPaths, params string[] arguments)
-    {
-        var result = GitProcess.RunRequired(repository, "Could not inspect exact portable capture paths",
-            ["--no-replace-objects", .. arguments]);
-        var actualPaths = result.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-            .Order(StringComparer.Ordinal).ToArray();
-        if (!actualPaths.SequenceEqual(expectedPaths, StringComparer.Ordinal))
-        {
-            throw new InvalidOperationException("Portable capture changes are not the exact reviewed path set.");
-        }
-    }
 }
