@@ -133,8 +133,10 @@
 - [x] Ferry reviewed the shared portable instruction target digest. Codex, Copilot and
   backup attribution use the same SHA-256 computation and lowercase format
   rule. The unit and focused portable selection passed all 353 tests.
-  Full regression and native smoke evidence above applies to the prior
-  production revision.
+  At PR candidate `bc71333`, all 754 routine Debug tests passed in 3m 52s
+  and the macOS ARM64 native installer, lifecycle, render and migration
+  smoke passed. The complete 1,382-case regression above covers the
+  production revision before the digest extraction.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor
