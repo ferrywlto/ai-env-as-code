@@ -100,7 +100,22 @@
   final drift checks remain. A matched dual-provider test passed before and
   after, with Git starts falling from 207 to 201; both ran in about four seconds.
   Unit and focused migration checks passed 358 tests in 2m 10s.
-- [ ] After review, choose the next bounded slice against the current code.
+- [ ] Complete cumulative regression verification at `ec4ad1e`. The initial
+  unfiltered Debug run was stopped because it used the system temporary
+  directory. The rerun with repository-local temporary and fixture directories
+  recorded 457 passes before the two-minute watchdog aborted during
+  `FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery`.
+  No assertion failure was reported. Results are in
+  `artifacts/refactor-regression.SFBaS9/full-debug.trx`.
+- [x] Ferry reviewed the fixture fix. Managed fixtures now default to the test build
+  output. The Git environment and committed-file provenance fixtures use the
+  same default. `AEC_TEST_TEMP_ROOT` remains available as an override. With the
+  override unset, all 52 focused tests passed and Git Trace2 recorded every
+  observed fixture worktree under the test build output.
+- [x] Native macOS ARM64 AOT build and isolated installer, provider lifecycle,
+  render and migration smoke passed at `ec4ad1e`; smoke fixtures used a
+  repository-local temporary directory. This is not real-harness verification.
+- [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor
 

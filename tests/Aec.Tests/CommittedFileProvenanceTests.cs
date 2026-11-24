@@ -92,7 +92,7 @@ public sealed class CommittedFileProvenanceTests
 
         public Repository(bool executable = false)
         {
-            root = Path.Combine(Path.GetTempPath(), "aec-provenance-tests", Guid.NewGuid().ToString("N"));
+            root = Path.Combine(TestTemporaryDirectory.Root, "aec-provenance-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
             File.WriteAllBytes(FilePath, Original);
             Git("init", "--quiet");
