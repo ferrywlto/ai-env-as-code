@@ -112,6 +112,16 @@
   same default. `AEC_TEST_TEMP_ROOT` remains available as an override. With the
   override unset, all 52 focused tests passed and Git Trace2 recorded every
   observed fixture worktree under the test build output.
+- [x] Ferry reviewed the fixture naming correction. The routine run at `d18a5d9`
+  passed 753 of 754 tests. The conditional Git identity test failed because
+  `fixtures` and the existing `Fixtures` directory aliased on the local
+  case-insensitive filesystem. With the fixture default renamed to
+  `test-work`, all 754 routine tests passed in 3m 29s. The isolated recovery
+  case passed in 1m 18s with 3,833 Git starts and a five-minute watchdog.
+  Both runs used the default fixture root. See
+  `artifacts/refactor-verify.uGZNHJ/routine.trx` and `recovery.trx`
+  in the same directory. The remaining legacy migration cases still need
+  cumulative verification.
 - [x] Native macOS ARM64 AOT build and isolated installer, provider lifecycle,
   render and migration smoke passed at `ec4ad1e`; smoke fixtures used a
   repository-local temporary directory. This is not real-harness verification.

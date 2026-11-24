@@ -1866,7 +1866,7 @@ public sealed class InitProcessStateTests
                 output,
                 error);
 
-            Assert.Equal(0, exitCode);
+            Assert.True(exitCode == 0, error.ToString());
             Assert.Equal($"initialized{Environment.NewLine}", output.ToString());
             Assert.Empty(error.ToString());
             Assert.Equal(
