@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec;
@@ -43,7 +42,7 @@ internal static class CopilotInstructionBlock
     {
         ValidateText(content);
         var target = RemoveManagedBlock(content, ReadBlock(content));
-        var targetDigest = Convert.ToHexStringLower(SHA256.HashData(target));
+        var targetDigest = InstructionTargetDigest.Compute(target);
         var merged = MergeVersion(content, NormalizeRepository(repository),
             version: StampedPortableVersion,
             ValidatePlatform(platform), targetDigest);
@@ -228,8 +227,7 @@ internal static class CopilotInstructionBlock
             }
 
             targetDigest = digestLine[digestPrefix.Length..^RepositorySuffix.Length];
-            if (targetDigest.Length != 64 || !targetDigest.All(character =>
-                    character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+            if (!InstructionTargetDigest.IsValid(targetDigest))
             {
                 throw new InvalidDataException(
                     "Copilot instructions contain an unsupported managed AEC block.");

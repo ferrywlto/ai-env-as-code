@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec;
@@ -62,7 +61,7 @@ internal static class AecInstructionBlock
         var normalizedRepository = NormalizeRepository(repository);
         platform = ValidatePlatform(platform);
         // Hash the authored target, not a pre-existing local AEC control block.
-        var targetDigest = Convert.ToHexStringLower(SHA256.HashData(Remove(content).Content));
+        var targetDigest = InstructionTargetDigest.Compute(Remove(content).Content);
         return includeChatGptGuidance
             ? Merge(content, PortableChatGptBlockLines(normalizedRepository, platform,
                 targetDigest), VersionBytes(StampedPortableChatGptVersion))
@@ -220,7 +219,7 @@ internal static class AecInstructionBlock
             }
 
             targetDigest = digestLine[digestPrefix.Length..^repositorySuffix.Length];
-            if (!IsLowerHexSha256(targetDigest))
+            if (!InstructionTargetDigest.IsValid(targetDigest))
             {
                 throw UnsupportedInitializedBlock();
             }
@@ -790,10 +789,6 @@ internal static class AecInstructionBlock
     }
 
     private readonly record struct Occurrences(int Count, int FirstIndex);
-
-    private static bool IsLowerHexSha256(string value) =>
-        value.Length == 64 && value.All(character =>
-            character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     internal sealed record RepositoryBinding(
         int Version,

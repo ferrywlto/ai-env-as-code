@@ -100,13 +100,15 @@
   final drift checks remain. A matched dual-provider test passed before and
   after, with Git starts falling from 207 to 201; both ran in about four seconds.
   Unit and focused migration checks passed 358 tests in 2m 10s.
-- [ ] Complete cumulative regression verification at `ec4ad1e`. The initial
-  unfiltered Debug run was stopped because it used the system temporary
-  directory. The rerun with repository-local temporary and fixture directories
-  recorded 457 passes before the two-minute watchdog aborted during
-  `FreshInvocationRefusesUncommittedMarkerThenKeepsPriorCommitsOnRecovery`.
-  No assertion failure was reported. Results are in
-  `artifacts/refactor-regression.SFBaS9/full-debug.trx`.
+- [x] Cumulative Debug regression passed for `35683d9` in three disjoint
+  runs. The 754 routine tests passed in 3m 29s, the isolated public recovery
+  case in 1m 18s, and the remaining 627 legacy migration tests in 48m 45s.
+  The three TRX files matched all 1,382 cases in unfiltered discovery by test
+  name and multiplicity, with no failures, skips or unmatched cases. Results
+  are in `artifacts/refactor-verify.uGZNHJ/` and
+  `artifacts/refactor-legacy.JnrGCW/`. The earlier unfiltered attempt at
+  `ec4ad1e` stopped during the public recovery case after 457 passes when
+  the two-minute watchdog fired.
 - [x] Ferry reviewed the fixture fix. Managed fixtures now default to the test build
   output. The Git environment and committed-file provenance fixtures use the
   same default. `AEC_TEST_TEMP_ROOT` remains available as an override. With the
@@ -120,11 +122,19 @@
   case passed in 1m 18s with 3,833 Git starts and a five-minute watchdog.
   Both runs used the default fixture root. See
   `artifacts/refactor-verify.uGZNHJ/routine.trx` and `recovery.trx`
-  in the same directory. The remaining legacy migration cases still need
-  cumulative verification.
+  in the same directory.
 - [x] Native macOS ARM64 AOT build and isolated installer, provider lifecycle,
   render and migration smoke passed at `ec4ad1e`; smoke fixtures used a
-  repository-local temporary directory. This is not real-harness verification.
+  repository-local temporary directory. The production source at `35683d9`
+  matches `ec4ad1e` exactly. Real-harness checks are tracked in #4.
+- Compared with `418650a`, production C# is down 646 lines and test C# is down
+  154 lines. The reviewed slices above record the removed paths and retained
+  coverage.
+- [x] Ferry reviewed the shared portable instruction target digest. Codex, Copilot and
+  backup attribution use the same SHA-256 computation and lowercase format
+  rule. The unit and focused portable selection passed all 353 tests.
+  Full regression and native smoke evidence above applies to the prior
+  production revision.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor
