@@ -137,6 +137,10 @@
   and the macOS ARM64 native installer, lifecycle, render and migration
   smoke passed. The complete 1,382-case regression above covers the
   production revision before the digest extraction.
+- [x] Ferry reviewed named Git path operations. Legacy and portable migration
+  verification now use the same staged-path and commit-diff APIs. The callers
+  still own exact path validation and retain their diagnostics, replacement-ref
+  behavior and check order. All 357 unit and focused migration tests passed.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor

@@ -1,6 +1,6 @@
 namespace Aec;
 
-// Repository identity and committed HEAD checks shared across workflows.
+// Named Git repository operations shared across workflows.
 internal static class GitRepository
 {
     internal static void ValidateRepositoryRoot(
@@ -55,5 +55,22 @@ internal static class GitRepository
             ? throw new InvalidOperationException("Git returned an empty commit identifier.")
             : commit;
     }
+    internal static string[] ReadStagedPathsComparedToCommit(
+        string repository, string commit, string failureMessage, bool ignoreReplacementObjects = true) =>
+        ReadPaths(repository, failureMessage, ignoreReplacementObjects,
+            ["diff", "--cached", "--no-renames", "--name-only", "-z", commit, "--"]);
 
+    internal static string[] ReadChangedPathsBetweenCommits(
+        string repository, string parent, string commit, string failureMessage,
+        bool ignoreReplacementObjects = true) =>
+        ReadPaths(repository, failureMessage, ignoreReplacementObjects,
+            ["diff-tree", "--no-commit-id", "--no-renames", "--name-only", "-r", "-z", parent, commit, "--"]);
+
+    private static string[] ReadPaths(
+        string repository, string failureMessage, bool ignoreReplacementObjects, string[] arguments)
+    {
+        var result = GitProcess.RunRequired(repository, failureMessage,
+            ignoreReplacementObjects ? ["--no-replace-objects", .. arguments] : arguments);
+        return result.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+    }
 }

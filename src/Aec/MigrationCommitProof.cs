@@ -35,9 +35,12 @@ internal static class MigrationCommitProof
     }
 
     internal static void VerifyStagedPaths(string repository, string parent,
-        string[] expected, bool portableCapture = false) =>
-        VerifyPaths(repository, expected, portableCapture,
-            "diff", "--cached", "--no-renames", "--name-only", "-z", parent, "--");
+        string[] expected, bool portableCapture = false)
+    {
+        var stagedPaths = GitRepository.ReadStagedPathsComparedToCommit(
+            repository, parent, PathInspectionError(portableCapture));
+        VerifyExactPaths(expected, stagedPaths, portableCapture);
+    }
 
     internal static void VerifyCommit(string repository, string parent, string commit,
         IReadOnlyList<(string RelativePath, string Blob)> files, Dictionary<string, string> modes,
@@ -50,7 +53,9 @@ internal static class MigrationCommitProof
                 ? "Portable capture did not create exactly one child of the reviewed commit."
                 : "Migration commit is not one child of the reviewed HEAD.");
         var paths = files.Select(file => file.RelativePath).ToArray();
-        VerifyPaths(repository, paths, portableCapture, "diff-tree", "--no-commit-id", "--no-renames", "--name-only", "-r", "-z", parent, commit, "--");
+        var committedPaths = GitRepository.ReadChangedPathsBetweenCommits(
+            repository, parent, commit, PathInspectionError(portableCapture));
+        VerifyExactPaths(paths, committedPaths, portableCapture);
         foreach (var (relative, blob) in files)
         {
             var entry = GitProcess.RunRequired(repository, portableCapture ? "Could not inspect committed portable capture" : "Could not inspect committed migration file",
@@ -62,12 +67,14 @@ internal static class MigrationCommitProof
         }
     }
 
-    private static void VerifyPaths(string repository, string[] expected, bool portableCapture, params string[] arguments)
+    private static string PathInspectionError(bool portableCapture) => portableCapture
+        ? "Could not inspect exact portable capture paths"
+        : "Could not inspect exact migration paths";
+
+    private static void VerifyExactPaths(string[] expected, string[] actual, bool portableCapture)
     {
-        var output = GitProcess.RunRequired(repository, portableCapture ? "Could not inspect exact portable capture paths" : "Could not inspect exact migration paths",
-            ["--no-replace-objects", .. arguments]).Output;
-        var paths = output.Split('\0', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal);
-        if (!paths.SequenceEqual(expected.Order(StringComparer.Ordinal), StringComparer.Ordinal))
+        if (!actual.Order(StringComparer.Ordinal)
+                .SequenceEqual(expected.Order(StringComparer.Ordinal), StringComparer.Ordinal))
             throw new InvalidOperationException(portableCapture
                 ? "Portable capture changes are not the exact reviewed path set."
                 : "Migration changes are not the exact reviewed path set.");

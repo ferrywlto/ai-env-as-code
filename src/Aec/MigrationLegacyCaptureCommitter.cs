@@ -5,6 +5,7 @@ namespace Aec;
 internal static class MigrationLegacyCaptureCommitter
 {
     private const string CommitMessage = "Backup legacy environment before migration";
+    private const string PathInspectionError = "Could not inspect exact capture paths";
 
     public static string? WriteAndCommit(MigrationLegacyCapturePreview reviewed)
     {
@@ -60,7 +61,8 @@ internal static class MigrationLegacyCaptureCommitter
                 }
                 expected.Add((file.RelativePath, blob));
             }
-            VerifyPaths("diff", "--cached", "--no-renames", "--name-only", "-z", parent, "--");
+            VerifyExactPaths(GitRepository.ReadStagedPathsComparedToCommit(
+                repository, parent, PathInspectionError, ignoreReplacementObjects: false));
             VerifyInputs(parent);
             BackupCommand.CommitStagedIndex(repository, CommitMessage,
                 expected, reviewed.Branch, parent, modes);
@@ -69,7 +71,8 @@ internal static class MigrationLegacyCaptureCommitter
             var actualParent = GitProcess.RunRequired(repository, "Could not inspect capture parent",
                 "rev-parse", $"{commit}^").Output.Trim();
             if (actualParent != parent) throw new InvalidOperationException("Capture commit parent changed.");
-            VerifyPaths("diff-tree", "--no-commit-id", "--no-renames", "--name-only", "-r", "-z", parent, commit, "--");
+            VerifyExactPaths(GitRepository.ReadChangedPathsBetweenCommits(
+                repository, parent, commit, PathInspectionError, ignoreReplacementObjects: false));
             foreach (var file in expected)
             {
                 var entry = GitProcess.RunRequired(repository, "Could not inspect committed capture",
@@ -119,10 +122,8 @@ internal static class MigrationLegacyCaptureCommitter
             }
         }
 
-        void VerifyPaths(params string[] arguments)
+        void VerifyExactPaths(string[] actual)
         {
-            var actual = GitProcess.RunRequired(repository, "Could not inspect exact capture paths", arguments)
-                .Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
             if (!actual.Order(StringComparer.Ordinal).SequenceEqual(paths.Order(StringComparer.Ordinal)))
             {
                 throw new InvalidOperationException("Capture changes are not the exact reviewed canonical path set.");
