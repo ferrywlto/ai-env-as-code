@@ -16,17 +16,17 @@ internal static class MigrationCommitProof
         {
             var blob = GitProcess.RunRequired(repository, "Could not resolve staged migration file",
                 "--no-replace-objects", "rev-parse", $":{relative}").Output.Trim();
-            var entry = MigrationScaffoldPreview.ReadIndexEntry(repository, relative);
+            var entry = GitRepository.ReadIndexEntry(repository, relative, "Could not inspect scaffold index entry");
             if (entry != $"{modes[relative]} {blob} 0\t{relative}\0")
                 throw new InvalidOperationException($"Staged migration file mode differs from review: {relative}; expected {modes[relative]}.");
-            var size = GitProcess.RunRequired(repository, "Could not inspect staged migration file size",
-                "--no-replace-objects", "cat-file", "-s", blob).Output.Trim();
+            var size = GitRepository.ReadObjectSizeText(repository, blob,
+                "Could not inspect staged migration file size");
             if (!int.TryParse(size, NumberStyles.None, CultureInfo.InvariantCulture, out var length))
                 throw new InvalidDataException($"Invalid staged migration file size: {relative}.");
             if (length != expectedContent.Length)
                 throw new InvalidOperationException($"Staged migration file byte length differs from review: {relative}.");
-            var content = GitProcess.RunRequiredBytes(repository, "Could not read staged migration file",
-                "--no-replace-objects", "cat-file", "blob", blob);
+            var content = GitRepository.ReadBlob(repository, blob,
+                "Could not read staged migration file");
             if (!content.AsSpan().SequenceEqual(expectedContent))
                 throw new InvalidOperationException($"Staged migration file bytes differ from review: {relative}.");
             staged.Add((relative, blob));
@@ -58,8 +58,8 @@ internal static class MigrationCommitProof
         VerifyExactPaths(paths, committedPaths, portableCapture);
         foreach (var (relative, blob) in files)
         {
-            var entry = GitProcess.RunRequired(repository, portableCapture ? "Could not inspect committed portable capture" : "Could not inspect committed migration file",
-                "--no-replace-objects", "ls-tree", "-z", commit, "--", relative).Output;
+            var entry = GitRepository.ReadTreeEntry(repository, commit, relative,
+                portableCapture ? "Could not inspect committed portable capture" : "Could not inspect committed migration file");
             if (entry != $"{modes[relative]} blob {blob}\t{relative}\0")
                 throw new InvalidOperationException(portableCapture
                     ? $"Committed portable capture bytes or mode differ from review: {relative}."

@@ -478,8 +478,8 @@ internal static class BackupCommand
             // the pinned tree, not a mutable index checked before write-tree.
             if (expectedModes is not null)
             {
-                var entry = RunRequired(repository, "Git could not inspect pinned canonical mode",
-                    "--no-replace-objects", "ls-tree", "-z", tree, "--", expected.RelativePath).Output;
+                var entry = GitRepository.ReadTreeEntry(repository, tree, expected.RelativePath,
+                    "Git could not inspect pinned canonical mode");
                 if (entry != $"{expectedModes[expected.RelativePath]} blob {expected.Blob}\t{expected.RelativePath}\0")
                 {
                     throw new InvalidOperationException("Pinned canonical file mode or blob differs from review.");

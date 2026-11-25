@@ -198,14 +198,8 @@ internal static class CommittedFileReader
         string relativePath,
         string label)
     {
-        var tree = RunRequired(
-            repository,
-            "Git could not inspect the committed canonical source",
-            "ls-tree",
-            "-z",
-            commit,
-            "--",
-            relativePath).Output;
+        var tree = GitRepository.ReadTreeEntry(repository, commit, relativePath,
+            "Git could not inspect the committed canonical source");
         if (tree.Length == 0 || !tree.EndsWith('\0') || tree[..^1].Contains('\0'))
         {
             throw new InvalidOperationException($"{label} is not a single committed Git file.");

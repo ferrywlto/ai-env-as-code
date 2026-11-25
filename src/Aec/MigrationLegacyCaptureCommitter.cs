@@ -32,8 +32,8 @@ internal static class MigrationLegacyCaptureCommitter
 
             var modes = changed.ToDictionary(file => file.RelativePath, file =>
             {
-                var entry = GitProcess.RunRequired(repository, "Could not read legacy file mode",
-                    "--no-replace-objects", "ls-tree", "-z", parent, "--", file.RelativePath).Output;
+                var entry = GitRepository.ReadTreeEntry(repository, parent, file.RelativePath,
+                    "Could not read legacy file mode");
                 return entry.Split(' ')[0];
             }, StringComparer.Ordinal);
             VerifyInputs(parent);
@@ -46,12 +46,12 @@ internal static class MigrationLegacyCaptureCommitter
             var expected = new List<(string RelativePath, string Blob)>();
             foreach (var file in changed)
             {
-                var indexed = GitProcess.RunRequired(repository, "Could not inspect captured index entry",
-                    "ls-files", "--stage", "-z", "--", file.RelativePath).Output;
+                var indexed = GitRepository.ReadIndexEntry(repository, file.RelativePath,
+                    "Could not inspect captured index entry");
                 var blob = GitProcess.RunRequired(repository, "Could not resolve captured index blob",
                     "rev-parse", $":{file.RelativePath}").Output.Trim();
-                var bytes = GitProcess.RunRequiredBytes(repository, "Could not read captured index blob",
-                    "--no-replace-objects", "cat-file", "blob", blob);
+                var bytes = GitRepository.ReadBlob(repository, blob,
+                    "Could not read captured index blob");
                 // Compare actual object bytes to private proposal buffers, not a
                 // hash obtained from a working file that another process can edit.
                 if (indexed != $"{modes[file.RelativePath]} {blob} 0\t{file.RelativePath}\0" ||
@@ -75,8 +75,8 @@ internal static class MigrationLegacyCaptureCommitter
                 repository, parent, commit, PathInspectionError, ignoreReplacementObjects: false));
             foreach (var file in expected)
             {
-                var entry = GitProcess.RunRequired(repository, "Could not inspect committed capture",
-                    "--no-replace-objects", "ls-tree", "-z", commit, "--", file.RelativePath).Output;
+                var entry = GitRepository.ReadTreeEntry(repository, commit, file.RelativePath,
+                    "Could not inspect committed capture");
                 if (entry != $"{modes[file.RelativePath]} blob {file.Blob}\t{file.RelativePath}\0")
                 {
                     throw new InvalidOperationException("Committed capture bytes or file mode differ from review.");

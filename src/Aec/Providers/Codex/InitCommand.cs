@@ -720,13 +720,8 @@ internal static class InitCommand
         string objectId,
         string label)
     {
-        var sizeText = GitProcess.RunRequired(
-            repository,
-            $"Git could not inspect {label} size",
-            "--no-replace-objects",
-            "cat-file",
-            "-s",
-            objectId).Output.Trim();
+        var sizeText = GitRepository.ReadObjectSizeText(repository, objectId,
+            $"Git could not inspect {label} size");
         if (!long.TryParse(sizeText, out var size) ||
             size < 0 ||
             size > AecApplication.MaximumTextBytes)
@@ -734,13 +729,8 @@ internal static class InitCommand
             throw new InvalidDataException($"{label} exceeds 1 MiB.");
         }
 
-        var content = GitProcess.RunRequiredBytes(
-            repository,
-            $"Git could not read {label}",
-            "--no-replace-objects",
-            "cat-file",
-            "blob",
-            objectId);
+        var content = GitRepository.ReadBlob(repository, objectId,
+            $"Git could not read {label}");
         if (content.LongLength != size)
         {
             throw new InvalidDataException($"{label} size changed while it was read.");

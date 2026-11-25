@@ -72,9 +72,8 @@ internal static class MigrationPortableCaptureCommitter
         var baselineModes = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var relativePath in changedPaths)
         {
-            var result = GitProcess.RunRequired(repository, "Could not read portable capture file mode",
-                "--no-replace-objects", "ls-tree", "-z", parent, "--", relativePath);
-            var treeEntry = result.Output;
+            var treeEntry = GitRepository.ReadTreeEntry(repository, parent, relativePath,
+                "Could not read portable capture file mode");
             var baselineMode = treeEntry.Split(' ')[0];
             if (baselineMode is not ("100644" or "100755"))
             {
@@ -98,12 +97,10 @@ internal static class MigrationPortableCaptureCommitter
             var blobResult = GitProcess.RunRequired(repository, "Could not resolve staged portable capture blob",
                 "--no-replace-objects", "rev-parse", $":{relativePath}");
             var stagedBlob = blobResult.Output.Trim();
-            var indexResult = GitProcess.RunRequired(repository, "Could not inspect portable capture index mode",
-                "ls-files", "--stage", "-z", "--", relativePath);
-            var indexEntry = indexResult.Output;
-            var sizeResult = GitProcess.RunRequired(repository, "Could not inspect staged portable blob size",
-                "--no-replace-objects", "cat-file", "-s", stagedBlob);
-            var sizeText = sizeResult.Output.Trim();
+            var indexEntry = GitRepository.ReadIndexEntry(repository, relativePath,
+                "Could not inspect portable capture index mode");
+            var sizeText = GitRepository.ReadObjectSizeText(repository, stagedBlob,
+                "Could not inspect staged portable blob size");
 
             var expectedEntry = $"{baselineModes[relativePath]} {stagedBlob} 0\t{relativePath}\0";
             if (indexEntry != expectedEntry)
@@ -122,8 +119,8 @@ internal static class MigrationPortableCaptureCommitter
             {
                 throw new InvalidOperationException($"Staged portable capture byte length differs from review: {relativePath}.");
             }
-            var stagedContent = GitProcess.RunRequiredBytes(repository, "Could not read staged portable capture blob",
-                "--no-replace-objects", "cat-file", "blob", stagedBlob);
+            var stagedContent = GitRepository.ReadBlob(repository, stagedBlob,
+                "Could not read staged portable capture blob");
             if (!stagedContent.AsSpan().SequenceEqual(proposedContent))
             {
                 throw new InvalidOperationException($"Staged portable capture bytes differ from review: {relativePath}.");

@@ -141,6 +141,11 @@
   verification now use the same staged-path and commit-diff APIs. The callers
   still own exact path validation and retain their diagnostics, replacement-ref
   behavior and check order. All 357 unit and focused migration tests passed.
+- [x] Ferry reviewed named Git object and index reads. Committed-file provenance,
+  Codex initialization and backup, and migration now share single-path tree
+  and index reads and immutable object size and blob reads. Existing size
+  limits, diagnostics and check order remain with the callers. All 362 unit
+  and focused provenance, initialization and migration tests passed.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor

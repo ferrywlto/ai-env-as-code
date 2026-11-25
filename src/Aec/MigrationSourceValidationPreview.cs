@@ -69,7 +69,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
     private static MigrationValidatedSource ReadSource(MigrationPreflight preflight, string relative)
     {
         var committed = MigrationScaffoldPreview.ReadCommittedSection(preflight, relative);
-        var indexEntry = MigrationScaffoldPreview.ReadIndexEntry(preflight.Repository, relative);
+        var indexEntry = GitRepository.ReadIndexEntry(preflight.Repository, relative, "Could not inspect scaffold index entry");
         if (indexEntry != committed.ExpectedIndexEntry)
             throw new InvalidOperationException($"Staged source changes stop post-DONE validation: {relative}.");
 

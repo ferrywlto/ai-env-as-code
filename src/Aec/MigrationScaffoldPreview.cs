@@ -132,7 +132,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
     {
         var repository = expected.Preflight.Repository;
         var committed = ReadCommittedSection(expected.Preflight, relativePath);
-        var indexEntry = ReadIndexEntry(repository, relativePath);
+        var indexEntry = GitRepository.ReadIndexEntry(repository, relativePath, "Could not inspect scaffold index entry");
         var workingContent = ReadFile(Path.Combine(repository, relativePath));
         var hasStagedChanges = indexEntry != committed.ExpectedIndexEntry;
         var workingDiffers = !SameBytes(committed.Content, workingContent);
@@ -149,9 +149,8 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
     internal static (byte[]? Content, string? Mode, string ExpectedIndexEntry) ReadCommittedSection(
         MigrationPreflight preflight, string relativePath)
     {
-        var result = GitProcess.RunRequired(preflight.Repository, "Could not inspect scaffold source history",
-            "--no-replace-objects", "ls-tree", "-z", preflight.Commit, "--", relativePath);
-        var treeEntry = result.Output;
+        var treeEntry = GitRepository.ReadTreeEntry(preflight.Repository, preflight.Commit,
+            relativePath, "Could not inspect scaffold source history");
         if (treeEntry.Length == 0) return (null, null, "");
 
         // Validate and read the immutable blob using the tree entry already
@@ -241,7 +240,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
             {
                 throw new InvalidOperationException($"Authored source changed during scaffold preview: {file.RelativePath}.");
             }
-            var indexEntry = ReadIndexEntry(repository, file.RelativePath);
+            var indexEntry = GitRepository.ReadIndexEntry(repository, file.RelativePath, "Could not inspect scaffold index entry");
             if (file.IndexEntry != indexEntry)
             {
                 throw new InvalidOperationException($"Indexed source changed during scaffold preview: {file.RelativePath}.");
@@ -260,10 +259,6 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
             throw new InvalidOperationException("Branch changed during scaffold preview.");
         }
     }
-
-    internal static string ReadIndexEntry(string repository, string relativePath) =>
-        GitProcess.RunRequired(repository, "Could not inspect scaffold index entry",
-            "ls-files", "--stage", "-z", "--", relativePath).Output;
 
     private static byte[]? ReadFile(string path)
     {

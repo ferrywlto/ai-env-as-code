@@ -55,6 +55,27 @@ internal static class GitRepository
             ? throw new InvalidOperationException("Git returned an empty commit identifier.")
             : commit;
     }
+
+    internal static string ReadTreeEntry(
+        string repository, string treeish, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "ls-tree", "-z", treeish, "--", path).Output;
+
+    internal static string ReadIndexEntry(
+        string repository, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "ls-files", "--stage", "-z", "--", path).Output;
+
+    internal static string ReadObjectSizeText(
+        string repository, string objectId, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "cat-file", "-s", objectId).Output.Trim();
+
+    internal static byte[] ReadBlob(
+        string repository, string objectId, string failureMessage) =>
+        GitProcess.RunRequiredBytes(repository, failureMessage,
+            "--no-replace-objects", "cat-file", "blob", objectId);
+
     internal static string[] ReadStagedPathsComparedToCommit(
         string repository, string commit, string failureMessage, bool ignoreReplacementObjects = true) =>
         ReadPaths(repository, failureMessage, ignoreReplacementObjects,

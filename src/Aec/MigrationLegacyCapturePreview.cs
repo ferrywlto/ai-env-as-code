@@ -151,8 +151,8 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
     {
         // Inspect tree kind before reading bytes: git show alone also accepts
         // links, oversized blobs and replacement objects as if they were files.
-        var tree = GitProcess.RunRequired(repository, "Git could not inspect historical migration source",
-            "--no-replace-objects", "ls-tree", "-z", commit, "--", relative).Output;
+        var tree = GitRepository.ReadTreeEntry(repository, commit, relative,
+            "Git could not inspect historical migration source");
         return ReadHistoricalBlob(repository, relative, tree).Content;
     }
 
@@ -169,14 +169,14 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         {
             throw new InvalidDataException($"Historical migration source must be a regular Git file: {relative}.");
         }
-        var size = GitProcess.RunRequired(repository, "Git could not inspect historical source size",
-            "--no-replace-objects", "cat-file", "-s", fields[2]).Output.Trim();
+        var size = GitRepository.ReadObjectSizeText(repository, fields[2],
+            "Git could not inspect historical source size");
         if (!long.TryParse(size, NumberStyles.None, CultureInfo.InvariantCulture, out var length) || length > AecApplication.MaximumTextBytes)
         {
             throw new InvalidDataException($"Historical migration source exceeds the supported text size: {relative}.");
         }
-        var content = GitProcess.RunRequiredBytes(repository, "Git could not read historical migration source",
-            "--no-replace-objects", "cat-file", "blob", fields[2]);
+        var content = GitRepository.ReadBlob(repository, fields[2],
+            "Git could not read historical migration source");
         MigrationLfsPointer.Reject(content, $"Historical migration source {relative}");
         return (content, fields[0], fields[2]);
     }
