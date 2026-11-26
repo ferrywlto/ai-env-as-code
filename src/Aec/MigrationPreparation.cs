@@ -68,8 +68,8 @@ internal sealed record MigrationPreparation(MigrationPreflight Preflight,
         // Path equality alone misses edits or staging changes during the prompt.
         // Capture exact working bytes (including absence) and staged blob entries;
         // Base64 is only a lossless in-memory comparison, never persisted content.
-        var index = GitProcess.RunRequired(preflight.Repository, "Git could not inspect reviewed sections",
-            ["ls-files", "--stage", "-z", "--", .. dirty.Paths]).Output;
+        var index = GitRepository.ReadIndexEntries(preflight.Repository, "Git could not inspect reviewed sections",
+            [.. dirty.Paths]);
         return [index, .. dirty.Paths.Select(path =>
         {
             var bytes = AecApplication.ReadOptionalTextFile(Path.Combine(preflight.Repository, path), "Migration section");

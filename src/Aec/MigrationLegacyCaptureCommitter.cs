@@ -38,8 +38,7 @@ internal static class MigrationLegacyCaptureCommitter
             }, StringComparer.Ordinal);
             VerifyInputs(parent);
             EnsureEmptyIndex(repository);
-            GitProcess.RunRequired(repository, "Could not stage captured canonical files",
-                ["add", "--", .. paths]);
+            GitRepository.StagePaths(repository, "Could not stage captured canonical files", paths);
 
             // Reject newline transforms, executable-bit changes and any extra
             // index path rather than silently committing Git's transformed bytes.
@@ -48,8 +47,8 @@ internal static class MigrationLegacyCaptureCommitter
             {
                 var indexed = GitRepository.ReadIndexEntry(repository, file.RelativePath,
                     "Could not inspect captured index entry");
-                var blob = GitProcess.RunRequired(repository, "Could not resolve captured index blob",
-                    "rev-parse", $":{file.RelativePath}").Output.Trim();
+                var blob = GitRepository.ReadStagedObjectId(repository, file.RelativePath,
+                    "Could not resolve captured index blob");
                 var bytes = GitRepository.ReadBlob(repository, blob,
                     "Could not read captured index blob");
                 // Compare actual object bytes to private proposal buffers, not a
@@ -68,8 +67,7 @@ internal static class MigrationLegacyCaptureCommitter
                 expected, reviewed.Branch, parent, modes);
 
             var commit = GitRepository.ResolveHeadCommit(repository);
-            var actualParent = GitProcess.RunRequired(repository, "Could not inspect capture parent",
-                "rev-parse", $"{commit}^").Output.Trim();
+            var actualParent = GitRepository.ReadFirstParent(repository, commit, "Could not inspect capture parent");
             if (actualParent != parent) throw new InvalidOperationException("Capture commit parent changed.");
             VerifyExactPaths(GitRepository.ReadChangedPathsBetweenCommits(
                 repository, parent, commit, PathInspectionError, ignoreReplacementObjects: false));
@@ -133,7 +131,7 @@ internal static class MigrationLegacyCaptureCommitter
 
     private static void EnsureEmptyIndex(string repository)
     {
-        var result = GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv");
+        var result = GitRepository.InspectUnfilteredStagedChanges(repository);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException("Legacy capture requires an empty staged diff; inspect the existing index before retrying. No automatic unstaging was performed.");

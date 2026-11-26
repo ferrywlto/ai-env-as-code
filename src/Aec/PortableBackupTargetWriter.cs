@@ -57,9 +57,8 @@ internal static class PortableBackupTargetWriter
             "Provider runtime target");
         var sources = new Dictionary<string, Source>(StringComparer.Ordinal);
         var changes = new List<TargetChange>();
-        var enrolled = GitProcess.RunRequired(
-            reviewed.Repository, "Could not list committed target enrollments",
-            "ls-tree", "-r", "--name-only", reviewed.Commit, "--", "environment/targets")
+        var enrolled = GitRepository.ListCommittedTargetEnrollments(
+            reviewed.Repository, reviewed.Commit)
             .Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var path in enrolled.OrderBy(value => value, StringComparer.Ordinal))
@@ -99,8 +98,8 @@ internal static class PortableBackupTargetWriter
             var current = renderedPaths is null
                 ? CommittedFileReader.ReadCommittedFile(
                     reviewed.Repository, reviewed.Commit, path, "Rendered target")
-                : GitProcess.RunRequiredBytes(reviewed.Repository,
-                    "Could not read committed rendered target", "show", $"{reviewed.Commit}:{path}");
+                : GitRepository.ReadFileAtTreeish(reviewed.Repository, reviewed.Commit, path,
+                    "Could not read committed rendered target");
             if (!current.AsSpan().SequenceEqual(baseline))
             {
                 throw new InvalidDataException(
@@ -188,9 +187,9 @@ internal static class PortableBackupTargetWriter
             byte[] baseline;
             if (relativePath == sourcePath)
             {
-                baseline = GitProcess.RunRequiredBytes(
-                    reviewed.Repository, "Could not read committed authored source",
-                    "show", $"{reviewed.Commit}:{relativePath}");
+                baseline = GitRepository.ReadFileAtTreeish(
+                    reviewed.Repository, reviewed.Commit, relativePath,
+                    "Could not read committed authored source");
                 if (!current.AsSpan().SequenceEqual(StrictUtf8.GetBytes(attribution.ProposedContent)))
                 {
                     throw new InvalidOperationException(
@@ -239,8 +238,7 @@ internal static class PortableBackupTargetWriter
             // backup commit ambiguous, even if working bytes still match.
             var paths = sources.Keys.Concat(changes.Select(change => change.RelativePath))
                 .Distinct(StringComparer.Ordinal).ToArray();
-            var staged = GitProcess.Run(reviewed.Repository,
-                ["diff", "--cached", "--quiet", "--exit-code", reviewed.Commit, "--", .. paths]);
+            var staged = GitRepository.InspectStagedPathsAgainstCommit(reviewed.Repository, reviewed.Commit, paths);
             if (staged.ExitCode != 0)
             {
                 throw new InvalidOperationException(

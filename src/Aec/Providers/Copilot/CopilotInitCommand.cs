@@ -18,8 +18,7 @@ internal static class CopilotInitCommand
             "Copilot runtime target");
 
         var platform = RenderCommand.CurrentPlatform();
-        var head = GitProcess.Run(repository, "rev-parse", "--verify", "--quiet",
-            "HEAD^{commit}");
+        var head = GitRepository.InspectOptionalHeadCommit(repository);
         if (head.ExitCode is not (0 or 1))
         {
             throw new InvalidOperationException(

@@ -61,8 +61,8 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         return new MigrationLegacyCapturePreview(preparation, branch, files);
     }
 
-    internal static string ReadBranch(string repository) => GitProcess.RunRequired(repository,
-        "Git could not inspect migration branch", "symbolic-ref", "--quiet", "HEAD").Output.TrimEnd('\r', '\n');
+    internal static string ReadBranch(string repository) => GitProcess.RequireSuccess(
+        GitRepository.InspectSymbolicHead(repository), "Git could not inspect migration branch").Output.TrimEnd('\r', '\n');
 
     private static MigrationLegacyCaptureFile ReadPersonality(MigrationPreparation preparation, MigrationHarness harness)
     {
@@ -123,10 +123,10 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         {
             throw new InvalidDataException("Original migration commit is not a full Git object ID.");
         }
-        var type = GitProcess.RunRequired(repository, "Git could not inspect original migration commit",
-            "--no-replace-objects", "cat-file", "-t", original).Output.Trim();
+        var type = GitRepository.ReadObjectType(repository, original,
+            "Git could not inspect original migration commit");
         if (type != "commit") throw new InvalidDataException("Original migration object is not a commit.");
-        var ancestry = GitProcess.Run(repository, "--no-replace-objects", "merge-base", "--is-ancestor", original, current);
+        var ancestry = GitRepository.InspectAncestry(repository, original, current);
         if (ancestry.ExitCode != 0)
         {
             throw new InvalidOperationException(ancestry.ExitCode == 1

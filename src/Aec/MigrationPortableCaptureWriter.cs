@@ -44,8 +44,7 @@ internal static class MigrationPortableCaptureWriter
             var commit = codexChanged
                 ? PortableCodexBackupWriter.WriteAndCommit(fresh.Codex!)
                 : PortableCopilotBackupWriter.WriteAndCommit(fresh.Copilot!);
-            var parents = GitProcess.RunRequired(repository, "Could not verify portable capture parent",
-                "--no-replace-objects", "rev-list", "--parents", "-n", "1", commit).Output.Trim();
+            var parents = GitRepository.ReadCommitParentLine(repository, commit, "Could not verify portable capture parent");
             if (parents != $"{commit} {parent}")
             {
                 throw new InvalidOperationException("Portable capture did not create exactly one child of the reviewed commit.");
@@ -121,7 +120,7 @@ internal static class MigrationPortableCaptureWriter
 
     internal static void EnsureEmptyIndex(string repository)
     {
-        if (GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv").ExitCode != 0)
+        if (GitRepository.InspectUnfilteredStagedChanges(repository).ExitCode != 0)
         {
             throw new InvalidOperationException("Portable migration capture requires an empty staged diff; no automatic unstaging was performed.");
         }

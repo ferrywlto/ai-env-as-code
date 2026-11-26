@@ -175,7 +175,7 @@ internal static class BackupCommand
     {
         GitRepository.ValidateRepositoryRoot(repository);
 
-        var branch = Run(repository, "symbolic-ref", "--quiet", "HEAD");
+        var branch = GitRepository.InspectSymbolicHeadWithoutReplacements(repository);
         if (branch.ExitCode == 1)
         {
             throw new InvalidOperationException("Backup requires a symbolic Git branch; detached HEAD is not supported.");
@@ -193,13 +193,8 @@ internal static class BackupCommand
                 "Backup requires HEAD to reference a local Git branch under refs/heads/.");
         }
 
-        var unmerged = RunRequired(
-            repository,
-            "Git could not inspect unmerged files",
-            "ls-files",
-            "--unmerged",
-            "-z");
-        if (unmerged.Output.Length != 0)
+        var unmerged = GitRepository.ReadUnmergedIndexEntries(repository, "Git could not inspect unmerged files");
+        if (unmerged.Length != 0)
         {
             throw new InvalidOperationException("Backup cannot run while the repository has unmerged files.");
         }
@@ -209,8 +204,7 @@ internal static class BackupCommand
             "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG",
             "rebase-merge", "rebase-apply", "sequencer"
         ];
-        var paths = Run(repository,
-            ["rev-parse", .. operations.SelectMany(operation => new[] { "--git-path", operation })]);
+        var paths = GitRepository.InspectMetadataPaths(repository, operations);
         // A linked Git directory can contain a newline. Resolve paths separately
         // when the output cannot be mapped unambiguously to the requested paths.
         var lines = paths.Output.EndsWith('\n') ? paths.Output[..^1].Split('\n') : [];
@@ -220,8 +214,7 @@ internal static class BackupCommand
             var operation = operations[index];
             var gitPath = useBatch
                 ? lines[index].Trim()
-                : RunRequired(repository, $"Git could not inspect operation {operation}",
-                    "rev-parse", "--git-path", operation).Output.Trim();
+                : GitRepository.ReadMetadataPath(repository, operation, $"Git could not inspect operation {operation}");
             if (gitPath.Length == 0)
             {
                 throw new InvalidOperationException($"Git returned an empty path for operation {operation}.");
@@ -240,19 +233,10 @@ internal static class BackupCommand
 
     internal static void EnsureNoChangesOutsideManagedSources(string repository)
     {
-        var status = RunRequired(
-            repository,
-            "Git could not inspect repository changes",
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-            "--",
-            ".",
-            OutsideSourcePathspec,
-            OutsideConfigSourcePathspec);
+        var status = GitRepository.ReadPorcelainStatus(repository,
+            "Git could not inspect repository changes", ".", OutsideSourcePathspec, OutsideConfigSourcePathspec);
 
-        if (status.Output.Length != 0)
+        if (status.Length != 0)
         {
             throw new InvalidOperationException(
                 "Repository has changes outside the managed Codex environment files.");
@@ -264,18 +248,10 @@ internal static class BackupCommand
         string relativePath,
         string label)
     {
-        var sourceHash = RunRequired(
-            repository,
-            $"Git could not hash the {label}",
-            "hash-object",
-            "--no-filters",
-            "--",
-            relativePath).Output.Trim();
-        var stagedHash = RunRequired(
-            repository,
-            $"Git could not inspect the staged {label}",
-            "rev-parse",
-            $":{relativePath}").Output.Trim();
+        var sourceHash = GitRepository.ReadWorkingFileHashWithoutFilters(repository, relativePath,
+            $"Git could not hash the {label}");
+        var stagedHash = GitRepository.ReadStagedObjectIdWithoutReplacements(repository, relativePath,
+            $"Git could not inspect the staged {label}");
 
         if (!string.Equals(sourceHash, stagedHash, StringComparison.Ordinal))
         {
@@ -288,12 +264,9 @@ internal static class BackupCommand
 
     private static void StageManagedSources(string repository)
     {
-        RunRequired(
+        GitRepository.ForceStagePaths(
             repository,
             "Git could not stage the managed Codex environment files",
-            "add",
-            "--force",
-            "--",
             AecApplication.SourceRelativePath,
             AecApplication.ConfigSourceRelativePath);
     }
@@ -319,12 +292,7 @@ internal static class BackupCommand
         byte[] expected,
         string label)
     {
-        var staged = RunRequiredBytes(
-            repository,
-            $"Git could not read the staged {label}",
-            "cat-file",
-            "blob",
-            blob);
+        var staged = GitRepository.ReadBlob(repository, blob, $"Git could not read the staged {label}");
         if (!staged.AsSpan().SequenceEqual(expected))
         {
             throw new InvalidOperationException(
@@ -334,12 +302,8 @@ internal static class BackupCommand
 
     private static void VerifyCommitParent(string repository, string expectedParent)
     {
-        var actualParent = RunRequired(
-            repository,
-            "Git could not verify the initialization commit parent",
-            "rev-parse",
-            "--verify",
-            "HEAD^").Output.Trim();
+        var actualParent = GitRepository.ReadVerifiedHeadParent(repository,
+            "Git could not verify the initialization commit parent");
         if (!string.Equals(actualParent, expectedParent, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -419,26 +383,10 @@ internal static class BackupCommand
         }
 
         var changedPaths = parent is null
-            ? RunRequired(
-                repository,
-                "Git could not inspect the pinned initial tree",
-                "ls-tree",
-                "--name-only",
-                "-r",
-                "-z",
-                tree).Output
-            : RunRequired(
-                repository,
-                "Git could not inspect the pinned canonical tree",
-                "diff-tree",
-                "--no-commit-id",
-                "--name-only",
-                "-r",
-                "-z",
-                parent,
-                tree).Output;
+            ? GitRepository.ReadTreePaths(repository, tree, "Git could not inspect the pinned initial tree")
+            : GitRepository.ReadChangedTreePaths(repository, parent, tree, "Git could not inspect the pinned canonical tree");
 
-        foreach (var path in changedPaths.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var path in changedPaths)
         {
             if (!allowedPaths.Contains(path))
             {
@@ -461,11 +409,8 @@ internal static class BackupCommand
                     throw new InvalidOperationException("Pinned canonical file mode or blob differs from review.");
                 }
             }
-            var actualBlob = RunRequired(
-                repository,
-                $"Git could not inspect pinned canonical path {expected.RelativePath}",
-                "rev-parse",
-                $"{tree}:{expected.RelativePath}").Output.Trim();
+            var actualBlob = GitRepository.ReadTreeObjectIdWithoutReplacements(repository, tree, expected.RelativePath,
+                $"Git could not inspect pinned canonical path {expected.RelativePath}");
             if (!string.Equals(actualBlob, expected.Blob, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
@@ -476,12 +421,7 @@ internal static class BackupCommand
 
     private static bool ShouldSignCommit(string repository)
     {
-        var result = Run(
-            repository,
-            "config",
-            "--bool",
-            "--get",
-            "commit.gpgSign");
+        var result = GitRepository.InspectBooleanConfig(repository, "commit.gpgSign");
         if (result.ExitCode == 1)
         {
             return false;
@@ -519,29 +459,18 @@ internal static class BackupCommand
             expectedConfigBlob,
             "canonical config");
 
-        var subject = RunRequired(
-            repository,
-            "Git could not inspect the managed environment commit message",
-            "log",
-            "-1",
-            "--format=%s").Output.TrimEnd('\r', '\n');
+        var subject = GitRepository.ReadHeadSubject(repository,
+            "Git could not inspect the managed environment commit message");
         if (!string.Equals(subject, expectedSubject, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 "Managed environment commit subject does not match the required message.");
         }
 
-        var status = RunRequired(
-            repository,
+        var status = GitRepository.ReadPorcelainStatus(repository,
             "Git could not verify the managed environment after commit",
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-            "--",
-            AecApplication.SourceRelativePath,
-            AecApplication.ConfigSourceRelativePath);
-        if (status.Output.Length != 0)
+            AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath);
+        if (status.Length != 0)
         {
             throw new InvalidOperationException(
                 "Managed Codex environment files are not clean after their commit.");
@@ -554,11 +483,8 @@ internal static class BackupCommand
         string expectedBlob,
         string label)
     {
-        var committedBlob = RunRequired(
-            repository,
-            $"Git could not inspect the committed {label}",
-            "rev-parse",
-            $"HEAD:{relativePath}").Output.Trim();
+        var committedBlob = GitRepository.ReadTreeObjectIdWithoutReplacements(repository, "HEAD", relativePath,
+            $"Git could not inspect the committed {label}");
         if (!string.Equals(expectedBlob, committedBlob, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -568,7 +494,7 @@ internal static class BackupCommand
 
     private static bool HasHead(string repository)
     {
-        var result = Run(repository, "rev-parse", "--verify", "--quiet", "HEAD");
+        var result = GitRepository.InspectHeadReference(repository);
         return result.ExitCode switch
         {
             0 => true,
@@ -580,15 +506,8 @@ internal static class BackupCommand
 
     private static bool HasStagedManagedChange(string repository)
     {
-        var result = Run(
-            repository,
-            "diff",
-            "--cached",
-            "--quiet",
-            "--exit-code",
-            "--",
-            AecApplication.SourceRelativePath,
-            AecApplication.ConfigSourceRelativePath);
+        var result = GitRepository.InspectStagedChangesForPaths(repository,
+            AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath);
 
         return result.ExitCode switch
         {
@@ -601,12 +520,7 @@ internal static class BackupCommand
 
     private static string ResolveHead(string repository)
     {
-        var head = RunRequired(
-            repository,
-            "Git could not resolve the new commit",
-            "rev-parse",
-            "--verify",
-            "HEAD").Output.Trim();
+        var head = GitRepository.ReadHeadReference(repository, "Git could not resolve the new commit");
         return head.Length == 0
             ? throw new InvalidOperationException("Git returned an empty commit identifier.")
             : head;
@@ -640,12 +554,8 @@ internal static class BackupCommand
 
     private static string ResolveBranch(string repository)
     {
-        var branch = RunRequired(
-            repository,
-            "Git could not resolve the branch for the canonical commit",
-            "symbolic-ref",
-            "--quiet",
-            "HEAD").Output.Trim();
+        var branch = GitRepository.ReadSymbolicHeadWithoutReplacements(repository,
+            "Git could not resolve the branch for the canonical commit");
         return branch.Length == 0
             ? throw new InvalidOperationException("Git returned an empty canonical branch name.")
             : branch;
@@ -653,44 +563,12 @@ internal static class BackupCommand
 
     private static void EnsureBranchMatches(string repository, string expected)
     {
-        var actual = RunRequired(
-            repository,
-            "Git could not verify the canonical source commit branch",
-            "symbolic-ref",
-            "--quiet",
-            "HEAD").Output.Trim();
+        var actual = GitRepository.ReadSymbolicHeadWithoutReplacements(repository,
+            "Git could not verify the canonical source commit branch");
         if (!string.Equals(actual, expected, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 "Repository branch changed during the canonical source commit.");
         }
     }
-
-    private static GitResult Run(string repository, params string[] arguments)
-    {
-        return GitProcess.Run(repository, ["--no-replace-objects", .. arguments]);
-    }
-
-    private static GitResult RunRequired(
-        string repository,
-        string failureMessage,
-        params string[] arguments)
-    {
-        return GitProcess.RunRequired(
-            repository,
-            failureMessage,
-            ["--no-replace-objects", .. arguments]);
-    }
-
-    private static byte[] RunRequiredBytes(
-        string repository,
-        string failureMessage,
-        params string[] arguments)
-    {
-        return GitProcess.RunRequiredBytes(
-            repository,
-            failureMessage,
-            ["--no-replace-objects", .. arguments]);
-    }
-
 }

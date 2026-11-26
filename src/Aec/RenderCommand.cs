@@ -60,8 +60,7 @@ internal static class RenderCommand
                 _ = CommittedFileReader.ReadCommittedFile(
                     repository, commit, relativePath, "Rendered target");
             }
-            else if (GitProcess.RunRequired(repository, "Git could not inspect target history",
-                         "ls-tree", "--name-only", commit, "--", relativePath).Output.Length != 0)
+            else if (GitRepository.InspectTargetHistory(repository, commit, relativePath).Output.Length != 0)
             {
                 throw new InvalidOperationException(
                     $"Rendered target is missing but committed at HEAD: {relativePath}");

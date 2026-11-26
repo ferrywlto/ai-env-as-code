@@ -14,8 +14,8 @@ internal static class MigrationCommitProof
         var staged = new List<(string RelativePath, string Blob)>();
         foreach (var (relative, expectedContent) in expectedFiles)
         {
-            var blob = GitProcess.RunRequired(repository, "Could not resolve staged migration file",
-                "--no-replace-objects", "rev-parse", $":{relative}").Output.Trim();
+            var blob = GitRepository.ReadStagedObjectIdWithoutReplacements(repository, relative,
+                "Could not resolve staged migration file");
             var entry = GitRepository.ReadIndexEntry(repository, relative, "Could not inspect scaffold index entry");
             if (entry != $"{modes[relative]} {blob} 0\t{relative}\0")
                 throw new InvalidOperationException($"Staged migration file mode differs from review: {relative}; expected {modes[relative]}.");
@@ -46,8 +46,8 @@ internal static class MigrationCommitProof
         IReadOnlyList<(string RelativePath, string Blob)> files, Dictionary<string, string> modes,
         bool portableCapture = false)
     {
-        var parents = GitProcess.RunRequired(repository, portableCapture ? "Could not inspect portable capture parent" : "Could not inspect migration commit parent",
-            "--no-replace-objects", "rev-list", "--parents", "-n", "1", commit).Output.Trim();
+        var parents = GitRepository.ReadCommitParentLine(repository, commit,
+            portableCapture ? "Could not inspect portable capture parent" : "Could not inspect migration commit parent");
         if (parents != $"{commit} {parent}")
             throw new InvalidOperationException(portableCapture
                 ? "Portable capture did not create exactly one child of the reviewed commit."

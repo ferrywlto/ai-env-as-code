@@ -24,14 +24,12 @@ internal static class MigrationFastForward
 
         if (fetched.Ancestry == MigrationAncestry.Behind)
         {
-            var incoming = GitProcess.RunRequired(current.Repository, "Git could not inspect the incoming tree",
-                "--no-replace-objects", "ls-tree", "-r", "-z", fetched.Remote.AdvertisedCommit).Output;
+            var incoming = GitRepository.ReadRecursiveTreeEntries(current.Repository, fetched.Remote.AdvertisedCommit,
+                "Git could not inspect the incoming tree");
             if (incoming.Split('\0', StringSplitOptions.RemoveEmptyEntries)
                 .Any(entry => entry.StartsWith("160000 ", StringComparison.Ordinal)))
                 throw new InvalidOperationException("Migration cannot fast-forward a repository containing submodules.");
-            var status = GitProcess.RunRequired(current.Repository, "Git could not inspect migration checkout",
-                "--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z",
-                "--untracked-files=all", "--ignore-submodules=none").Output;
+            var status = GitRepository.ReadMigrationCheckoutStatus(current.Repository, "Git could not inspect migration checkout");
             if (status.Length != 0)
             {
                 throw new InvalidOperationException("Migration fast-forward requires a clean checkout; preserve or resolve local edits first. No stash or discard was performed.");
@@ -49,13 +47,7 @@ internal static class MigrationFastForward
             // Per-command settings leave user config intact. Disable hooks and
             // branch merge options, autostash and recursive submodule updates.
             // Git's default overwrites ignored files: explicitly refuse instead.
-            var merge = GitProcess.Run(current.Repository,
-                "--no-replace-objects", "-c", "core.hooksPath=/dev/null",
-                "-c", "core.fsmonitor=false", "-c", "core.autocrlf=false",
-                "-c", "submodule.recurse=false", "-c", "merge.autostash=false",
-                "-c", $"branch.{branch}.mergeOptions=", "merge", "--ff-only",
-                "--no-autostash", "--no-edit", "--no-overwrite-ignore", "--no-stat",
-                fetched.Remote.AdvertisedCommit);
+            var merge = GitRepository.FastForwardMigrationCheckout(current.Repository, branch, fetched.Remote.AdvertisedCommit);
             if (merge.ExitCode != 0)
             {
                 throw new InvalidOperationException("Migration fast-forward failed; inspect the checkout before retrying. No rollback, capture or apply was attempted.");
@@ -96,20 +88,18 @@ internal static class MigrationFastForward
         // fail closed before status or checkout can invoke configured commands.
         if (!GitProcess.MigrationFiltersSuppressed)
         {
-            var filters = GitProcess.Run(repository, "config", "--name-only", "--get-regexp",
-                @"^filter\..*\.(clean|smudge|process)$");
+            var filters = GitRepository.InspectExternalFilterConfiguration(repository);
             if (filters.ExitCode != 1)
                 throw new InvalidOperationException("Migration requires configured external Git filters to be suppressed.");
         }
-        var monitor = GitProcess.Run(repository, "config", "--type=bool", "--get", "core.fsmonitor");
+        var monitor = GitRepository.InspectFsMonitorConfiguration(repository);
         if (monitor.ExitCode != 1 && (monitor.ExitCode != 0 || monitor.Output.Trim() != "false"))
         {
             throw new InvalidOperationException("Migration fast-forward requires Git fsmonitor to be disabled; review the checkout configuration first.");
         }
         // Status can enter a submodule and use its own unsuppressed filters.
         // Disable fsmonitor for this inspection as well as checking it above.
-        var index = GitProcess.RunRequired(repository, "Git could not inspect the migration index",
-            "--no-optional-locks", "-c", "core.fsmonitor=false", "ls-files", "--stage", "-z").Output;
+        var index = GitRepository.ReadMigrationCheckoutIndex(repository, "Git could not inspect the migration index");
         if (index.Split('\0', StringSplitOptions.RemoveEmptyEntries)
             .Any(entry => entry.StartsWith("160000 ", StringComparison.Ordinal)))
             throw new InvalidOperationException("Migration cannot operate on a repository containing submodules.");

@@ -32,8 +32,8 @@ internal sealed record MigrationPreflight(
 
         var markerPath = Path.Combine(repository, FormatRelativePath);
         var marker = AecApplication.ReadOptionalTextFile(markerPath, "Repository format marker");
-        var tracked = GitProcess.RunRequired(repository, "Git could not inspect the format marker",
-            "ls-tree", "--name-only", "-z", commit, "--", FormatRelativePath).Output.Length != 0;
+        var tracked = GitRepository.HasPathAtTreeish(repository, commit, FormatRelativePath,
+            "Git could not inspect the format marker");
         var current = LegacyFormat;
         if (marker is not null || tracked)
         {

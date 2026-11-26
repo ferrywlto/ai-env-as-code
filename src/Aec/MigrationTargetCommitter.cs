@@ -27,8 +27,7 @@ internal static class MigrationTargetCommitter
         try
         {
             if (writer.Write() is null) return null;
-            GitProcess.RunRequired(repository, "Could not stage migration instruction target",
-                "add", "--", writer.RelativePath);
+            GitRepository.StagePaths(repository, "Could not stage migration instruction target", writer.RelativePath);
             var staged = MigrationCommitProof.VerifyStagedFiles(repository, parent, expectedFiles, modes);
             writer.VerifyWrittenForCommit(MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository));
 

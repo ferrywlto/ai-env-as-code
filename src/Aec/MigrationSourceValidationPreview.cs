@@ -186,10 +186,9 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
     {
         var files = ReadProtectedFiles(expected);
         var repository = expected.Preflight.Repository;
-        var targets = GitProcess.RunRequired(repository, "Could not list protected migration targets",
-            "--no-replace-objects", "ls-tree", "-r", "--name-only", "-z",
-            expected.Preflight.Commit, "--", "environment/targets").Output;
-        foreach (var relative in targets.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        var targets = GitRepository.ListCommittedPathsUnder(repository, expected.Preflight.Commit,
+            "environment/targets", "Could not list protected migration targets");
+        foreach (var relative in targets)
         {
             _ = MigrationPortableTargetWriter.ReadEnrollment(relative);
             var path = Path.Combine(repository, relative);

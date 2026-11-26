@@ -32,8 +32,7 @@ internal static class MigrationSourceCommitter
 
         try
         {
-            GitProcess.RunRequired(repository, "Could not stage reviewed migration sources",
-                ["add", "--", .. paths]);
+            GitRepository.StagePaths(repository, "Could not stage reviewed migration sources", paths);
             var stagedFiles = MigrationCommitProof.VerifyStagedFiles(repository, parent, expectedFiles, modes);
             var stagedIndex = MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository);
             MigrationSourceValidationPreview.VerifyFinalState(fresh.Preparation, fresh.Branch,

@@ -184,7 +184,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
 
     internal static void VerifyMissingPathNotIgnored(string repository, string relativePath)
     {
-        var ignored = GitProcess.Run(repository, "check-ignore", "--no-index", "--quiet", "--", relativePath);
+        var ignored = GitRepository.InspectIgnoreRule(repository, relativePath);
         if (ignored.ExitCode == 0)
         {
             throw new InvalidOperationException($"Missing scaffold source is ignored by Git: {relativePath}.");

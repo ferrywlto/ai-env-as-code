@@ -38,7 +38,7 @@ internal static class GitRepository
 
     internal static string ResolveHeadCommit(string repository)
     {
-        var result = GitProcess.Run(repository, "--no-replace-objects", "rev-parse", "--verify", "--quiet", "HEAD^{commit}");
+        var result = InspectOptionalHeadCommit(repository, ignoreReplacementObjects: true);
         if (result.ExitCode == 1)
         {
             throw new InvalidOperationException("Apply requires a committed Git HEAD.");
@@ -144,8 +144,7 @@ internal static class GitRepository
 
     internal static string ReadIndexEntry(
         string repository, string path, string failureMessage) =>
-        GitProcess.RunRequired(repository, failureMessage,
-            "ls-files", "--stage", "-z", "--", path).Output;
+        ReadIndexEntries(repository, failureMessage, path);
 
     internal static string ReadObjectSizeText(
         string repository, string objectId, string failureMessage) =>
@@ -175,4 +174,218 @@ internal static class GitRepository
             ignoreReplacementObjects ? ["--no-replace-objects", .. arguments] : arguments);
         return result.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
+
+    // Repository setup and history.
+    internal static void InitializeEmptyRepository(string repository, string initialBranch, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "init", "--quiet", "--template=", $"--initial-branch={initialBranch}");
+
+    internal static void SetLocalConfiguration(
+        string repository, string key, string value, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage, "config", "--local", key, value);
+
+    internal static void RequireGitAvailable() =>
+        GitProcess.RunRequired(null, "Git is not available", "--version");
+
+    internal static void RequireAuthorIdentity(string? repository) =>
+        GitProcess.RunRequired(repository, "Git author identity is not configured", "var", "GIT_AUTHOR_IDENT");
+
+    internal static void RequireCommitterIdentity(string? repository) =>
+        GitProcess.RunRequired(repository, "Git committer identity is not configured", "var", "GIT_COMMITTER_IDENT");
+
+    internal static byte[] ReadCommitObject(string repository, string commit, string failureMessage) =>
+        GitProcess.RunRequiredBytes(repository, failureMessage, "--no-replace-objects", "cat-file", "commit", commit);
+
+    internal static GitResult InspectFirstParentHistoryInChronologicalOrder(string repository) =>
+        GitProcess.Run(repository, "--no-replace-objects", "rev-list", "--first-parent", "--reverse", "HEAD");
+
+    internal static string ReadVerifiedHeadCommit(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "rev-parse", "--verify", "HEAD^{commit}").Output.Trim();
+
+    internal static string ReadRecursiveTreeEntries(string repository, string commit, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "ls-tree", "-r", "-z", commit).Output;
+
+    internal static string ReadMetadataDirectory(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage, "rev-parse", "--absolute-git-dir").Output.Trim();
+
+    internal static string ReadCommonMetadataDirectory(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage, "rev-parse", "--git-common-dir").Output.Trim();
+
+    internal static string ReadWorktreeRoot(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage, "rev-parse", "--show-toplevel").Output.Trim();
+
+    internal static string ReadCommitSubject(string repository, string commit, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "log", "-1", "--format=%s", commit).Output.TrimEnd('\r', '\n');
+
+    internal static GitResult ReadWorktreeStatus(
+        string repository, string failureMessage, bool ignoreReplacementObjects, params string[] pathspecs)
+    {
+        string[] arguments = ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", .. pathspecs];
+        return GitProcess.RunRequired(repository, failureMessage,
+            ignoreReplacementObjects ? ["--no-replace-objects", .. arguments] : arguments);
+    }
+
+    // Backup and index inspection.
+    internal static GitResult InspectSymbolicHeadWithoutReplacements(string repository) =>
+        GitProcess.Run(repository, "--no-replace-objects", "symbolic-ref", "--quiet", "HEAD");
+
+    internal static string ReadSymbolicHeadWithoutReplacements(string repository, string failureMessage) =>
+        GitProcess.RequireSuccess(InspectSymbolicHeadWithoutReplacements(repository), failureMessage).Output.Trim();
+
+    internal static string ReadUnmergedIndexEntries(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "ls-files", "--unmerged", "-z").Output;
+
+    internal static GitResult InspectMetadataPaths(string repository, params string[] names) =>
+        GitProcess.Run(repository,
+            ["--no-replace-objects", "rev-parse", .. names.SelectMany(name => new[] { "--git-path", name })]);
+
+    internal static string ReadMetadataPath(string repository, string name, string failureMessage) =>
+        GitProcess.RequireSuccess(InspectMetadataPaths(repository, name), failureMessage).Output.Trim();
+
+    internal static string ReadPorcelainStatus(string repository, string failureMessage, params string[] paths) =>
+        ReadWorktreeStatus(repository, failureMessage, ignoreReplacementObjects: true, paths).Output;
+
+    internal static string ReadWorkingFileHashWithoutFilters(string repository, string path, string failureMessage) =>
+        GitProcess.RequireSuccess(HashWorkingFilesWithoutFilters(repository, path), failureMessage).Output.Trim();
+
+    internal static string ReadStagedObjectIdWithoutReplacements(string repository, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "rev-parse", $":{path}").Output.Trim();
+
+    internal static string ReadTreeObjectIdWithoutReplacements(
+        string repository, string treeish, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "rev-parse", $"{treeish}:{path}").Output.Trim();
+
+    internal static void ForceStagePaths(string repository, string failureMessage, params string[] paths) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            ["--no-replace-objects", "add", "--force", "--", .. paths]);
+
+    internal static string ReadVerifiedHeadParent(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "rev-parse", "--verify", "HEAD^").Output.Trim();
+
+    internal static string[] ReadTreePaths(string repository, string tree, string failureMessage) =>
+        ReadPaths(repository, failureMessage, ignoreReplacementObjects: true,
+            ["ls-tree", "--name-only", "-r", "-z", tree]);
+
+    internal static string[] ReadChangedTreePaths(string repository, string parent, string tree, string failureMessage) =>
+        ReadPaths(repository, failureMessage, ignoreReplacementObjects: true,
+            ["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", parent, tree]);
+
+    internal static GitResult InspectBooleanConfig(string repository, string key) =>
+        GitProcess.Run(repository, "--no-replace-objects", "config", "--bool", "--get", key);
+
+    internal static string ReadHeadSubject(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "log", "-1", "--format=%s").Output.TrimEnd('\r', '\n');
+
+    internal static GitResult InspectHeadReference(string repository) =>
+        GitProcess.Run(repository, "--no-replace-objects", "rev-parse", "--verify", "--quiet", "HEAD");
+
+    internal static GitResult InspectStagedChangesForPaths(string repository, params string[] paths) =>
+        GitProcess.Run(repository,
+            ["--no-replace-objects", "diff", "--cached", "--quiet", "--exit-code", "--", .. paths]);
+
+    internal static string ReadHeadReference(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "rev-parse", "--verify", "HEAD").Output.Trim();
+
+    // Migration and checkout inspection.
+    internal static string ReadObjectType(string repository, string objectId, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "cat-file", "-t", objectId).Output.Trim();
+
+    internal static GitResult InspectAncestry(string repository, string ancestor, string descendant) =>
+        GitProcess.Run(repository, "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant);
+
+    internal static string ReadCommitParentLine(string repository, string commit, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "rev-list", "--parents", "-n", "1", commit).Output.Trim();
+
+    internal static GitResult InspectUnfilteredStagedChanges(string repository) =>
+        GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv");
+
+    internal static string ReadIndexEntries(string repository, string failureMessage, params string[] paths) =>
+        GitProcess.RunRequired(repository, failureMessage, ["ls-files", "--stage", "-z", "--", .. paths]).Output;
+
+    internal static string ReadIgnoredUntrackedPaths(string repository, string failureMessage, params string[] paths) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", .. paths]).Output;
+
+    internal static string ReadMigrationSectionStatus(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames",
+            "--ignore-submodules=none", "--", ".").Output;
+
+    internal static string[] ListCommittedPathsUnder(string repository, string commit, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "ls-tree", "-r", "--name-only", "-z", commit, "--", path)
+            .Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+
+    internal static bool HasPathAtTreeish(string repository, string commit, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "ls-tree", "--name-only", "-z", commit, "--", path).Output.Length != 0;
+
+    internal static string ReadMigrationCheckoutStatus(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z",
+            "--untracked-files=all", "--ignore-submodules=none").Output;
+
+    internal static GitResult FastForwardMigrationCheckout(string repository, string branch, string commit) =>
+        GitProcess.Run(repository,
+            "--no-replace-objects", "-c", "core.hooksPath=/dev/null",
+            "-c", "core.fsmonitor=false", "-c", "core.autocrlf=false",
+            "-c", "submodule.recurse=false", "-c", "merge.autostash=false",
+            "-c", $"branch.{branch}.mergeOptions=", "merge", "--ff-only",
+            "--no-autostash", "--no-edit", "--no-overwrite-ignore", "--no-stat", commit);
+
+    internal static GitResult InspectExternalFilterConfiguration(string repository) =>
+        GitProcess.Run(repository, "config", "--name-only", "--get-regexp", @"^filter\..*\.(clean|smudge|process)$");
+
+    internal static GitResult InspectFsMonitorConfiguration(string repository) =>
+        GitProcess.Run(repository, "config", "--type=bool", "--get", "core.fsmonitor");
+
+    internal static string ReadMigrationCheckoutIndex(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-optional-locks", "-c", "core.fsmonitor=false", "ls-files", "--stage", "-z").Output;
+
+    internal static GitResult InspectIgnoreRule(string repository, string path) =>
+        GitProcess.Run(repository, "check-ignore", "--no-index", "--quiet", "--", path);
+
+    internal static bool IsValidReferenceName(string repository, string name) =>
+        GitProcess.Run(repository, "check-ref-format", name).ExitCode == 0;
+
+    internal static GitResult InspectNullDelimitedConfigValues(string repository, string key) =>
+        GitProcess.Run(repository, "config", "--null", "--get-all", key);
+
+    // Portable target inspection.
+    internal static GitResult InspectOptionalHeadCommit(
+        string repository, bool ignoreReplacementObjects = false)
+    {
+        string[] arguments = ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"];
+        return GitProcess.Run(repository,
+            ignoreReplacementObjects ? ["--no-replace-objects", .. arguments] : arguments);
+    }
+
+    internal static GitResult ListCommittedTargetEnrollments(string repository, string commit) =>
+        GitProcess.RunRequired(repository, "Could not list committed target enrollments",
+            "ls-tree", "-r", "--name-only", commit, "--", "environment/targets");
+
+    internal static GitResult InspectStagedPathsAgainstCommit(
+        string repository, string commit, params string[] paths) =>
+        GitProcess.Run(repository,
+            ["diff", "--cached", "--quiet", "--exit-code", commit, "--", .. paths]);
+
+    internal static GitResult InspectTargetHistory(string repository, string commit, string path) =>
+        GitProcess.RunRequired(repository, "Git could not inspect target history",
+            "ls-tree", "--name-only", commit, "--", path);
+
+    internal static GitResult InspectEnrolledTarget(string repository, string commit, string path) =>
+        GitProcess.RunRequired(repository, "Git could not inspect the enrolled target",
+            "ls-tree", "-z", "--name-only", commit, "--", path);
 }

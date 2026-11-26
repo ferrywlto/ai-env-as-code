@@ -25,8 +25,8 @@ internal sealed record MigrationFetchPreparation(MigrationRemotePreflight Remote
 
     internal static MigrationAncestry ReadAncestry(MigrationPreflight preflight, MigrationRemotePreflight approvedRemote)
     {
-        var type = GitProcess.RunRequired(preflight.Repository, "Git could not inspect the fetched object",
-            "--no-replace-objects", "cat-file", "-t", approvedRemote.AdvertisedCommit).Output.Trim();
+        var type = GitRepository.ReadObjectType(preflight.Repository, approvedRemote.AdvertisedCommit,
+            "Git could not inspect the fetched object");
         if (type != "commit") throw new InvalidDataException("Fetched default-branch tip is not a commit.");
 
         MigrationAncestry ancestry;
@@ -63,7 +63,7 @@ internal sealed record MigrationFetchPreparation(MigrationRemotePreflight Remote
 
     private static bool IsAncestor(string repository, string ancestor, string descendant)
     {
-        var result = GitProcess.Run(repository, "--no-replace-objects", "merge-base", "--is-ancestor", ancestor, descendant);
+        var result = GitRepository.InspectAncestry(repository, ancestor, descendant);
         return result.ExitCode switch
         {
             0 => true,

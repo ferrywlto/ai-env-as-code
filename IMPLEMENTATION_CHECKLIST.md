@@ -160,6 +160,13 @@
   signing and publish only if the branch still has the expected old value.
   The publisher retains tree validation and its branch and parent checks.
   All 374 unit and focused backup, initialization and migration tests passed.
+- [x] Consolidated the remaining production Git calls behind named operations.
+  Migration, Codex and Copilot providers, render, and target validation use
+  repository APIs for command construction. A source scan found no raw Git
+  calls in production workflows. All 879 selected Debug tests passed in 6m 16s,
+  covering the complete routine suite and focused legacy migration paths.
+  macOS ARM64 Native AOT build and installer, lifecycle, render, and migration
+  smoke passed. The 1,382-case full-suite result above covers an earlier revision.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor

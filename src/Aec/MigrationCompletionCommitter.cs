@@ -29,7 +29,7 @@ internal static class MigrationCompletionCommitter
         try
         {
             writer.Write(afterWriteForTests: afterWriteForTests);
-            GitProcess.RunRequired(repository, "Could not stage migration completion marker", "add", "--", relative);
+            GitRepository.StagePaths(repository, "Could not stage migration completion marker", relative);
             afterStageForTests?.Invoke();
             var staged = MigrationCommitProof.VerifyStagedFiles(repository, parent, files, modes);
             writer.VerifyWrittenForCommit(MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository));

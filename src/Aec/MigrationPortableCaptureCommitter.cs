@@ -39,8 +39,7 @@ internal static class MigrationPortableCaptureCommitter
                 return null;
             }
 
-            GitProcess.RunRequired(repository, "Could not stage combined portable capture",
-                ["add", "--", .. changedPaths]);
+            GitRepository.StagePaths(repository, "Could not stage combined portable capture", changedPaths);
             var stagedFiles = VerifyStagedFiles(repository, parent, changedPaths, baselineModes, proposedFiles);
             targetWriter.VerifyForCommit(parent);
 
@@ -94,9 +93,8 @@ internal static class MigrationPortableCaptureCommitter
         var stagedFiles = new List<(string RelativePath, string Blob)>();
         foreach (var relativePath in changedPaths)
         {
-            var blobResult = GitProcess.RunRequired(repository, "Could not resolve staged portable capture blob",
-                "--no-replace-objects", "rev-parse", $":{relativePath}");
-            var stagedBlob = blobResult.Output.Trim();
+            var stagedBlob = GitRepository.ReadStagedObjectIdWithoutReplacements(repository, relativePath,
+                "Could not resolve staged portable capture blob");
             var indexEntry = GitRepository.ReadIndexEntry(repository, relativePath,
                 "Could not inspect portable capture index mode");
             var sizeText = GitRepository.ReadObjectSizeText(repository, stagedBlob,
