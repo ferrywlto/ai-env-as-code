@@ -146,6 +146,10 @@
   and index reads and immutable object size and blob reads. Existing size
   limits, diagnostics and check order remain with the callers. All 362 unit
   and focused provenance, initialization and migration tests passed.
+- [x] Ferry reviewed named Git provenance operations. The committed-file reader uses
+  named APIs for tree entries, staged differences, worktree/index differences
+  and unfiltered file hashes. It retains its batch fallback and single-path
+  diagnostics. All 375 unit and focused portable and provenance tests passed.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor

@@ -33,12 +33,10 @@ internal static class CommittedFileReader
         }
 
         var paths = files.Select(file => file.Path).ToArray();
-        var tree = Run(repository, ["ls-tree", "-z", commit, "--", .. paths]);
-        var staged = Run(repository, ["--no-optional-locks", "diff", "--cached", "--quiet",
-            "--exit-code", "--no-ext-diff", "--no-textconv", commit, "--", .. paths]);
-        var modes = Run(repository, ["--no-optional-locks", "diff-files", "--raw", "-z",
-            "--no-renames", "--no-ext-diff", "--no-textconv", "--", .. paths]);
-        var hashes = Run(repository, ["hash-object", "--no-filters", "--", .. paths]);
+        var tree = GitRepository.InspectTreeEntries(repository, commit, paths);
+        var staged = GitRepository.CompareStagedPathsToCommit(repository, commit, paths);
+        var modes = GitRepository.InspectWorktreeIndexDifferences(repository, paths);
+        var hashes = GitRepository.HashWorkingFilesWithoutFilters(repository, paths);
         if (tree.ExitCode != 0 || staged.ExitCode != 0 || modes.ExitCode != 0 || hashes.ExitCode != 0 ||
             !BatchedBlobsMatch(tree.Output, hashes.Output, paths) || !BatchedModesMatch(modes.Output, paths))
         {
@@ -129,30 +127,15 @@ internal static class CommittedFileReader
         // Check commit-to-index changes separately. Worktree content and mode
         // checks below must not refresh the index or reject stat-only changes.
         EnsureDiffIsClean(
-            Run(
-                repository,
-                "--no-optional-locks",
-                "diff",
-                "--cached",
-                "--quiet",
-                "--exit-code",
-                "--no-ext-diff",
-                "--no-textconv",
-                commit,
-                "--",
-                relativePath),
+            GitRepository.CompareStagedPathsToCommit(repository, commit, relativePath),
             $"{label} has staged changes.",
             $"Git could not inspect staged {label.ToLowerInvariant()} changes");
         EnsureWorkingModeMatchesIndex(repository, relativePath, label);
 
         // Git's normal diff can hide clean/smudge or line-ending transforms; raw hashing cannot.
-        var workingBlob = RunRequired(
-            repository,
-            $"Git could not hash the {label.ToLowerInvariant()}",
-            "hash-object",
-            "--no-filters",
-            "--",
-            relativePath).Output.Trim();
+        var hashes = GitRepository.HashWorkingFilesWithoutFilters(repository, relativePath);
+        var workingBlob = GitProcess.RequireSuccess(
+            hashes, $"Git could not hash the {label.ToLowerInvariant()}").Output.Trim();
         if (!string.Equals(committedBlob, workingBlob, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -175,9 +158,9 @@ internal static class CommittedFileReader
         // The plumbing command does not refresh the on-disk index. Let Git
         // interpret core.filemode and platform permissions instead of guessing
         // Unix executable semantics on Windows. Content is checked by raw hash.
-        var changes = RunRequired(repository, $"Git could not inspect {label.ToLowerInvariant()} mode",
-            "--no-optional-locks", "diff-files", "--raw", "-z", "--no-renames",
-            "--no-ext-diff", "--no-textconv", "--", relativePath).Output;
+        var diff = GitRepository.InspectWorktreeIndexDifferences(repository, relativePath);
+        var changes = GitProcess.RequireSuccess(
+            diff, $"Git could not inspect {label.ToLowerInvariant()} mode").Output;
         if (changes.Length == 0) return;
 
         // One raw record: metadata NUL exact-path NUL. A stat-only M record
@@ -241,21 +224,4 @@ internal static class CommittedFileReader
                 throw new InvalidOperationException($"{failureMessage} (exit code {result.ExitCode}).");
         }
     }
-
-    private static GitResult Run(string repository, params string[] arguments)
-    {
-        return GitProcess.Run(repository, ["--no-replace-objects", .. arguments]);
-    }
-
-    private static GitResult RunRequired(
-        string repository,
-        string failureMessage,
-        params string[] arguments)
-    {
-        return GitProcess.RunRequired(
-            repository,
-            failureMessage,
-            ["--no-replace-objects", .. arguments]);
-    }
-
 }

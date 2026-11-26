@@ -128,9 +128,11 @@ internal static class GitProcess
     public static GitResult RunRequired(
         string? workingDirectory,
         string failureMessage,
-        params string[] arguments)
+        params string[] arguments) =>
+        RequireSuccess(Run(workingDirectory, arguments), failureMessage);
+
+    internal static GitResult RequireSuccess(GitResult result, string failureMessage)
     {
-        var result = Run(workingDirectory, arguments);
         if (result.ExitCode == 0)
         {
             return result;

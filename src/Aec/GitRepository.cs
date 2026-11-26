@@ -58,8 +58,29 @@ internal static class GitRepository
 
     internal static string ReadTreeEntry(
         string repository, string treeish, string path, string failureMessage) =>
-        GitProcess.RunRequired(repository, failureMessage,
-            "--no-replace-objects", "ls-tree", "-z", treeish, "--", path).Output;
+        GitProcess.RequireSuccess(InspectTreeEntries(repository, treeish, path), failureMessage).Output;
+
+    internal static GitResult InspectTreeEntries(
+        string repository, string treeish, params string[] paths) =>
+        GitProcess.Run(repository,
+            ["--no-replace-objects", "ls-tree", "-z", treeish, "--", .. paths]);
+
+    internal static GitResult CompareStagedPathsToCommit(
+        string repository, string commit, params string[] paths) =>
+        GitProcess.Run(repository,
+            ["--no-replace-objects", "--no-optional-locks", "diff", "--cached", "--quiet",
+                "--exit-code", "--no-ext-diff", "--no-textconv", commit, "--", .. paths]);
+
+    internal static GitResult InspectWorktreeIndexDifferences(
+        string repository, params string[] paths) =>
+        GitProcess.Run(repository,
+            ["--no-replace-objects", "--no-optional-locks", "diff-files", "--raw", "-z",
+                "--no-renames", "--no-ext-diff", "--no-textconv", "--", .. paths]);
+
+    internal static GitResult HashWorkingFilesWithoutFilters(
+        string repository, params string[] paths) =>
+        GitProcess.Run(repository,
+            ["--no-replace-objects", "hash-object", "--no-filters", "--", .. paths]);
 
     internal static string ReadIndexEntry(
         string repository, string path, string failureMessage) =>
