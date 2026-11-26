@@ -79,8 +79,40 @@ internal static class GitRepository
 
     internal static GitResult HashWorkingFilesWithoutFilters(
         string repository, params string[] paths) =>
-        GitProcess.Run(repository,
-            ["--no-replace-objects", "hash-object", "--no-filters", "--", .. paths]);
+        HashWorkingFilesWithoutFilters(repository, ignoreReplacementObjects: true, paths);
+
+    internal static GitResult HashWorkingFilesWithoutFilters(
+        string repository, bool ignoreReplacementObjects, params string[] paths)
+    {
+        string[] arguments = ["hash-object", "--no-filters", "--", .. paths];
+        return GitProcess.Run(repository,
+            ignoreReplacementObjects ? ["--no-replace-objects", .. arguments] : arguments);
+    }
+
+    internal static GitResult InspectStagedChanges(string repository) =>
+        GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code");
+
+    internal static GitResult InspectSymbolicHead(string repository) =>
+        GitProcess.Run(repository, "symbolic-ref", "--quiet", "HEAD");
+
+    internal static string ReadStagedObjectId(
+        string repository, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage, "rev-parse", $":{path}").Output.Trim();
+
+    internal static string ReadTreeObjectId(
+        string repository, string treeish, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage, "rev-parse", $"{treeish}:{path}").Output.Trim();
+
+    internal static string ReadFirstParent(
+        string repository, string revision, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage, "rev-parse", $"{revision}^").Output.Trim();
+
+    internal static byte[] ReadFileAtTreeish(
+        string repository, string treeish, string path, string failureMessage) =>
+        GitProcess.RunRequiredBytes(repository, failureMessage, "show", $"{treeish}:{path}");
+
+    internal static void StagePaths(string repository, string failureMessage, params string[] paths) =>
+        GitProcess.RunRequired(repository, failureMessage, ["add", "--", .. paths]);
 
     internal static string ReadIndexEntry(
         string repository, string path, string failureMessage) =>

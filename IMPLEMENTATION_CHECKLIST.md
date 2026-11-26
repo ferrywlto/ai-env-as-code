@@ -150,6 +150,11 @@
   named APIs for tree entries, staged differences, worktree/index differences
   and unfiltered file hashes. It retains its batch fallback and single-path
   diagnostics. All 375 unit and focused portable and provenance tests passed.
+- [x] Ferry reviewed named portable backup Git operations. The committer uses
+  named APIs for branch and index inspection, hashing, staging, and
+  committed-file and parent reads. Exact-content checks, publication and
+  diagnostics stay in the committer. All 389 unit and focused backup and
+  provenance tests passed.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor
