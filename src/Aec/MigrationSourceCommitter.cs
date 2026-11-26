@@ -17,8 +17,9 @@ internal static class MigrationSourceCommitter
         if (branch != fresh.Branch)
             throw new InvalidOperationException("Migration source branch changed before staging.");
         MigrationPortableCaptureWriter.EnsureEmptyIndex(repository);
-        var index = ReadIndex(repository);
-        var protectedFiles = ReadProtectedFiles(fresh);
+        var index = MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository);
+        var protectedFiles = MigrationSourceValidationPreview.ReadProtectedFilesWithTargets(
+            fresh.Preparation, requireTargets: true);
         var paths = fresh.ChangedPaths.ToArray();
         var changedFiles = fresh.Files.Where(file => paths.Contains(file.RelativePath, StringComparer.Ordinal)).ToArray();
         var modes = changedFiles.ToDictionary(file => file.RelativePath,
@@ -31,10 +32,9 @@ internal static class MigrationSourceCommitter
 
         try
         {
-            GitProcess.RunRequired(repository, "Could not stage reviewed migration sources",
-                ["add", "--", .. paths]);
+            GitRepository.StagePaths(repository, "Could not stage reviewed migration sources", paths);
             var stagedFiles = MigrationCommitProof.VerifyStagedFiles(repository, parent, expectedFiles, modes);
-            var stagedIndex = ReadIndex(repository);
+            var stagedIndex = MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository);
             MigrationSourceValidationPreview.VerifyFinalState(fresh.Preparation, fresh.Branch,
                 stagedIndex, new MigrationDirtySections(paths), fresh.Files, protectedFiles);
 
@@ -42,7 +42,7 @@ internal static class MigrationSourceCommitter
             // and refusing a concurrent branch move. No working-file reread for commit.
             BackupCommand.CommitStagedIndex(repository, CommitMessage, stagedFiles,
                 fresh.Branch, parent, modes);
-            var commit = ApplyCommand.ResolveHeadCommit(repository);
+            var commit = GitRepository.ResolveHeadCommit(repository);
             MigrationCommitProof.VerifyCommit(repository, parent, commit, stagedFiles, modes);
 
             // write-tree may legitimately refresh index cache extensions. Verify
@@ -53,7 +53,7 @@ internal static class MigrationSourceCommitter
                 Preflight = fresh.Preparation.Preflight with { Commit = commit }
             };
             MigrationSourceValidationPreview.VerifyFinalState(committedPreparation, fresh.Branch,
-                ReadIndex(repository), new MigrationDirtySections([]), fresh.Files, protectedFiles);
+                MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository), new MigrationDirtySections([]), fresh.Files, protectedFiles);
             return commit;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
@@ -89,26 +89,6 @@ internal static class MigrationSourceCommitter
                 throw new InvalidOperationException($"Migration source bytes changed after review: {current.RelativePath}.");
         }
     }
-
-    private static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationSourceValidationPreview fresh)
-    {
-        var files = MigrationSourceValidationPreview.ReadProtectedFiles(fresh.Preparation);
-        var repository = fresh.Preparation.Preflight.Repository;
-        var targets = GitProcess.RunRequired(repository, "Could not list protected migration targets",
-            "--no-replace-objects", "ls-tree", "-r", "--name-only", "-z",
-            fresh.Preparation.Preflight.Commit, "--", "environment/targets").Output;
-        foreach (var relative in targets.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            _ = MigrationPortableTargetWriter.ReadEnrollment(relative);
-            var path = Path.Combine(repository, relative);
-            AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!, "Protected target path");
-            files.Add(path, AecApplication.ReadRequiredTextFile(path, "Protected migration target"));
-        }
-        return files;
-    }
-
-    private static byte[] ReadIndex(string repository) =>
-        MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
 
     private static bool SameBytes(byte[]? before, byte[]? current)
     {

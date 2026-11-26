@@ -1,5 +1,178 @@
 # Implementation Checklist
 
+## Production refactoring (#21)
+
+- [x] Ferry reviewed the first slice: retire the test-only legacy Copilot backup path.
+  The public portable command remains in use. Seven old direct-command cases
+  map to live success, unchanged and binding tests; missing and unmanaged
+  runtime refusals and runtime timestamp preservation are now covered there.
+  Committed enrollment replaces the old untracked-source behavior, and
+  unrelated untracked files are preserved by portable backup. The targeted
+  Copilot and committer selection passed 19 tests; the combined unit and
+  initialization selection passed 436 tests. Production code decreased by
+  211 lines and test code by 204 lines.
+- [x] Ferry reviewed the second slice: retire the test-only source-only initialization
+  commit path and its exclusive helpers. The live environment commit test
+  covers stale canonical instruction and configuration content; initialization
+  tests retain legacy-baseline resume and failed-signing recovery coverage.
+  The combined unit, initialization and backup selection passed 442 tests.
+- [x] Ferry reviewed the third slice: remove the uncalled ordinary Codex backup wrapper
+  and its unreachable personality branch. Initialization retains the preflight
+  comparison; ordinary backup uses the portable command and its warning test.
+  The combined unit, initialization and Codex backup selection passed 474 tests.
+- [x] Ferry reviewed the fourth slice: remove unused application helpers for byte
+  comparison, legacy argument parsing and managed-root validation, including
+  the parser-only options record. Live parsing and path checks remain in use.
+  The combined unit and focused CLI selection passed 369 tests.
+- [x] Ferry reviewed the fifth slice: share portable capture post-commit parent, path,
+  byte and mode verification with the existing migration commit proof. Retain
+  capture-specific diagnostics, staged verification and write-time guards.
+  The combined unit and four migration committer selections passed 426 tests
+  in 10m 11s, including the legacy portable capture cases.
+- [x] Ferry reviewed the sixth slice: share the Codex and Copilot pre-write branch and
+  staged-index guard. Keep the separate check before staging and provider-specific
+  errors. Added Codex staged-work coverage; the unit and portable backup selection
+  passed 372 tests.
+- [x] Ferry reviewed the seventh slice: replace four identical migration index-reader
+  wrappers with one repository-based call to the existing path reader. Preserve
+  index path, link checks, diagnostics and the timing of each read. The unit
+  and focused migration selection passed 353 tests.
+- [x] Ferry reviewed the eighth slice: share managed-block byte removal for Codex and
+  Copilot while preserving provider parsing, byte-order marks and separators.
+  The unit and block/uninstall selection passed 358 tests, including in-place
+  Copilot digest coverage.
+- [x] Ferry reviewed the ninth slice: move committed-file provenance readers from the
+  Codex apply command to a repository-focused class. The reader and its Git
+  adapters are unchanged; callers in both providers and migration use it. The
+  unit, provenance, initialization, apply and focused review selection passed
+  521 tests in 2m 20s.
+- [x] Ferry approved the tenth slice: move shared repository-root and committed-HEAD
+  checks from Codex apply into GitRepository. Their implementations, including
+  detached-HEAD behavior and diagnostics, are unchanged. The focused run
+  passed 367 tests with local socket access; the earlier sandboxed run aborted
+  before execution when its local socket bind was denied.
+- [x] Ferry reviewed the eleventh slice: move the Codex source/config committed-file
+  delegates out of the apply writer; callers retain their pinned commits, byte
+  reads and diagnostics. The unit, apply, initialization, portable backup and
+  migration selection passed 553 tests in 4m 55s.
+- [x] Ferry reviewed the twelfth slice: remove the test-only apply entry point and run
+  its writer cases through attachment checkpoints. Preserve foreign-binding
+  precedence and real Git provenance coverage. Unit, apply, initialization,
+  provenance and portable review selection passed 494 tests in 1m 32s.
+- [x] Ferry reviewed the thirteenth slice: combine the initialization and attachment
+  checkpoint representation and shared comparisons while preserving their
+  diagnostics, no-op order, provenance rereads and distinct write guards.
+  Unit, apply, initialization, provenance and portable checks passed 494 tests
+  in 5m 25s.
+- [x] Ferry reviewed the fourteenth slice: share the reviewed backup snapshot input
+  comparison while retaining fresh preview creation, provider-specific errors
+  and Codex runtime configuration comparison. Unit and focused portable
+  backup checks passed 382 tests.
+- [x] Ferry reviewed the fifteenth slice: move the shared runtime path containment
+  checks from Codex apply into RuntimePathGuard. The implementation and each
+  caller's link-validation order and diagnostic labels are unchanged. The unit
+  and focused path-safety selection passed 383 tests.
+- [x] Ferry reviewed the sixteenth slice: share protected-target snapshot enumeration
+  between migration source commits and target writes. Preserve required versus
+  optional missing targets, path diagnostics and existing snapshot timing.
+  Unit and focused migration checks passed 358 tests in 1m 30s.
+- [x] Ferry reviewed the seventeenth slice: share exact staged-path verification for
+  portable capture and the other migration committers. Keep per-file proofs,
+  diagnostic text and verification order unchanged. Unit and focused migration
+  checks passed 360 tests in 2m 50s.
+- [x] Ferry reviewed the eighteenth slice: reuse the pinned tree entry when validating
+  migration scaffold source blobs. Preserve missing-file handling, regular-file
+  validation, bounded reads, LFS rejection and no-replacement-object checks.
+  Unit and focused migration preview checks passed 364 tests in 39s.
+- [x] Ferry reviewed the nineteenth slice: remove the unused non-empty-only option
+  from the initialization commit and keep its fixed commit message and required
+  empty second commit behavior. Unit, initialization and backup checks passed
+  461 tests in 52s.
+- [x] Ferry reviewed the twentieth slice: share historical-target pinning logic between
+  status and completion, retaining independent reads and final drift checks.
+  Unit and status/completion preview checks passed 362 tests in 2m 14s.
+- [x] Ferry reviewed the twenty-first slice: share the protected-file inventory between
+  scaffold writing and source validation while retaining their separate file
+  readers, diagnostic labels and validation checkpoints. Unit and focused
+  migration checks passed 373 tests in 3m 16s.
+- [x] Ferry reviewed the twenty-second slice: reuse immutable historical source blobs
+  within a single portable migration preview. Per-provider working-file and
+  final drift checks remain. A matched dual-provider test passed before and
+  after, with Git starts falling from 207 to 201; both ran in about four seconds.
+  Unit and focused migration checks passed 358 tests in 2m 10s.
+- [x] Cumulative Debug regression passed for `35683d9` in three disjoint
+  runs. The 754 routine tests passed in 3m 29s, the isolated public recovery
+  case in 1m 18s, and the remaining 627 legacy migration tests in 48m 45s.
+  The three TRX files matched all 1,382 cases in unfiltered discovery by test
+  name and multiplicity, with no failures, skips or unmatched cases. Results
+  are in `artifacts/refactor-verify.uGZNHJ/` and
+  `artifacts/refactor-legacy.JnrGCW/`. The earlier unfiltered attempt at
+  `ec4ad1e` stopped during the public recovery case after 457 passes when
+  the two-minute watchdog fired.
+- [x] Ferry reviewed the fixture fix. Managed fixtures now default to the test build
+  output. The Git environment and committed-file provenance fixtures use the
+  same default. `AEC_TEST_TEMP_ROOT` remains available as an override. With the
+  override unset, all 52 focused tests passed and Git Trace2 recorded every
+  observed fixture worktree under the test build output.
+- [x] Ferry reviewed the fixture naming correction. The routine run at `d18a5d9`
+  passed 753 of 754 tests. The conditional Git identity test failed because
+  `fixtures` and the existing `Fixtures` directory aliased on the local
+  case-insensitive filesystem. With the fixture default renamed to
+  `test-work`, all 754 routine tests passed in 3m 29s. The isolated recovery
+  case passed in 1m 18s with 3,833 Git starts and a five-minute watchdog.
+  Both runs used the default fixture root. See
+  `artifacts/refactor-verify.uGZNHJ/routine.trx` and `recovery.trx`
+  in the same directory.
+- [x] Native macOS ARM64 AOT build and isolated installer, provider lifecycle,
+  render and migration smoke passed at `ec4ad1e`; smoke fixtures used a
+  repository-local temporary directory. The production source at `35683d9`
+  matches `ec4ad1e` exactly. Real-harness checks are tracked in #4.
+- Compared with `418650a`, production C# is down 646 lines and test C# is down
+  154 lines. The reviewed slices above record the removed paths and retained
+  coverage.
+- [x] Ferry reviewed the shared portable instruction target digest. Codex, Copilot and
+  backup attribution use the same SHA-256 computation and lowercase format
+  rule. The unit and focused portable selection passed all 353 tests.
+  At PR candidate `bc71333`, all 754 routine Debug tests passed in 3m 52s
+  and the macOS ARM64 native installer, lifecycle, render and migration
+  smoke passed. The complete 1,382-case regression above covers the
+  production revision before the digest extraction.
+- [x] Ferry reviewed named Git path operations. Legacy and portable migration
+  verification now use the same staged-path and commit-diff APIs. The callers
+  still own exact path validation and retain their diagnostics, replacement-ref
+  behavior and check order. All 357 unit and focused migration tests passed.
+- [x] Ferry reviewed named Git object and index reads. Committed-file provenance,
+  Codex initialization and backup, and migration now share single-path tree
+  and index reads and immutable object size and blob reads. Existing size
+  limits, diagnostics and check order remain with the callers. All 362 unit
+  and focused provenance, initialization and migration tests passed.
+- [x] Ferry reviewed named Git provenance operations. The committed-file reader uses
+  named APIs for tree entries, staged differences, worktree/index differences
+  and unfiltered file hashes. It retains its batch fallback and single-path
+  diagnostics. All 375 unit and focused portable and provenance tests passed.
+- [x] Ferry reviewed named portable backup Git operations. The committer uses
+  named APIs for branch and index inspection, hashing, staging, and
+  committed-file and parent reads. Exact-content checks, publication and
+  diagnostics stay in the committer. All 389 unit and focused backup and
+  provenance tests passed.
+- [x] Ferry reviewed named Git commit publication operations. The shared publisher
+  uses named APIs to write the index tree, create a commit with optional
+  signing and publish only if the branch still has the expected old value.
+  The publisher retains tree validation and its branch and parent checks.
+  All 374 unit and focused backup, initialization and migration tests passed.
+- [x] Consolidated the remaining production Git calls behind named operations.
+  Migration, Codex and Copilot providers, render, and target validation use
+  repository APIs for command construction. A source scan found no raw Git
+  calls in production workflows. All 879 selected Debug tests passed in 6m 16s,
+  covering the complete routine suite and focused legacy migration paths.
+  macOS ARM64 Native AOT build and installer, lifecycle, render, and migration
+  smoke passed. The 1,382-case full-suite result above covers an earlier revision.
+- [x] Ferry reviewed moving remote command construction into `GitRepository`,
+  sharing Git failure formatting, and reusing a tree path query for enrollment
+  and migration preflight. All 133 focused Debug tests passed in 3m 42s. A
+  source scan found no raw Git launcher calls in production workflows.
+- [ ] Complete Ferry's final review and ticket acceptance.
+
 ## Routine regression refactor
 
 [Issue #19](https://github.com/ferrywlto/ai-env-as-code/issues/19) is in review in

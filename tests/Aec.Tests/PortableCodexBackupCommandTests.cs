@@ -205,6 +205,29 @@ public sealed class PortableCodexBackupCommandTests
         Assert.Equal(string.Empty, layout.GitStatus());
     }
 
+    [Fact]
+    public void ExistingStagedWorkStopsBeforeCanonicalWrite()
+    {
+        using var layout = NewLayout();
+        File.WriteAllText(RuntimeConfigPath(layout), "personality = \"friendly\"\n");
+        File.WriteAllText(Path.Combine(layout.Repository, "note.txt"), "Keep staged.\n");
+        GitProcess.RunRequired(layout.Repository, "Could not stage fixture note",
+            "add", "--", "note.txt");
+        var head = layout.Head();
+        var config = File.ReadAllBytes(layout.CanonicalConfigPath);
+
+        var result = Run(layout);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Empty(result.Output);
+        Assert.Contains("already has staged changes; Codex backup stopped before writing", result.Error,
+            StringComparison.Ordinal);
+        Assert.Equal(head, layout.Head());
+        Assert.Equal(config, File.ReadAllBytes(layout.CanonicalConfigPath));
+        Assert.Equal("note.txt\n", GitProcess.RunRequired(layout.Repository,
+            "Could not inspect staged paths", "diff", "--cached", "--name-only").Output);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

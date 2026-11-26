@@ -13,7 +13,7 @@ internal sealed record MigrationRemotePreflight(string Remote, string BranchRef,
         var remote = ReadSingleConfig(repository, $"branch.{branchName}.remote");
         var merge = ReadSingleConfig(repository, $"branch.{branchName}.merge");
         if (remote == "." || remote.StartsWith('-') ||
-            GitProcess.Run(repository, "check-ref-format", $"refs/remotes/{remote}/aec").ExitCode != 0)
+            !GitRepository.IsValidReferenceName(repository, $"refs/remotes/{remote}/aec"))
         {
             throw new InvalidOperationException("Migration requires one named upstream remote, not local-only or invalid tracking.");
         }
@@ -26,7 +26,7 @@ internal sealed record MigrationRemotePreflight(string Remote, string BranchRef,
         // Require a real configured remote. Otherwise ls-remote can interpret an
         // undefined remote name as a repository path/URL instead of an upstream.
         var url = ReadSingleConfig(repository, $"remote.{remote}.url");
-        var advertised = GitProcess.ReadRemoteHead(repository, remote);
+        var advertised = GitRepository.ReadRemoteHead(repository, remote);
         if (advertised.ExitCode != 0)
         {
             // Transport stderr can contain credential-bearing URLs. Report the
@@ -76,7 +76,7 @@ internal sealed record MigrationRemotePreflight(string Remote, string BranchRef,
 
     private static string ReadSingleConfig(string repository, string key)
     {
-        var result = GitProcess.Run(repository, "config", "--null", "--get-all", key);
+        var result = GitRepository.InspectNullDelimitedConfigValues(repository, key);
         var values = result.Output.Split('\0');
         if (result.ExitCode != 0 || values.Length != 2 || values[1].Length != 0 || string.IsNullOrWhiteSpace(values[0]))
         {
@@ -87,7 +87,7 @@ internal sealed record MigrationRemotePreflight(string Remote, string BranchRef,
 
     private static string ReadBranch(string repository)
     {
-        var result = GitProcess.Run(repository, "symbolic-ref", "--quiet", "HEAD");
+        var result = GitRepository.InspectSymbolicHead(repository);
         var branch = result.Output.TrimEnd('\r', '\n');
         return result.ExitCode == 0 && branch.StartsWith("refs/heads/", StringComparison.Ordinal) && branch.Length > "refs/heads/".Length
             ? branch : throw new InvalidOperationException("Migration requires a checked-out local branch; detached HEAD is not supported.");
@@ -95,7 +95,7 @@ internal sealed record MigrationRemotePreflight(string Remote, string BranchRef,
 
     internal static void EnsureSnapshot(MigrationPreflight preflight, string branch)
     {
-        if (!string.Equals(preflight.Commit, ApplyCommand.ResolveHeadCommit(preflight.Repository), StringComparison.Ordinal) ||
+        if (!string.Equals(preflight.Commit, GitRepository.ResolveHeadCommit(preflight.Repository), StringComparison.Ordinal) ||
             !string.Equals(branch, ReadBranch(preflight.Repository), StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD or branch changed during migration remote preflight.");

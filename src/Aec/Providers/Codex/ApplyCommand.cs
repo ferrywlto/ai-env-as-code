@@ -2,21 +2,6 @@ namespace Aec;
 
 internal static class ApplyCommand
 {
-    public static int Run(
-        string repository,
-        string codexHome,
-        TextWriter output,
-        TextWriter warning)
-    {
-        return Run(
-            repository,
-            codexHome,
-            output,
-            warning,
-            initialization: null,
-            repositoryExpectation: null);
-    }
-
     internal static int RunForInitialization(
         string repository,
         string codexHome,
@@ -36,13 +21,8 @@ internal static class ApplyCommand
             codexHome,
             output,
             TextWriter.Null,
-            initialization: new InitializationExpectation(
-                expectedRuntime,
-                expectedRuntimePersonality,
-                expectedCommit,
-                expectedSource,
-                expectedConfig),
-            repositoryExpectation: null);
+            new ApplyExpectation(expectedRuntime, expectedRuntimePersonality,
+                expectedCommit, expectedSource, expectedConfig, null, IsInitialization: true));
     }
 
     internal static int RunForAttachment(
@@ -65,14 +45,9 @@ internal static class ApplyCommand
             codexHome,
             output,
             warning,
-            initialization: null,
-            repositoryExpectation: new RepositoryExpectation(
-                expectedRuntime,
-                expectedRuntimePersonality,
-                expectedCommit,
-                expectedSource,
-                expectedConfig,
-                expectedLocalRuntimeSource));
+            new ApplyExpectation(expectedRuntime, expectedRuntimePersonality,
+                expectedCommit, expectedSource, expectedConfig, expectedLocalRuntimeSource,
+                IsInitialization: false));
     }
 
     private static int Run(
@@ -80,38 +55,25 @@ internal static class ApplyCommand
         string codexHome,
         TextWriter output,
         TextWriter warning,
-        InitializationExpectation? initialization,
-        RepositoryExpectation? repositoryExpectation)
+        ApplyExpectation expected)
     {
-        EnsureRuntimeOutsideRepository(repository, codexHome);
-        ValidateRepositoryRoot(repository);
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(repository, codexHome);
+        GitRepository.ValidateRepositoryRoot(repository);
 
-        var commit = ResolveHeadCommit(repository);
-        if (initialization is not null &&
-            !string.Equals(commit, initialization.Commit, StringComparison.Ordinal))
+        var commit = GitRepository.ResolveHeadCommit(repository);
+        if (!string.Equals(commit, expected.Commit, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                "Repository HEAD changed after the initialization commit.");
-        }
-        if (repositoryExpectation is not null &&
-            !string.Equals(commit, repositoryExpectation.Commit, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Repository HEAD changed before attachment apply.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Repository HEAD changed after the initialization commit."
+                : "Repository HEAD changed before attachment apply.");
         }
 
-        var source = ReadCommittedSource(repository, commit);
-        if (initialization is not null &&
-            !source.AsSpan().SequenceEqual(initialization.Source))
+        var source = CodexCanonicalFiles.ReadCommittedSource(repository, commit);
+        if (!source.AsSpan().SequenceEqual(expected.Source))
         {
-            throw new InvalidOperationException(
-                "Committed source does not match the expected initialization content.");
-        }
-        if (repositoryExpectation is not null &&
-            !source.AsSpan().SequenceEqual(repositoryExpectation.Source))
-        {
-            throw new InvalidOperationException(
-                "Committed source changed before attachment apply.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Committed source does not match the expected initialization content."
+                : "Committed source changed before attachment apply.");
         }
 
         var binding = AecInstructionBlock.ReadRepositoryBinding(source);
@@ -121,7 +83,7 @@ internal static class ApplyCommand
         {
             // Only confirmed init attachment may substitute a machine-local
             // binding. The committed bytes remain pinned and are never edited.
-            var localSource = repositoryExpectation?.LocalRuntimeSource;
+            var localSource = expected.LocalRuntimeSource;
             if (localSource is null ||
                 !AecInstructionBlock.RebindRepository(source, repository)
                     .AsSpan().SequenceEqual(localSource))
@@ -136,18 +98,12 @@ internal static class ApplyCommand
             desiredRuntimeSource = localSource;
         }
 
-        var canonicalConfig = ReadCommittedConfig(repository, commit);
-        if (initialization is not null &&
-            !canonicalConfig.AsSpan().SequenceEqual(initialization.Config))
+        var canonicalConfig = CodexCanonicalFiles.ReadCommittedConfig(repository, commit);
+        if (!canonicalConfig.AsSpan().SequenceEqual(expected.Config))
         {
-            throw new InvalidOperationException(
-                "Committed config does not match the expected initialization content.");
-        }
-        if (repositoryExpectation is not null &&
-            !canonicalConfig.AsSpan().SequenceEqual(repositoryExpectation.Config))
-        {
-            throw new InvalidOperationException(
-                "Committed config changed before attachment apply.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Committed config does not match the expected initialization content."
+                : "Committed config changed before attachment apply.");
         }
 
         var desiredPersonality = CodexPersonalityConfig.ReadCanonical(
@@ -169,19 +125,19 @@ internal static class ApplyCommand
             desiredPersonality);
 
         // Revalidate provenance after observing runtime so a concurrent checkout or canonical edit stops apply.
-        var currentCommit = ResolveHeadCommit(repository);
+        var currentCommit = GitRepository.ResolveHeadCommit(repository);
         if (!string.Equals(commit, currentCommit, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during apply.");
         }
 
-        var refreshedSource = ReadCommittedSource(repository, commit);
+        var refreshedSource = CodexCanonicalFiles.ReadCommittedSource(repository, commit);
         if (!refreshedSource.AsSpan().SequenceEqual(source))
         {
             throw new InvalidOperationException("Canonical source changed during apply.");
         }
 
-        var refreshedConfig = ReadCommittedConfig(repository, commit);
+        var refreshedConfig = CodexCanonicalFiles.ReadCommittedConfig(repository, commit);
         if (!refreshedConfig.AsSpan().SequenceEqual(canonicalConfig))
         {
             throw new InvalidOperationException("Canonical config changed during apply.");
@@ -194,43 +150,21 @@ internal static class ApplyCommand
             return 0;
         }
 
-        // Init may overwrite only the exact runtime bytes captured by its baseline commit.
-        if (initialization is not null &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(initialization.Runtime)) &&
+        // Both routes permit the reviewed runtime or an already-applied target.
+        if (!MatchesOptionalBytes(runtime, expected.Runtime) &&
             (runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource)))
         {
-            throw new InvalidOperationException(
-                "Runtime target changed after the initialization backup; committed source was not applied.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Runtime target changed after the initialization backup; committed source was not applied."
+                : "Runtime target changed during AEC attachment; the committed environment was not applied.");
         }
 
-        if (initialization is not null &&
-            runtimePersonality != initialization.RuntimePersonality &&
+        if (runtimePersonality != expected.RuntimePersonality &&
             runtimePersonality != desiredPersonality)
         {
-            throw new InvalidOperationException(
-                "Runtime personality changed after the initialization backup; " +
-                "the committed environment was not applied.");
-        }
-
-        // Attachment uses the runtime snapshot taken before skill installation or
-        // a local path rebind. The already-desired state is also accepted so a
-        // previously interrupted apply remains safely repeatable.
-        if (repositoryExpectation is not null &&
-            !MatchesOptionalBytes(runtime, repositoryExpectation.Runtime) &&
-            (runtime is null || !runtime.AsSpan().SequenceEqual(desiredRuntimeSource)))
-        {
-            throw new InvalidOperationException(
-                "Runtime target changed during AEC attachment; " +
-                "the committed environment was not applied.");
-        }
-
-        if (repositoryExpectation is not null &&
-            runtimePersonality != repositoryExpectation.RuntimePersonality &&
-            runtimePersonality != desiredPersonality)
-        {
-            throw new InvalidOperationException(
-                "Runtime personality changed during AEC attachment; " +
-                "the committed environment was not applied.");
+            throw new InvalidOperationException(expected.IsInitialization
+                ? "Runtime personality changed after the initialization backup; the committed environment was not applied."
+                : "Runtime personality changed during AEC attachment; the committed environment was not applied.");
         }
 
         if (configUpdate.Changed)
@@ -256,393 +190,13 @@ internal static class ApplyCommand
         {
             AtomicFile.ReplaceIfUnchanged(
                 runtimePath,
-                initialization?.Runtime ?? runtime,
+                expected.IsInitialization ? expected.Runtime : runtime,
                 desiredRuntimeSource);
         }
 
         output.WriteLine("applied");
         return 0;
     }
-
-    internal static void ValidateRepositoryRoot(
-        string repository,
-        string rootRequirement = "--repo must identify the Git repository root")
-    {
-        var metadata = RunRequired(
-            repository,
-            "Repository is not a Git work tree",
-            "rev-parse",
-            "--is-inside-work-tree",
-            "--is-bare-repository",
-            "--show-prefix").Output.Split('\n', 3);
-        if (metadata.Length != 3 || !metadata[2].EndsWith('\n'))
-        {
-            throw new InvalidOperationException("Git returned incomplete repository metadata.");
-        }
-
-        if (!string.Equals(metadata[0].Trim(), "true", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException($"Repository is not a Git work tree: {repository}");
-        }
-
-        if (!string.Equals(metadata[1].Trim(), "false", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException($"Repository must not be bare: {repository}");
-        }
-
-        if (metadata[2].Trim().Length != 0)
-        {
-            throw new InvalidOperationException($"{rootRequirement}: {repository}");
-        }
-    }
-
-    internal static string ResolveHeadCommit(string repository)
-    {
-        var result = Run(repository, "rev-parse", "--verify", "--quiet", "HEAD^{commit}");
-        if (result.ExitCode == 1)
-        {
-            throw new InvalidOperationException("Apply requires a committed Git HEAD.");
-        }
-
-        if (result.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"Git could not resolve committed HEAD (exit code {result.ExitCode}).");
-        }
-
-        var commit = result.Output.Trim();
-        return commit.Length == 0
-            ? throw new InvalidOperationException("Git returned an empty commit identifier.")
-            : commit;
-    }
-
-    internal static byte[] ReadCommittedSource(string repository, string commit)
-    {
-        return ReadCommittedFile(
-            repository,
-            commit,
-            AecApplication.SourceRelativePath,
-            "Canonical source");
-    }
-
-    internal static byte[] ReadCommittedConfig(string repository, string commit)
-    {
-        return ReadCommittedFile(
-            repository,
-            commit,
-            AecApplication.ConfigSourceRelativePath,
-            "Canonical config");
-    }
-
-    internal static byte[][] ReadCommittedFiles(
-        string repository, string commit, params (string Path, string Label)[] files)
-    {
-        byte[] ReadWorkingFile((string Path, string Label) file)
-        {
-            var path = Path.Combine(repository, file.Path);
-            AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!, $"{file.Label} path");
-            return AecApplication.ReadRequiredTextFile(path, file.Label);
-        }
-
-        byte[][] ReadIndividually() => files.Select(file =>
-        {
-            var path = Path.Combine(repository, file.Path);
-            AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!, $"{file.Label} path");
-            return ReadCommittedFile(repository, commit, file.Path, file.Label);
-        }).ToArray();
-
-        byte[][] before;
-        try
-        {
-            before = files.Select(ReadWorkingFile).ToArray();
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
-            InvalidOperationException or InvalidDataException)
-        {
-            _ = ReadIndividually();
-            throw;
-        }
-
-        var paths = files.Select(file => file.Path).ToArray();
-        var tree = Run(repository, ["ls-tree", "-z", commit, "--", .. paths]);
-        var staged = Run(repository, ["--no-optional-locks", "diff", "--cached", "--quiet",
-            "--exit-code", "--no-ext-diff", "--no-textconv", commit, "--", .. paths]);
-        var modes = Run(repository, ["--no-optional-locks", "diff-files", "--raw", "-z",
-            "--no-renames", "--no-ext-diff", "--no-textconv", "--", .. paths]);
-        var hashes = Run(repository, ["hash-object", "--no-filters", "--", .. paths]);
-        if (tree.ExitCode != 0 || staged.ExitCode != 0 || modes.ExitCode != 0 || hashes.ExitCode != 0 ||
-            !BatchedBlobsMatch(tree.Output, hashes.Output, paths) || !BatchedModesMatch(modes.Output, paths))
-        {
-            // Preserve the single-path diagnostic. A transient mismatch remains a refusal.
-            _ = ReadIndividually();
-            throw new InvalidOperationException("Committed files changed while Git provenance was checked.");
-        }
-
-        for (var index = 0; index < files.Length; index++)
-        {
-            if (!before[index].AsSpan().SequenceEqual(ReadWorkingFile(files[index])))
-            {
-                throw new InvalidOperationException($"{files[index].Label} changed while its Git provenance was checked.");
-            }
-        }
-
-        return before;
-    }
-
-    private static bool BatchedBlobsMatch(string tree, string hashes, string[] paths)
-    {
-        if (!tree.EndsWith('\0'))
-        {
-            return false;
-        }
-
-        var blobs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var entry in tree[..^1].Split('\0'))
-        {
-            var tab = entry.IndexOf('\t');
-            if (tab < 0)
-            {
-                return false;
-            }
-
-            var fields = entry[..tab].Split(' ');
-            if (fields.Length != 3 || fields[0] is not ("100644" or "100755") ||
-                fields[1] != "blob" || fields[2].Length == 0 || !blobs.TryAdd(entry[(tab + 1)..], fields[2]))
-            {
-                return false;
-            }
-        }
-
-        var working = hashes.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return blobs.Count == paths.Length && working.Length == paths.Length &&
-            paths.Select((path, index) => blobs.TryGetValue(path, out var blob) && blob == working[index])
-                .All(matches => matches);
-    }
-
-    private static bool BatchedModesMatch(string output, string[] paths)
-    {
-        if (output.Length == 0)
-        {
-            return true;
-        }
-
-        var records = output.Split('\0');
-        if (records.Length % 2 != 1 || records[^1].Length != 0)
-        {
-            return false;
-        }
-
-        var unmatched = paths.ToHashSet(StringComparer.Ordinal);
-        for (var index = 0; index < records.Length - 1; index += 2)
-        {
-            var fields = records[index].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            // A stat-only modification retains the regular file mode. Raw bytes are checked separately.
-            if (!unmatched.Remove(records[index + 1]) || fields.Length != 5 ||
-                fields[0] is not (":100644" or ":100755") || fields[4] != "M" || fields[0][1..] != fields[1])
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    internal static byte[] ReadCommittedFile(
-        string repository,
-        string commit,
-        string relativePath,
-        string label)
-    {
-        var sourcePath = Path.Combine(repository, relativePath);
-        var source = AecApplication.ReadRequiredTextFile(sourcePath, label);
-        var committedBlob = ResolveCommittedBlob(repository, commit, relativePath, label);
-
-        // Check commit-to-index changes separately. Worktree content and mode
-        // checks below must not refresh the index or reject stat-only changes.
-        EnsureDiffIsClean(
-            Run(
-                repository,
-                "--no-optional-locks",
-                "diff",
-                "--cached",
-                "--quiet",
-                "--exit-code",
-                "--no-ext-diff",
-                "--no-textconv",
-                commit,
-                "--",
-                relativePath),
-            $"{label} has staged changes.",
-            $"Git could not inspect staged {label.ToLowerInvariant()} changes");
-        EnsureWorkingModeMatchesIndex(repository, relativePath, label);
-
-        // Git's normal diff can hide clean/smudge or line-ending transforms; raw hashing cannot.
-        var workingBlob = RunRequired(
-            repository,
-            $"Git could not hash the {label.ToLowerInvariant()}",
-            "hash-object",
-            "--no-filters",
-            "--",
-            relativePath).Output.Trim();
-        if (!string.Equals(committedBlob, workingBlob, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"{label} has unstaged changes: bytes do not exactly match the committed Git blob; " +
-                "filters or file changes are present.");
-        }
-
-        var reread = AecApplication.ReadRequiredTextFile(sourcePath, label);
-        if (!reread.AsSpan().SequenceEqual(source))
-        {
-            throw new InvalidOperationException(
-                $"{label} changed while its Git provenance was checked.");
-        }
-
-        return source;
-    }
-
-    private static void EnsureWorkingModeMatchesIndex(string repository, string relativePath, string label)
-    {
-        // The plumbing command does not refresh the on-disk index. Let Git
-        // interpret core.filemode and platform permissions instead of guessing
-        // Unix executable semantics on Windows. Content is checked by raw hash.
-        var changes = RunRequired(repository, $"Git could not inspect {label.ToLowerInvariant()} mode",
-            "--no-optional-locks", "diff-files", "--raw", "-z", "--no-renames",
-            "--no-ext-diff", "--no-textconv", "--", relativePath).Output;
-        if (changes.Length == 0) return;
-
-        // One raw record: metadata NUL exact-path NUL. A stat-only M record
-        // with equal modes is not a content change; the raw hash decides that.
-        var records = changes.Split('\0');
-        if (records.Length != 3 || records[1] != relativePath || records[2].Length != 0)
-            throw new InvalidOperationException($"Git returned malformed {label.ToLowerInvariant()} mode metadata.");
-        var fields = records[0].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (fields.Length != 5 || fields[0] is not (":100644" or ":100755"))
-            throw new InvalidOperationException($"Git returned malformed {label.ToLowerInvariant()} mode metadata.");
-        if (fields[4] != "M" || fields[0][1..] != fields[1])
-            throw new InvalidOperationException($"{label} has unstaged changes (file mode or type).");
-    }
-
-    private static string ResolveCommittedBlob(
-        string repository,
-        string commit,
-        string relativePath,
-        string label)
-    {
-        var tree = RunRequired(
-            repository,
-            "Git could not inspect the committed canonical source",
-            "ls-tree",
-            "-z",
-            commit,
-            "--",
-            relativePath).Output;
-        if (tree.Length == 0 || !tree.EndsWith('\0') || tree[..^1].Contains('\0'))
-        {
-            throw new InvalidOperationException($"{label} is not a single committed Git file.");
-        }
-
-        var record = tree[..^1];
-        var tab = record.IndexOf('\t');
-        if (tab < 0 ||
-            !string.Equals(record[(tab + 1)..], relativePath, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"Git returned malformed {label.ToLowerInvariant()} metadata.");
-        }
-
-        var fields = record[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (fields.Length != 3 ||
-            fields[0] is not ("100644" or "100755") ||
-            fields[1] != "blob" ||
-            fields[2].Length == 0)
-        {
-            throw new InvalidOperationException($"{label} must be a committed regular Git file.");
-        }
-
-        return fields[2];
-    }
-
-    private static void EnsureDiffIsClean(
-        GitResult result,
-        string dirtyMessage,
-        string failureMessage)
-    {
-        switch (result.ExitCode)
-        {
-            case 0:
-                return;
-            case 1:
-                throw new InvalidOperationException(dirtyMessage);
-            default:
-                throw new InvalidOperationException($"{failureMessage} (exit code {result.ExitCode}).");
-        }
-    }
-
-    internal static void EnsureRuntimeOutsideRepository(string repository, string codexHome)
-    {
-        EnsureRuntimeOutsideRepository(
-            repository,
-            codexHome,
-            "AGENTS.md",
-            "Codex runtime target");
-    }
-
-    internal static void EnsureRuntimeOutsideRepository(
-        string repository,
-        string runtimeHome,
-        string runtimeFileName,
-        string label)
-    {
-        var runtimePath = Path.GetFullPath(Path.Combine(runtimeHome, runtimeFileName));
-        if (IsPathInsideDirectory(repository, runtimePath))
-        {
-            throw new InvalidOperationException($"{label} must be outside the data repository.");
-        }
-    }
-
-    internal static bool IsPathInsideDirectory(string directory, string path)
-    {
-        var directoryRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
-        var candidate = Path.GetFullPath(path);
-        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
-        if (string.Equals(candidate, directoryRoot, comparison))
-        {
-            return true;
-        }
-
-        // Filesystem roots already end in a separator; appending another would break containment.
-        var directoryPrefix = Path.EndsInDirectorySeparator(directoryRoot)
-            ? directoryRoot
-            : $"{directoryRoot}{Path.DirectorySeparatorChar}";
-        return candidate.StartsWith(directoryPrefix, comparison);
-    }
-
-    private static GitResult Run(string repository, params string[] arguments)
-    {
-        return GitProcess.Run(repository, ["--no-replace-objects", .. arguments]);
-    }
-
-    private static GitResult RunRequired(
-        string repository,
-        string failureMessage,
-        params string[] arguments)
-    {
-        return GitProcess.RunRequired(
-            repository,
-            failureMessage,
-            ["--no-replace-objects", .. arguments]);
-    }
-
-    private sealed record InitializationExpectation(
-        byte[] Runtime,
-        CodexPersonality? RuntimePersonality,
-        string Commit,
-        byte[] Source,
-        byte[] Config);
 
     private static bool MatchesOptionalBytes(byte[]? left, byte[]? right)
     {
@@ -651,11 +205,12 @@ internal static class ApplyCommand
             : right is not null && left.AsSpan().SequenceEqual(right);
     }
 
-    private sealed record RepositoryExpectation(
+    private sealed record ApplyExpectation(
         byte[]? Runtime,
         CodexPersonality? RuntimePersonality,
         string Commit,
         byte[] Source,
         byte[] Config,
-        byte[]? LocalRuntimeSource);
+        byte[]? LocalRuntimeSource,
+        bool IsInitialization);
 }

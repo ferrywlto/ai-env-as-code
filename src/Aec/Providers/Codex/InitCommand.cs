@@ -3,7 +3,6 @@ namespace Aec;
 internal static class InitCommand
 {
     private const string LegacyInitializedRootSubject = "Initialize AEC data repository";
-    private const string InitializationCommitMessage = "Initialize AEC instructions";
 
     public static int Run(
         string directoryPath,
@@ -16,7 +15,7 @@ internal static class InitCommand
         var isFreshTarget = IsFreshTarget(directoryPath);
         AecApplication.EnsureNoLinksInExistingPath(codexHome, "Codex home path");
         AecApplication.EnsureRealDirectory(codexHome, "Codex home");
-        ApplyCommand.EnsureRuntimeOutsideRepository(directoryPath, codexHome);
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(directoryPath, codexHome);
 
         if (isFreshTarget && forcePathChange)
         {
@@ -141,13 +140,8 @@ internal static class InitCommand
         if (!isFreshTarget)
         {
             AecSkillInstaller.Install(codexHome);
-            GitProcess.RunRequired(
-                directoryPath,
-                "Git could not configure exact instruction bytes",
-                "config",
-                "--local",
-                "core.autocrlf",
-                "false");
+            GitRepository.SetLocalConfiguration(directoryPath, "core.autocrlf", "false",
+                "Git could not configure exact instruction bytes");
         }
 
         var sourcePath = Path.Combine(directoryPath, AecApplication.SourceRelativePath);
@@ -174,11 +168,9 @@ internal static class InitCommand
 
         var initializationCommit = BackupCommand.CommitCanonicalEnvironment(
             directoryPath,
-            InitializationCommitMessage,
             baseline.Commit,
             merged,
-            baseline.Config,
-            allowEmpty: true);
+            baseline.Config);
         ApplyCommand.RunForInitialization(
             directoryPath,
             codexHome,
@@ -252,7 +244,7 @@ internal static class InitCommand
             // The path was already confirmed on this machine. Preserve its
             // possibly newer portable runtime block; status/apply own drift.
             AecSkillInstaller.Install(codexHome);
-            if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
+            if (!string.Equals(completed.Commit, GitRepository.ResolveHeadCommit(repository),
                     StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
@@ -429,11 +421,11 @@ internal static class InitCommand
         string platform,
         byte[] expectedTarget)
     {
-        if (!string.Equals(completed.Commit, ApplyCommand.ResolveHeadCommit(repository),
+        if (!string.Equals(completed.Commit, GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal) ||
             !CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Codex)
                 .AsSpan().SequenceEqual(expectedTarget) ||
-            !ApplyCommand.ReadCommittedConfig(repository, completed.Commit)
+            !CodexCanonicalFiles.ReadCommittedConfig(repository, completed.Commit)
                 .AsSpan().SequenceEqual(completed.Config))
         {
             throw new InvalidOperationException(
@@ -470,10 +462,9 @@ internal static class InitCommand
         {
             // A first enrollment leaves exactly one target uncommitted for review.
             // A repeat invocation may inspect that same target, but nothing else.
-            var status = GitProcess.RunRequired(
+            var status = GitRepository.ReadWorktreeStatus(
                 repository,
-                "Git could not inspect enrollment changes",
-                "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".",
+                "Git could not inspect enrollment changes", ignoreReplacementObjects: false, ".",
                 $":(top,exclude,literal){allowedEnrollmentTarget}");
             if (status.Output.Length != 0)
             {
@@ -482,8 +473,8 @@ internal static class InitCommand
             }
         }
 
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
-        var files = ApplyCommand.ReadCommittedFiles(repository, commit,
+        var commit = GitRepository.ResolveHeadCommit(repository);
+        var files = CommittedFileReader.ReadCommittedFiles(repository, commit,
             (AecApplication.SourceRelativePath, "Canonical source"),
             (AecApplication.ConfigSourceRelativePath, "Canonical config"));
         var content = files[0];
@@ -506,7 +497,7 @@ internal static class InitCommand
 
         // Pin the inspected snapshot after all history checks so a concurrent checkout
         // cannot silently redirect the later attachment apply.
-        var currentCommit = ApplyCommand.ResolveHeadCommit(repository);
+        var currentCommit = GitRepository.ResolveHeadCommit(repository);
         if (!string.Equals(commit, currentCommit, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -562,8 +553,8 @@ internal static class InitCommand
 
     private static void ValidateLegacyInitializedRoot(string repository, string commit)
     {
-        var root = GitProcess.RunRequiredBytes(repository, "Git could not inspect the legacy AEC root",
-            "--no-replace-objects", "cat-file", "commit", commit);
+        var root = GitRepository.ReadCommitObject(repository, commit,
+            "Git could not inspect the legacy AEC root");
         EnsureRootCommit(root);
 
         var entries = ReadTreeEntries(repository, commit);
@@ -588,13 +579,7 @@ internal static class InitCommand
     {
         // First-parent order keeps the original lifecycle commits stable even when
         // later provider work introduces merge commits.
-        var result = GitProcess.Run(
-            repository,
-            "--no-replace-objects",
-            "rev-list",
-            "--first-parent",
-            "--reverse",
-            "HEAD");
+        var result = GitRepository.InspectFirstParentHistoryInChronologicalOrder(repository);
         if (result.ExitCode != 0)
         {
             if (required)
@@ -613,14 +598,8 @@ internal static class InitCommand
 
     private static string ReadCommitSubject(string repository, string commit)
     {
-        return GitProcess.RunRequired(
-            repository,
-            "Git could not inspect AEC initialization history",
-            "--no-replace-objects",
-            "log",
-            "-1",
-            "--format=%s",
-            commit).Output.TrimEnd('\r', '\n');
+        return GitRepository.ReadCommitSubject(repository, commit,
+            "Git could not inspect AEC initialization history");
     }
 
     private static void ValidateInitializationHistory(
@@ -629,13 +608,8 @@ internal static class InitCommand
         string initializationCommit,
         string? baselineSubject)
     {
-        var baselineObject = GitProcess.RunRequiredBytes(
-            repository,
-            "Git could not inspect the AEC baseline commit",
-            "--no-replace-objects",
-            "cat-file",
-            "commit",
-            baselineCommit);
+        var baselineObject = GitRepository.ReadCommitObject(repository, baselineCommit,
+            "Git could not inspect the AEC baseline commit");
         EnsureRootCommit(baselineObject);
         var baselineFormat = baselineSubject switch
         {
@@ -651,13 +625,8 @@ internal static class InitCommand
             baselineEntries[AecApplication.SourceRelativePath].ObjectId,
             "AEC initialization baseline canonical source");
 
-        var initializationObject = GitProcess.RunRequiredBytes(
-            repository,
-            "Git could not inspect the AEC initialization commit",
-            "--no-replace-objects",
-            "cat-file",
-            "commit",
-            initializationCommit);
+        var initializationObject = GitRepository.ReadCommitObject(repository, initializationCommit,
+            "Git could not inspect the AEC initialization commit");
         EnsureSingleParent(initializationObject, baselineCommit);
 
         var initializationEntries = ReadTreeEntries(repository, initializationCommit);
@@ -723,13 +692,8 @@ internal static class InitCommand
         string objectId,
         string label)
     {
-        var sizeText = GitProcess.RunRequired(
-            repository,
-            $"Git could not inspect {label} size",
-            "--no-replace-objects",
-            "cat-file",
-            "-s",
-            objectId).Output.Trim();
+        var sizeText = GitRepository.ReadObjectSizeText(repository, objectId,
+            $"Git could not inspect {label} size");
         if (!long.TryParse(sizeText, out var size) ||
             size < 0 ||
             size > AecApplication.MaximumTextBytes)
@@ -737,13 +701,8 @@ internal static class InitCommand
             throw new InvalidDataException($"{label} exceeds 1 MiB.");
         }
 
-        var content = GitProcess.RunRequiredBytes(
-            repository,
-            $"Git could not read {label}",
-            "--no-replace-objects",
-            "cat-file",
-            "blob",
-            objectId);
+        var content = GitRepository.ReadBlob(repository, objectId,
+            $"Git could not read {label}");
         if (content.LongLength != size)
         {
             throw new InvalidDataException($"{label} size changed while it was read.");
@@ -806,7 +765,7 @@ internal static class InitCommand
     {
         try
         {
-            GitProcess.RunRequired(null, "Git is not available", "--version");
+            GitRepository.RequireGitAvailable();
         }
         catch (System.ComponentModel.Win32Exception exception)
         {
@@ -816,16 +775,8 @@ internal static class InitCommand
 
     private static void EnsureCommitIdentity(string? workingDirectory)
     {
-        GitProcess.RunRequired(
-            workingDirectory,
-            "Git author identity is not configured",
-            "var",
-            "GIT_AUTHOR_IDENT");
-        GitProcess.RunRequired(
-            workingDirectory,
-            "Git committer identity is not configured",
-            "var",
-            "GIT_COMMITTER_IDENT");
+        GitRepository.RequireAuthorIdentity(workingDirectory);
+        GitRepository.RequireCommitterIdentity(workingDirectory);
     }
 
     private static void EnsureFreshCommitIdentity(
@@ -835,13 +786,8 @@ internal static class InitCommand
         try
         {
             Directory.CreateDirectory(repository);
-            GitProcess.RunRequired(
-                repository,
-                "Git identity preflight repository could not be initialized",
-                "init",
-                "--quiet",
-                "--template=",
-                "--initial-branch=main");
+            GitRepository.InitializeEmptyRepository(repository, "main",
+                "Git identity preflight repository could not be initialized");
             EnsureGitDirectory(repository);
             EnsureCommitIdentity(repository);
         }
@@ -864,23 +810,13 @@ internal static class InitCommand
     private static void InitializeRepository(string repository)
     {
         Directory.CreateDirectory(repository);
-        GitProcess.RunRequired(
-            repository,
-            "Git init failed",
-            "init",
-            "--quiet",
-            "--template=",
-            "--initial-branch=main");
+        GitRepository.InitializeEmptyRepository(repository, "main",
+            "Git init failed");
         EnsureGitDirectory(repository);
 
         // Disable checkout conversion because both initialization commits must retain exact bytes.
-        GitProcess.RunRequired(
-            repository,
-            "Git could not configure exact instruction bytes",
-            "config",
-            "--local",
-            "core.autocrlf",
-            "false");
+        GitRepository.SetLocalConfiguration(repository, "core.autocrlf", "false",
+            "Git could not configure exact instruction bytes");
 
         var sourcePath = Path.Combine(repository, AecApplication.SourceRelativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
@@ -905,14 +841,9 @@ internal static class InitCommand
 
         EnsureMainBranch(repository);
         BackupCommand.EnsureNoChangesOutsideManagedSources(repository);
-        var managedStatus = GitProcess.RunRequired(
-            repository,
-            "Git could not verify the initialized canonical environment",
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-            "--",
+        var managedStatus = GitRepository.ReadWorktreeStatus(
+                repository,
+                "Git could not verify the initialized canonical environment", ignoreReplacementObjects: false,
             AecApplication.SourceRelativePath,
             AecApplication.ConfigSourceRelativePath);
         if (managedStatus.Output.Length != 0)
@@ -973,23 +904,12 @@ internal static class InitCommand
 
         EnsureMainBranch(repository);
 
-        var commitObject = GitProcess.RunRequiredBytes(
-            repository,
-            "Git could not inspect initialization history",
-            "--no-replace-objects",
-            "cat-file",
-            "commit",
-            commit);
+        var commitObject = GitRepository.ReadCommitObject(repository, commit,
+            "Git could not inspect initialization history");
         EnsureRootCommit(commitObject);
 
-        var subject = GitProcess.RunRequired(
-            repository,
-            "Git could not inspect the initialization baseline subject",
-            "--no-replace-objects",
-            "log",
-            "-1",
-            "--format=%s",
-            commit).Output.TrimEnd('\r', '\n');
+        var subject = GitRepository.ReadCommitSubject(repository, commit,
+            "Git could not inspect the initialization baseline subject");
         var format = subject switch
         {
             BackupCommand.CommitMessage => BaselineFormat.LegacyAgentsOnly,
@@ -1089,12 +1009,8 @@ internal static class InitCommand
 
     private static void EnsureMainBranch(string repository)
     {
-        var branch = GitProcess.RunRequired(
-            repository,
-            "Git could not inspect the initialization branch",
-            "symbolic-ref",
-            "--quiet",
-            "HEAD").Output.Trim();
+        var branch = GitProcess.RequireSuccess(GitRepository.InspectSymbolicHead(repository),
+            "Git could not inspect the initialization branch").Output.Trim();
         if (!string.Equals(branch, "refs/heads/main", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Initialization baseline must be on branch main.");
@@ -1103,13 +1019,7 @@ internal static class InitCommand
 
     private static string ResolveBaselineHead(string repository, string failureMessage)
     {
-        var commit = GitProcess.RunRequired(
-            repository,
-            failureMessage,
-            "--no-replace-objects",
-            "rev-parse",
-            "--verify",
-            "HEAD^{commit}").Output.Trim();
+        var commit = GitRepository.ReadVerifiedHeadCommit(repository, failureMessage);
         return commit.Length == 0
             ? throw new InvalidOperationException("Git returned an empty commit identifier.")
             : commit;
@@ -1186,14 +1096,8 @@ internal static class InitCommand
         string repository,
         string commit)
     {
-        var tree = GitProcess.RunRequired(
-            repository,
-            "Git could not inspect the initialization baseline tree",
-            "--no-replace-objects",
-            "ls-tree",
-            "-r",
-            "-z",
-            commit).Output;
+        var tree = GitRepository.ReadRecursiveTreeEntries(repository, commit,
+            "Git could not inspect the initialization baseline tree");
         var records = tree.Split('\0', StringSplitOptions.RemoveEmptyEntries);
         var entries = new Dictionary<string, GitTreeEntry>(StringComparer.Ordinal);
         foreach (var record in records)
@@ -1296,18 +1200,12 @@ internal static class InitCommand
     {
         EnsureSamePath(
             gitDirectory,
-            GitProcess.RunRequired(
-                repository,
-                "Git could not resolve its metadata directory",
-                "rev-parse",
-                "--absolute-git-dir").Output.Trim(),
+            GitRepository.ReadMetadataDirectory(repository,
+                "Git could not resolve its metadata directory"),
             "Git metadata directory");
 
-        var commonDirectory = GitProcess.RunRequired(
-            repository,
-            "Git could not resolve its common metadata directory",
-            "rev-parse",
-            "--git-common-dir").Output.Trim();
+        var commonDirectory = GitRepository.ReadCommonMetadataDirectory(repository,
+            "Git could not resolve its common metadata directory");
         var resolvedCommonDirectory = Path.IsPathFullyQualified(commonDirectory)
             ? commonDirectory
             : Path.GetFullPath(commonDirectory, repository);
@@ -1315,11 +1213,8 @@ internal static class InitCommand
 
         EnsureSamePath(
             repository,
-            GitProcess.RunRequired(
-                repository,
-                "Git could not resolve its work tree",
-                "rev-parse",
-                "--show-toplevel").Output.Trim(),
+            GitRepository.ReadWorktreeRoot(repository,
+                "Git could not resolve its work tree"),
             "Git work tree");
 
         // A fresh AEC repository has no linked metadata; reject paths that could redirect writes.

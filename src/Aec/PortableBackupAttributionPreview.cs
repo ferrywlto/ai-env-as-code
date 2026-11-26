@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec;
@@ -44,7 +43,7 @@ internal sealed record PortableBackupAttributionPreview(
 
         // Repository-path binding alone cannot distinguish a local edit from a
         // target applied before the selected repository advanced to a new commit.
-        var currentDigest = Convert.ToHexStringLower(SHA256.HashData(snapshot.Target));
+        var currentDigest = InstructionTargetDigest.Compute(snapshot.Target);
         if (!string.Equals(lastAppliedDigest, currentDigest, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(

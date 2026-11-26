@@ -30,7 +30,7 @@ internal static class SharedEnrollmentCommand
         AecApplication.EnsureRealDirectory(repository, "Repository");
         AecApplication.EnsureNoLinksInExistingPath(providerHome, "Provider home path");
         AecApplication.EnsureRealDirectory(providerHome, "Provider home");
-        ApplyCommand.EnsureRuntimeOutsideRepository(
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(
             repository, providerHome, fileName, "Provider runtime target");
         AecApplication.EnsureNoLinksInExistingPath(targetDirectory, "Enrollment target path");
         var runtime = AecApplication.ReadRequiredTextFile(Path.Combine(providerHome, fileName),
@@ -45,7 +45,7 @@ internal static class SharedEnrollmentCommand
         };
         EnsureSourcesExist(repository, sourcePaths);
 
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
         var shared = ReadCommittedSource(repository, commit, sourcePaths[0]);
         var policy = ReadCommittedSource(repository, commit, sourcePaths[1]);
         var overlay = ReadCommittedSource(repository, commit, sourcePaths[2]);
@@ -66,7 +66,7 @@ internal static class SharedEnrollmentCommand
 
         if (provider == AecIdentifiers.Copilot)
         {
-            var canonical = ApplyCommand.ReadCommittedFile(
+            var canonical = CommittedFileReader.ReadCommittedFile(
                 repository,
                 commit,
                 AecApplication.CopilotSourceRelativePath,
@@ -98,7 +98,7 @@ internal static class SharedEnrollmentCommand
         // change during preflight must not produce an unreviewed composition.
         if (!string.Equals(
                 commit,
-                ApplyCommand.ResolveHeadCommit(repository),
+                GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during enrollment.");
@@ -106,7 +106,7 @@ internal static class SharedEnrollmentCommand
 
         foreach (var relativePath in sourcePaths)
         {
-            _ = ApplyCommand.ReadCommittedFile(
+            _ = CommittedFileReader.ReadCommittedFile(
                 repository, commit, relativePath, "Authored instruction source");
         }
 
@@ -165,7 +165,7 @@ internal static class SharedEnrollmentCommand
 
     private static string ReadCommittedSource(string repository, string commit, string relativePath)
     {
-        var bytes = ApplyCommand.ReadCommittedFile(
+        var bytes = CommittedFileReader.ReadCommittedFile(
             repository, commit, relativePath, "Authored instruction source");
         return StrictUtf8.GetString(bytes);
     }

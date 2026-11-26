@@ -142,7 +142,7 @@ internal sealed class MigrationPortableCapturePlan
 
     private void VerifyHead(string expectedHead)
     {
-        var currentHead = ApplyCommand.ResolveHeadCommit(Repository);
+        var currentHead = GitRepository.ResolveHeadCommit(Repository);
         if (currentHead != expectedHead)
         {
             throw new InvalidOperationException("Migration HEAD changed; no further files will be replaced.");

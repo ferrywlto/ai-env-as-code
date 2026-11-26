@@ -33,6 +33,11 @@ Integration tests use real Git repositories and check filesystem safety. Some
 groups run sequentially because they change process-wide settings. See
 `IMPLEMENTATION_CHECKLIST.md` for recorded regression runs.
 
+Managed test fixtures default to the `test-work` directory next to the test
+binaries. Set `AEC_TEST_TEMP_ROOT` to an absolute, writable path without symbolic
+links to override it. Set `TMPDIR` (or `TEMP` on Windows) to also direct the test
+runner and its subprocesses to a particular temporary directory.
+
 The production project uses only the .NET Base Class Library; tests use xUnit
 without a coverage dependency.
 

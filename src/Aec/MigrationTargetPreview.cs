@@ -45,7 +45,7 @@ internal sealed record MigrationTargetPreview(MigrationPreparation Preparation,
         // sources. A source-only commit legitimately makes an old target stale.
         AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!, "Migration target path");
         var baseline = MigrationScaffoldPreview.ReadCommittedSection(validated.Preparation.Preflight, relative);
-        var indexEntry = MigrationScaffoldPreview.ReadIndexEntry(repository, relative);
+        var indexEntry = GitRepository.ReadIndexEntry(repository, relative, "Could not inspect scaffold index entry");
         if (indexEntry != baseline.ExpectedIndexEntry)
             throw new InvalidOperationException($"Migration target has staged changes: {relative}.");
         var working = AecApplication.ReadOptionalTextFile(path, "Migration target");

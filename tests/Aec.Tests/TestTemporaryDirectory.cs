@@ -2,8 +2,8 @@ namespace Aec.Tests;
 
 internal static class TestTemporaryDirectory
 {
-    // macOS may report a temporary directory through a symbolic link.
-    // Fixture roots must also work with AEC's no-link path validation.
+    // Keep default fixtures beside the test binaries in the checkout's ignored
+    // build output. AEC checks fixture paths for symbolic links.
     public static string Root => Environment.GetEnvironmentVariable("AEC_TEST_TEMP_ROOT")
-        ?? (OperatingSystem.IsMacOS() ? "/private/tmp" : Path.GetTempPath());
+        ?? Path.Combine(AppContext.BaseDirectory, "test-work");
 }

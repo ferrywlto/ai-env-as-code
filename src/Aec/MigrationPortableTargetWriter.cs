@@ -23,9 +23,8 @@ internal sealed class MigrationPortableTargetWriter
     {
         var proposals = plan.ChangedSourcePaths;
         var changes = new List<TargetChange>();
-        var enrolled = GitProcess.RunRequired(plan.Repository, "Could not list committed migration targets",
-            "--no-replace-objects", "ls-tree", "-r", "--name-only", "-z", plan.Commit, "--", "environment/targets")
-            .Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        var enrolled = GitRepository.ListCommittedPathsUnder(plan.Repository, plan.Commit,
+            "environment/targets", "Could not list committed migration targets");
         foreach (var relative in enrolled.Order(StringComparer.Ordinal))
         {
             var (platform, provider) = ReadEnrollment(relative);

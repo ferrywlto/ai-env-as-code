@@ -63,20 +63,17 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
         var pathspecs = allowed.ToArray();
         // Working files alone cannot reveal a staged/deleted symlink or gitlink.
         // Validate both committed and indexed kinds without requiring clean bytes.
-        EnsureRegularEntries(GitProcess.RunRequired(preflight.Repository, "Git could not inspect section history",
-            ["--no-replace-objects", "ls-tree", "-z", preflight.Commit, "--", .. pathspecs]).Output);
-        EnsureRegularEntries(GitProcess.RunRequired(preflight.Repository, "Git could not inspect section index",
-            ["ls-files", "--stage", "-z", "--", .. pathspecs]).Output);
-        var ignored = GitProcess.RunRequired(preflight.Repository, "Git could not inspect ignored sections",
-            ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", .. pathspecs]);
-        if (ignored.Output.Length != 0)
+        EnsureRegularEntries(GitProcess.RequireSuccess(GitRepository.InspectTreeEntries(preflight.Repository, preflight.Commit, pathspecs),
+            "Git could not inspect section history").Output);
+        EnsureRegularEntries(GitRepository.ReadIndexEntries(preflight.Repository, "Git could not inspect section index", pathspecs));
+        var ignored = GitRepository.ReadIgnoredUntrackedPaths(preflight.Repository,
+            "Git could not inspect ignored sections", pathspecs);
+        if (ignored.Length != 0)
         {
             throw new InvalidOperationException("Migration section files are ignored by Git; review ignore rules first.");
         }
 
-        var status = GitProcess.RunRequired(preflight.Repository, "Git could not inspect migration changes",
-            "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames",
-            "--ignore-submodules=none", "--", ".").Output;
+        var status = GitRepository.ReadMigrationSectionStatus(preflight.Repository, "Git could not inspect migration changes");
         var dirty = new HashSet<string>(StringComparer.Ordinal);
         foreach (var record in Records(status))
         {
@@ -97,7 +94,7 @@ internal sealed record MigrationDirtySections(IReadOnlyList<string> Paths)
             dirty.Add(path);
         }
 
-        if (!string.Equals(preflight.Commit, ApplyCommand.ResolveHeadCommit(preflight.Repository), StringComparison.Ordinal))
+        if (!string.Equals(preflight.Commit, GitRepository.ResolveHeadCommit(preflight.Repository), StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during migration section preflight.");
         }

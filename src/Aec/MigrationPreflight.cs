@@ -27,19 +27,19 @@ internal sealed record MigrationPreflight(
         AecApplication.EnsureRealDirectory(gitDirectory, "Git directory");
         InitCommand.EnsureContainedGitMetadata(repository, gitDirectory);
         BackupCommand.ValidateRepository(repository);
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
         InitCommand.ValidateInitializationHistory(repository);
 
         var markerPath = Path.Combine(repository, FormatRelativePath);
         var marker = AecApplication.ReadOptionalTextFile(markerPath, "Repository format marker");
-        var tracked = GitProcess.RunRequired(repository, "Git could not inspect the format marker",
-            "ls-tree", "--name-only", "-z", commit, "--", FormatRelativePath).Output.Length != 0;
+        var tracked = GitRepository.ReadNullDelimitedTreePathMatches(repository, commit, FormatRelativePath,
+            "Git could not inspect the format marker").Length != 0;
         var current = LegacyFormat;
         if (marker is not null || tracked)
         {
             // Untracked, staged, deleted or transformed markers must fail, never
             // fall back to legacy. A section directory alone proves no completion.
-            var bytes = ApplyCommand.ReadCommittedFile(repository, commit,
+            var bytes = CommittedFileReader.ReadCommittedFile(repository, commit,
                 FormatRelativePath, "Repository format marker");
             current = ParseFormatVersion(new UTF8Encoding(false, true).GetString(bytes)
                 .TrimEnd('\r', '\n'), "Repository format marker");
@@ -57,11 +57,11 @@ internal sealed record MigrationPreflight(
             // Historical initialization alone cannot prove later commits left a
             // usable legacy environment. Validate today's committed managed files
             // without rejecting unrelated draft section edits.
-            var source = ApplyCommand.ReadCommittedSource(repository, commit);
+            var source = CodexCanonicalFiles.ReadCommittedSource(repository, commit);
             _ = AecInstructionBlock.ReadRepositoryBinding(source)
                 ?? throw new InvalidDataException(
                     "Canonical instructions do not contain a supported initialized AEC block.");
-            var config = ApplyCommand.ReadCommittedConfig(repository, commit);
+            var config = CodexCanonicalFiles.ReadCommittedConfig(repository, commit);
             _ = CodexPersonalityConfig.ReadCanonical(config,
                 Path.Combine(repository, AecApplication.ConfigSourceRelativePath));
         }
@@ -69,7 +69,7 @@ internal sealed record MigrationPreflight(
         var binaryVersion = typeof(AecApplication).Assembly.GetName().Version
             ?? throw new InvalidOperationException("Application version could not be resolved.");
         ValidateVersions(current, target, binaryVersion);
-        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository), StringComparison.Ordinal))
+        if (!string.Equals(commit, GitRepository.ResolveHeadCommit(repository), StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during migration preflight.");
         }

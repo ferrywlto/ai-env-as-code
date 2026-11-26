@@ -22,7 +22,7 @@ internal static class MigrationHarnessSelection
 
             AecApplication.EnsureRealDirectory(home, $"{provider} home");
             var fileName = provider == AecIdentifiers.Codex ? "AGENTS.md" : "copilot-instructions.md";
-            ApplyCommand.EnsureRuntimeOutsideRepository(
+            RuntimePathGuard.EnsureRuntimeOutsideRepository(
                 preflight.Repository, home, fileName, $"{provider} runtime target");
             var runtimePath = Path.Combine(home, fileName);
             var runtime = AecApplication.ReadOptionalTextFile(runtimePath,
@@ -63,7 +63,7 @@ internal static class MigrationHarnessSelection
             selected.Add(new MigrationHarness(provider, home, runtimePath));
         }
 
-        if (!string.Equals(preflight.Commit, ApplyCommand.ResolveHeadCommit(preflight.Repository),
+        if (!string.Equals(preflight.Commit, GitRepository.ResolveHeadCommit(preflight.Repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during migration harness selection.");

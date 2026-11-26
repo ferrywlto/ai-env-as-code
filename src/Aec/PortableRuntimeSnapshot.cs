@@ -12,6 +12,13 @@ internal sealed record PortableRuntimeSnapshot(
     byte[]? Runtime,
     int? BlockVersion)
 {
+    internal bool HasSameBackupInputs(PortableRuntimeSnapshot other) =>
+        string.Equals(Repository, other.Repository, StringComparison.Ordinal) &&
+        string.Equals(RuntimePath, other.RuntimePath, StringComparison.Ordinal) &&
+        string.Equals(Commit, other.Commit, StringComparison.Ordinal) &&
+        Runtime is not null && other.Runtime is not null &&
+        Runtime.AsSpan().SequenceEqual(other.Runtime);
+
     public static PortableRuntimeSnapshot Read(
         string repository,
         string provider,
@@ -36,7 +43,7 @@ internal sealed record PortableRuntimeSnapshot(
         AecApplication.EnsureRealDirectory(repository, "Repository");
         AecApplication.EnsureNoLinksInExistingPath(providerHome, "Provider home path");
         AecApplication.EnsureRealDirectory(providerHome, "Provider home");
-        ApplyCommand.EnsureRuntimeOutsideRepository(
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(
             repository, providerHome, fileName, "Provider runtime target");
 
         var platform = RenderCommand.CurrentPlatform();
@@ -44,7 +51,7 @@ internal sealed record PortableRuntimeSnapshot(
         var runtimePath = Path.Combine(providerHome, fileName);
         var runtime = AecApplication.ReadOptionalTextFile(
             runtimePath, "Provider runtime instructions");
-        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
+        if (!string.Equals(commit, GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(

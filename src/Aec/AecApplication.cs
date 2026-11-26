@@ -145,16 +145,6 @@ public static class AecApplication
         return UninstallCommand.Run(codexHome, output);
     }
 
-    private static string CompareExactBytes(byte[] desired, byte[]? current)
-    {
-        if (current is null)
-        {
-            return "missing";
-        }
-
-        return desired.AsSpan().SequenceEqual(current) ? "in_sync" : "different";
-    }
-
     private static int RunBackup(
         ProviderRepositoryOptions options,
         TextWriter output,
@@ -327,49 +317,6 @@ public static class AecApplication
 
         output.WriteLine(PortableCodexWriter.Apply(preview));
         return 0;
-    }
-
-    private static RepositoryOptions ParseRepositoryArguments(string[] args, string command)
-    {
-        string? repository = null;
-        string? codexHome = null;
-
-        for (var index = 1; index < args.Length; index++)
-        {
-            var option = args[index];
-            if (option is not ("--repo" or "--codex-home"))
-            {
-                throw new ArgumentException($"Unknown argument: {option}");
-            }
-
-            var value = ReadRequiredOptionValue(args, ref index, option);
-            if (option == "--repo")
-            {
-                if (repository is not null)
-                {
-                    throw new ArgumentException("--repo may be specified only once.");
-                }
-
-                repository = value;
-            }
-            else
-            {
-                if (codexHome is not null)
-                {
-                    throw new ArgumentException("--codex-home may be specified only once.");
-                }
-
-                codexHome = value;
-            }
-        }
-
-        if (repository is null)
-        {
-            throw new ArgumentException(
-                $"{command} requires --repo with the source-of-truth data repository.");
-        }
-
-        return new RepositoryOptions(repository, codexHome);
     }
 
     private static string ParseRenderRepository(string[] args)
@@ -711,12 +658,6 @@ public static class AecApplication
         return Path.GetFullPath(path);
     }
 
-    private static void EnsureNoLinksInManagedRoots(string repository, string codexHome)
-    {
-        EnsureNoLinksInExistingPath(repository, "Repository path");
-        EnsureNoLinksInExistingPath(codexHome, "Codex home path");
-    }
-
     internal static void EnsureSourceDirectories(string repository)
     {
         var environment = Path.Combine(repository, "environment");
@@ -916,8 +857,6 @@ public static class AecApplication
         output.WriteLine(version ?? throw new InvalidOperationException(
             "Application version could not be resolved."));
     }
-
-    private sealed record RepositoryOptions(string Repository, string? CodexHome);
 
     private sealed record ProviderRepositoryOptions(
         string Repository,

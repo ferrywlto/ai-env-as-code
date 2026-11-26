@@ -46,17 +46,7 @@ internal static class GitProcess
             standardError.GetAwaiter().GetResult());
     }
 
-    internal static GitResult ReadRemoteHead(string repository, string remote, TimeSpan? timeout = null) =>
-        RunRemoteCommand(repository, ["ls-remote", "--symref", "--", remote, "HEAD"],
-            "Remote HEAD query", timeout ?? TimeSpan.FromSeconds(30));
-
-    internal static GitResult FetchRemoteCommit(string repository, string remote, string commit, TimeSpan? timeout = null) =>
-        RunRemoteCommand(repository,
-            ["fetch", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--refmap=",
-                "--no-auto-maintenance", "--no-write-commit-graph", "--", remote, commit],
-            "Remote fetch", timeout ?? TimeSpan.FromMinutes(2));
-
-    private static GitResult RunRemoteCommand(
+    internal static GitResult RunRemoteCommand(
         string repository, string[] arguments, string operation, TimeSpan limit)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(limit, TimeSpan.Zero);
@@ -116,10 +106,7 @@ internal static class GitProcess
 
         if (process.ExitCode != 0)
         {
-            var details = error.ReplaceLineEndings(" ").Trim();
-            var suffix = details.Length == 0 ? string.Empty : $": {details}";
-            throw new InvalidOperationException(
-                $"{failureMessage} with exit code {process.ExitCode}{suffix}");
+            throw CreateFailure(failureMessage, process.ExitCode, error);
         }
 
         return output.ToArray();
@@ -128,19 +115,25 @@ internal static class GitProcess
     public static GitResult RunRequired(
         string? workingDirectory,
         string failureMessage,
-        params string[] arguments)
+        params string[] arguments) =>
+        RequireSuccess(Run(workingDirectory, arguments), failureMessage);
+
+    internal static GitResult RequireSuccess(GitResult result, string failureMessage)
     {
-        var result = Run(workingDirectory, arguments);
         if (result.ExitCode == 0)
         {
             return result;
         }
 
         var details = string.IsNullOrWhiteSpace(result.Error) ? result.Output : result.Error;
+        throw CreateFailure(failureMessage, result.ExitCode, details);
+    }
+
+    private static InvalidOperationException CreateFailure(string message, int exitCode, string details)
+    {
         details = details.ReplaceLineEndings(" ").Trim();
         var suffix = details.Length == 0 ? string.Empty : $": {details}";
-        throw new InvalidOperationException(
-            $"{failureMessage} with exit code {result.ExitCode}{suffix}");
+        return new InvalidOperationException($"{message} with exit code {exitCode}{suffix}");
     }
 
     private static void ClearInjectedGitConfiguration(ProcessStartInfo startInfo)

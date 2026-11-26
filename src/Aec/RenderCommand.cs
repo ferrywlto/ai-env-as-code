@@ -13,8 +13,8 @@ internal static class RenderCommand
     {
         AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
         AecApplication.EnsureRealDirectory(repository, "Repository");
-        ApplyCommand.ValidateRepositoryRoot(repository);
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        GitRepository.ValidateRepositoryRoot(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
 
         var platform = CurrentPlatform();
         var targetRoot = Path.Combine(repository, "environment", "targets", platform);
@@ -57,11 +57,10 @@ internal static class RenderCommand
             {
                 // A committed target must be clean before regeneration. Its working
                 // bytes may contain a user's edit that render must never overwrite.
-                _ = ApplyCommand.ReadCommittedFile(
+                _ = CommittedFileReader.ReadCommittedFile(
                     repository, commit, relativePath, "Rendered target");
             }
-            else if (GitProcess.RunRequired(repository, "Git could not inspect target history",
-                         "ls-tree", "--name-only", commit, "--", relativePath).Output.Length != 0)
+            else if (GitRepository.InspectTargetHistory(repository, commit, relativePath).Output.Length != 0)
             {
                 throw new InvalidOperationException(
                     $"Rendered target is missing but committed at HEAD: {relativePath}");

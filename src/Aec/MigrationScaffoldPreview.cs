@@ -132,7 +132,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
     {
         var repository = expected.Preflight.Repository;
         var committed = ReadCommittedSection(expected.Preflight, relativePath);
-        var indexEntry = ReadIndexEntry(repository, relativePath);
+        var indexEntry = GitRepository.ReadIndexEntry(repository, relativePath, "Could not inspect scaffold index entry");
         var workingContent = ReadFile(Path.Combine(repository, relativePath));
         var hasStagedChanges = indexEntry != committed.ExpectedIndexEntry;
         var workingDiffers = !SameBytes(committed.Content, workingContent);
@@ -149,17 +149,14 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
     internal static (byte[]? Content, string? Mode, string ExpectedIndexEntry) ReadCommittedSection(
         MigrationPreflight preflight, string relativePath)
     {
-        var result = GitProcess.RunRequired(preflight.Repository, "Could not inspect scaffold source history",
-            "--no-replace-objects", "ls-tree", "-z", preflight.Commit, "--", relativePath);
-        var treeEntry = result.Output;
+        var treeEntry = GitRepository.ReadTreeEntry(preflight.Repository, preflight.Commit,
+            relativePath, "Could not inspect scaffold source history");
         if (treeEntry.Length == 0) return (null, null, "");
 
-        // Reuse the bounded regular-blob validator before reading its metadata.
-        // The pinned commit is read without replacement objects in both calls.
-        var content = MigrationLegacyCapturePreview.ReadHistoricalFile(preflight.Repository, preflight.Commit, relativePath);
-        var metadata = treeEntry[..treeEntry.IndexOf('\t')].Split(' ');
-        var mode = metadata[0];
-        var blob = metadata[2];
+        // Validate and read the immutable blob using the tree entry already
+        // obtained from the pinned commit, without a second tree query.
+        var (content, mode, blob) = MigrationLegacyCapturePreview.ReadHistoricalBlob(
+            preflight.Repository, relativePath, treeEntry);
         return (content, mode, $"{mode} {blob} 0\t{relativePath}\0");
     }
 
@@ -187,7 +184,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
 
     internal static void VerifyMissingPathNotIgnored(string repository, string relativePath)
     {
-        var ignored = GitProcess.Run(repository, "check-ignore", "--no-index", "--quiet", "--", relativePath);
+        var ignored = GitRepository.InspectIgnoreRule(repository, relativePath);
         if (ignored.ExitCode == 0)
         {
             throw new InvalidOperationException($"Missing scaffold source is ignored by Git: {relativePath}.");
@@ -243,7 +240,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
             {
                 throw new InvalidOperationException($"Authored source changed during scaffold preview: {file.RelativePath}.");
             }
-            var indexEntry = ReadIndexEntry(repository, file.RelativePath);
+            var indexEntry = GitRepository.ReadIndexEntry(repository, file.RelativePath, "Could not inspect scaffold index entry");
             if (file.IndexEntry != indexEntry)
             {
                 throw new InvalidOperationException($"Indexed source changed during scaffold preview: {file.RelativePath}.");
@@ -253,7 +250,7 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
 
     private static void VerifyHeadAndBranch(MigrationPreflight expected, string branch)
     {
-        if (ApplyCommand.ResolveHeadCommit(expected.Repository) != expected.Commit)
+        if (GitRepository.ResolveHeadCommit(expected.Repository) != expected.Commit)
         {
             throw new InvalidOperationException("HEAD changed during scaffold preview.");
         }
@@ -262,10 +259,6 @@ internal sealed record MigrationScaffoldPreview(MigrationPreparation Preparation
             throw new InvalidOperationException("Branch changed during scaffold preview.");
         }
     }
-
-    internal static string ReadIndexEntry(string repository, string relativePath) =>
-        GitProcess.RunRequired(repository, "Could not inspect scaffold index entry",
-            "ls-files", "--stage", "-z", "--", relativePath).Output;
 
     private static byte[]? ReadFile(string path)
     {

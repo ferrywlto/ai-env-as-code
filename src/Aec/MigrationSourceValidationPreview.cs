@@ -25,7 +25,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
         VerifyEntry(expected);
         var repository = expected.Preflight.Repository;
         var branch = MigrationLegacyCapturePreview.ReadBranch(repository);
-        var index = ReadIndex(repository);
+        var index = MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository);
         var protectedFiles = ReadProtectedFiles(expected);
 
         // Refresh current owned dirt instead of comparing it with the pre-start
@@ -69,7 +69,7 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
     private static MigrationValidatedSource ReadSource(MigrationPreflight preflight, string relative)
     {
         var committed = MigrationScaffoldPreview.ReadCommittedSection(preflight, relative);
-        var indexEntry = MigrationScaffoldPreview.ReadIndexEntry(preflight.Repository, relative);
+        var indexEntry = GitRepository.ReadIndexEntry(preflight.Repository, relative, "Could not inspect scaffold index entry");
         if (indexEntry != committed.ExpectedIndexEntry)
             throw new InvalidOperationException($"Staged source changes stop post-DONE validation: {relative}.");
 
@@ -130,9 +130,9 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             : MigrationDirtySections.ReadForTarget(expected.Preflight, expected.Harnesses, targetRelativePath);
         if (!currentDirty.Paths.SequenceEqual(dirty.Paths, StringComparer.Ordinal))
             throw new InvalidOperationException("Dirty paths changed during source validation.");
-        if (!index.AsSpan().SequenceEqual(ReadIndex(repository)))
+        if (!index.AsSpan().SequenceEqual(MigrationLegacyCaptureWriter.ReadRepositoryIndex(repository)))
             throw new InvalidOperationException("Git index changed during source validation.");
-        if (ApplyCommand.ResolveHeadCommit(repository) != expected.Preflight.Commit)
+        if (GitRepository.ResolveHeadCommit(repository) != expected.Preflight.Commit)
             throw new InvalidOperationException("HEAD changed during source validation.");
         if (MigrationLegacyCapturePreview.ReadBranch(repository) != branch)
             throw new InvalidOperationException("Branch changed during source validation.");
@@ -154,7 +154,11 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
             throw new InvalidOperationException("Local harness enrollment changed during source validation.");
     }
 
-    internal static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationPreparation expected)
+    internal static Dictionary<string, byte[]?> ReadProtectedFiles(MigrationPreparation expected) =>
+        ReadProtectedFiles(expected, ReadFile);
+
+    internal static Dictionary<string, byte[]?> ReadProtectedFiles(
+        MigrationPreparation expected, Func<string, byte[]?> readFile)
     {
         var files = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         string[] legacy = [AecApplication.SourceRelativePath, AecApplication.ConfigSourceRelativePath,
@@ -162,22 +166,40 @@ internal sealed record MigrationSourceValidationPreview(MigrationPreparation Pre
         foreach (var relative in legacy)
         {
             var path = Path.Combine(expected.Preflight.Repository, relative);
-            files.Add(path, ReadFile(path));
+            files.Add(path, readFile(path));
         }
         foreach (var harness in expected.Harnesses)
         {
-            files.Add(harness.RuntimePath, ReadFile(harness.RuntimePath));
+            files.Add(harness.RuntimePath, readFile(harness.RuntimePath));
             if (harness.Provider == AecIdentifiers.Codex)
             {
                 var path = Path.Combine(harness.Home, "config.toml");
-                files.Add(path, ReadFile(path));
+                files.Add(path, readFile(path));
             }
         }
         return files;
     }
 
-    private static byte[] ReadIndex(string repository) =>
-        MigrationLegacyCaptureWriter.ReadIndex(Path.Combine(repository, ".git", "index"));
+
+    internal static Dictionary<string, byte[]?> ReadProtectedFilesWithTargets(
+        MigrationPreparation expected, bool requireTargets)
+    {
+        var files = ReadProtectedFiles(expected);
+        var repository = expected.Preflight.Repository;
+        var targets = GitRepository.ListCommittedPathsUnder(repository, expected.Preflight.Commit,
+            "environment/targets", "Could not list protected migration targets");
+        foreach (var relative in targets)
+        {
+            _ = MigrationPortableTargetWriter.ReadEnrollment(relative);
+            var path = Path.Combine(repository, relative);
+            AecApplication.EnsureNoLinksInExistingPath(Path.GetDirectoryName(path)!,
+                requireTargets ? "Protected target path" : "Protected migration target path");
+            files.Add(path, requireTargets
+                ? AecApplication.ReadRequiredTextFile(path, "Protected migration target")
+                : AecApplication.ReadOptionalTextFile(path, "Protected migration target"));
+        }
+        return files;
+    }
 
     private static byte[]? ReadFile(string path)
     {

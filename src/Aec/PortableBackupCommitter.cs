@@ -26,6 +26,17 @@ internal static class PortableBackupCommitter
             renderedPaths, reviewed);
     }
 
+    internal static void EnsureReadyToWrite(string repository, string provider)
+    {
+        RequireLocalBranch(repository);
+        var staged = GitRepository.InspectStagedChanges(repository);
+        if (staged.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"The repository already has staged changes; {provider} backup stopped before writing.");
+        }
+    }
+
     private static string CommitCore(
         PortableRuntimeSnapshot reviewed,
         PortableBackupAttributionPreview? attribution,
@@ -52,7 +63,7 @@ internal static class PortableBackupCommitter
         EnsureHeadAndRuntime();
         // Refuse a mixed index before staging anything. Other unstaged files
         // remain untouched; only the paths returned by rendering are added.
-        var staged = GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code");
+        var staged = GitRepository.InspectStagedChanges(repository);
         if (staged.ExitCode != 0)
         {
             throw new InvalidOperationException(
@@ -88,25 +99,19 @@ internal static class PortableBackupCommitter
                 throw new InvalidOperationException("Canonical config changed before staging.");
             }
 
-            reviewedBlobs.Add(path, GitProcess.RunRequired(repository,
-                $"Could not hash reviewed backup file {path}",
-                "hash-object", "--no-filters", "--", path).Output.Trim());
+            reviewedBlobs.Add(path, ReadWorkingBlob(repository, path, $"Could not hash reviewed backup file {path}"));
         }
 
         // A target could change between its first validation and hashing. This
         // second pass binds every captured blob to the reviewed render.
         VerifyReviewedFiles();
         EnsureHeadAndRuntime();
-        GitProcess.RunRequired(repository, "Could not stage reviewed backup files",
-            ["add", "--", .. paths]);
+        GitRepository.StagePaths(repository, "Could not stage reviewed backup files", paths);
         foreach (var path in paths)
         {
-            var working = GitProcess.RunRequired(repository,
-                $"Could not hash backup file {path}", "hash-object", "--no-filters", "--", path)
-                .Output.Trim();
-            var indexed = GitProcess.RunRequired(repository,
-                $"Could not read staged backup file {path}", "rev-parse", $":{path}")
-                .Output.Trim();
+            var working = ReadWorkingBlob(repository, path, $"Could not hash backup file {path}");
+            var indexed = GitRepository.ReadStagedObjectId(repository, path,
+                $"Could not read staged backup file {path}");
             if (!string.Equals(working, indexed, StringComparison.Ordinal) ||
                 !string.Equals(indexed, reviewedBlobs[path], StringComparison.Ordinal))
             {
@@ -123,9 +128,9 @@ internal static class PortableBackupCommitter
         BackupCommand.CommitStagedIndex(
             repository, codex is null ? CommitMessage : CodexCommitMessage,
             expected, branch, reviewed.Commit);
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
-        var parent = GitProcess.RunRequired(repository,
-            "Could not inspect backup commit parent", "rev-parse", "HEAD^").Output.Trim();
+        var commit = GitRepository.ResolveHeadCommit(repository);
+        var parent = GitRepository.ReadFirstParent(repository, "HEAD",
+            "Could not inspect backup commit parent");
         if (!string.Equals(parent, reviewed.Commit, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Backup commit has an unexpected parent.");
@@ -133,9 +138,8 @@ internal static class PortableBackupCommitter
 
         foreach (var (path, blob) in expected)
         {
-            var committed = GitProcess.RunRequired(repository,
-                $"Could not inspect committed backup file {path}", "rev-parse", $"HEAD:{path}")
-                .Output.Trim();
+            var committed = GitRepository.ReadTreeObjectId(repository, "HEAD", path,
+                $"Could not inspect committed backup file {path}");
             if (!string.Equals(committed, blob, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException($"Committed backup bytes differ: {path}.");
@@ -162,9 +166,8 @@ internal static class PortableBackupCommitter
                     repository, AecApplication.ConfigSourceRelativePath);
                 AecApplication.EnsureNoLinksInExistingPath(
                     Path.GetDirectoryName(canonicalPath)!, "Canonical config path");
-                var committed = GitProcess.RunRequiredBytes(repository,
-                    "Could not read committed canonical config", "show",
-                    $"{reviewed.Commit}:{AecApplication.ConfigSourceRelativePath}");
+                var committed = GitRepository.ReadFileAtTreeish(repository, reviewed.Commit,
+                    AecApplication.ConfigSourceRelativePath, "Could not read committed canonical config");
                 var personality = CodexPersonalityConfig.ReadRuntime(
                     codex.RuntimeConfig, codex.RuntimeConfigPath)
                     ?? throw new InvalidOperationException(
@@ -193,7 +196,7 @@ internal static class PortableBackupCommitter
 
         void EnsureHeadAndRuntime()
         {
-            if (!string.Equals(ApplyCommand.ResolveHeadCommit(repository), reviewed.Commit,
+            if (!string.Equals(GitRepository.ResolveHeadCommit(repository), reviewed.Commit,
                     StringComparison.Ordinal) ||
                 !AecApplication.ReadRequiredTextFile(
                     reviewed.RuntimePath, "Provider runtime instructions")
@@ -209,9 +212,16 @@ internal static class PortableBackupCommitter
         }
     }
 
+    private static string ReadWorkingBlob(string repository, string path, string failureMessage)
+    {
+        var hashes = GitRepository.HashWorkingFilesWithoutFilters(
+            repository, ignoreReplacementObjects: false, path);
+        return GitProcess.RequireSuccess(hashes, failureMessage).Output.Trim();
+    }
+
     internal static string RequireLocalBranch(string repository)
     {
-        var result = GitProcess.Run(repository, "symbolic-ref", "--quiet", "HEAD");
+        var result = GitRepository.InspectSymbolicHead(repository);
         if (result.ExitCode == 1)
         {
             throw new InvalidOperationException(

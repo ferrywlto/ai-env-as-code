@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec;
@@ -62,7 +61,7 @@ internal static class AecInstructionBlock
         var normalizedRepository = NormalizeRepository(repository);
         platform = ValidatePlatform(platform);
         // Hash the authored target, not a pre-existing local AEC control block.
-        var targetDigest = Convert.ToHexStringLower(SHA256.HashData(Remove(content).Content));
+        var targetDigest = InstructionTargetDigest.Compute(Remove(content).Content);
         return includeChatGptGuidance
             ? Merge(content, PortableChatGptBlockLines(normalizedRepository, platform,
                 targetDigest), VersionBytes(StampedPortableChatGptVersion))
@@ -89,26 +88,7 @@ internal static class AecInstructionBlock
             return new RemovalResult(content, Removed: false);
         }
 
-        var bodyOffset = HasUtf8Bom(content) ? Utf8Bom.Length : 0;
-        var suffixOffset = block.End;
-        var newLine = Encoding.ASCII.GetBytes(block.NewLine);
-
-        // Merge owns the separator after its block. At the top it inserted up to
-        // two line endings; in-place blocks own the one ending their final marker.
-        if (block.Start == bodyOffset &&
-            content.AsSpan(suffixOffset).StartsWith(newLine) &&
-            content.AsSpan(suffixOffset + newLine.Length).StartsWith(newLine))
-        {
-            suffixOffset += newLine.Length * 2;
-        }
-        else if (content.AsSpan(suffixOffset).StartsWith(newLine))
-        {
-            suffixOffset += newLine.Length;
-        }
-
-        var result = new byte[block.Start + content.Length - suffixOffset];
-        content.AsSpan(0, block.Start).CopyTo(result);
-        content.AsSpan(suffixOffset).CopyTo(result.AsSpan(block.Start));
+        var result = ManagedBlockRemoval.Remove(content, block.Start, block.End, block.NewLine);
         return new RemovalResult(result, Removed: true);
     }
 
@@ -239,7 +219,7 @@ internal static class AecInstructionBlock
             }
 
             targetDigest = digestLine[digestPrefix.Length..^repositorySuffix.Length];
-            if (!IsLowerHexSha256(targetDigest))
+            if (!InstructionTargetDigest.IsValid(targetDigest))
             {
                 throw UnsupportedInitializedBlock();
             }
@@ -809,10 +789,6 @@ internal static class AecInstructionBlock
     }
 
     private readonly record struct Occurrences(int Count, int FirstIndex);
-
-    private static bool IsLowerHexSha256(string value) =>
-        value.Length == 64 && value.All(character =>
-            character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     internal sealed record RepositoryBinding(
         int Version,

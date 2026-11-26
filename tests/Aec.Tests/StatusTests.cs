@@ -15,7 +15,7 @@ public sealed class GitTestEnvironment : IDisposable
 
     public GitTestEnvironment()
     {
-        root = Path.Combine(Path.GetTempPath(), "aec-git-test-config", Guid.NewGuid().ToString("N"));
+        root = Path.Combine(TestTemporaryDirectory.Root, "aec-git-test-config", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         var config = Path.Combine(root, "config");
         File.WriteAllText(

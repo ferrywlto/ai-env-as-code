@@ -21,12 +21,12 @@ internal sealed record PortableCodexConfigPreview(
             snapshot.Repository, AecApplication.ConfigSourceRelativePath);
         AecApplication.EnsureNoLinksInExistingPath(
             Path.GetDirectoryName(canonicalPath)!, "Canonical config path");
-        var canonical = ApplyCommand.ReadCommittedConfig(snapshot.Repository, snapshot.Commit);
+        var canonical = CodexCanonicalFiles.ReadCommittedConfig(snapshot.Repository, snapshot.Commit);
         var desiredPersonality = CodexPersonalityConfig.ReadCanonical(canonical, canonicalPath);
 
         var providerHome = Path.GetDirectoryName(snapshot.RuntimePath)
             ?? throw new InvalidOperationException("Codex runtime target has no parent directory.");
-        ApplyCommand.EnsureRuntimeOutsideRepository(
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(
             snapshot.Repository, providerHome, "config.toml", "Codex runtime config");
         var runtimePath = Path.Combine(providerHome, "config.toml");
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime config");
@@ -35,7 +35,7 @@ internal sealed record PortableCodexConfigPreview(
 
         // The target and config must be derived from one HEAD. This preview is
         // still stale as soon as it returns; the writer will revalidate later.
-        if (!string.Equals(snapshot.Commit, ApplyCommand.ResolveHeadCommit(snapshot.Repository),
+        if (!string.Equals(snapshot.Commit, GitRepository.ResolveHeadCommit(snapshot.Repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(

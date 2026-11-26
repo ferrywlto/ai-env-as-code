@@ -192,7 +192,7 @@ public sealed class MigrationRemotePreflightTests
             // Count startup against the deadline so this deterministic tiny budget
             // tests cleanup using a local bare remote, not a hanging network server.
             var error = Assert.Throws<InvalidOperationException>(() =>
-                GitProcess.ReadRemoteHead(layout.Repository, "shared", TimeSpan.FromTicks(1)));
+                GitRepository.ReadRemoteHead(layout.Repository, "shared", TimeSpan.FromTicks(1)));
             Assert.Contains("timed out", error.Message, StringComparison.Ordinal);
         });
     }

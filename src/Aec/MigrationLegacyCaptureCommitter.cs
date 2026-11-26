@@ -5,6 +5,7 @@ namespace Aec;
 internal static class MigrationLegacyCaptureCommitter
 {
     private const string CommitMessage = "Backup legacy environment before migration";
+    private const string PathInspectionError = "Could not inspect exact capture paths";
 
     public static string? WriteAndCommit(MigrationLegacyCapturePreview reviewed)
     {
@@ -31,26 +32,25 @@ internal static class MigrationLegacyCaptureCommitter
 
             var modes = changed.ToDictionary(file => file.RelativePath, file =>
             {
-                var entry = GitProcess.RunRequired(repository, "Could not read legacy file mode",
-                    "--no-replace-objects", "ls-tree", "-z", parent, "--", file.RelativePath).Output;
+                var entry = GitRepository.ReadTreeEntry(repository, parent, file.RelativePath,
+                    "Could not read legacy file mode");
                 return entry.Split(' ')[0];
             }, StringComparer.Ordinal);
             VerifyInputs(parent);
             EnsureEmptyIndex(repository);
-            GitProcess.RunRequired(repository, "Could not stage captured canonical files",
-                ["add", "--", .. paths]);
+            GitRepository.StagePaths(repository, "Could not stage captured canonical files", paths);
 
             // Reject newline transforms, executable-bit changes and any extra
             // index path rather than silently committing Git's transformed bytes.
             var expected = new List<(string RelativePath, string Blob)>();
             foreach (var file in changed)
             {
-                var indexed = GitProcess.RunRequired(repository, "Could not inspect captured index entry",
-                    "ls-files", "--stage", "-z", "--", file.RelativePath).Output;
-                var blob = GitProcess.RunRequired(repository, "Could not resolve captured index blob",
-                    "rev-parse", $":{file.RelativePath}").Output.Trim();
-                var bytes = GitProcess.RunRequiredBytes(repository, "Could not read captured index blob",
-                    "--no-replace-objects", "cat-file", "blob", blob);
+                var indexed = GitRepository.ReadIndexEntry(repository, file.RelativePath,
+                    "Could not inspect captured index entry");
+                var blob = GitRepository.ReadStagedObjectId(repository, file.RelativePath,
+                    "Could not resolve captured index blob");
+                var bytes = GitRepository.ReadBlob(repository, blob,
+                    "Could not read captured index blob");
                 // Compare actual object bytes to private proposal buffers, not a
                 // hash obtained from a working file that another process can edit.
                 if (indexed != $"{modes[file.RelativePath]} {blob} 0\t{file.RelativePath}\0" ||
@@ -60,20 +60,21 @@ internal static class MigrationLegacyCaptureCommitter
                 }
                 expected.Add((file.RelativePath, blob));
             }
-            VerifyPaths("diff", "--cached", "--no-renames", "--name-only", "-z", parent, "--");
+            VerifyExactPaths(GitRepository.ReadStagedPathsComparedToCommit(
+                repository, parent, PathInspectionError, ignoreReplacementObjects: false));
             VerifyInputs(parent);
             BackupCommand.CommitStagedIndex(repository, CommitMessage,
                 expected, reviewed.Branch, parent, modes);
 
-            var commit = ApplyCommand.ResolveHeadCommit(repository);
-            var actualParent = GitProcess.RunRequired(repository, "Could not inspect capture parent",
-                "rev-parse", $"{commit}^").Output.Trim();
+            var commit = GitRepository.ResolveHeadCommit(repository);
+            var actualParent = GitRepository.ReadFirstParent(repository, commit, "Could not inspect capture parent");
             if (actualParent != parent) throw new InvalidOperationException("Capture commit parent changed.");
-            VerifyPaths("diff-tree", "--no-commit-id", "--no-renames", "--name-only", "-r", "-z", parent, commit, "--");
+            VerifyExactPaths(GitRepository.ReadChangedPathsBetweenCommits(
+                repository, parent, commit, PathInspectionError, ignoreReplacementObjects: false));
             foreach (var file in expected)
             {
-                var entry = GitProcess.RunRequired(repository, "Could not inspect committed capture",
-                    "--no-replace-objects", "ls-tree", "-z", commit, "--", file.RelativePath).Output;
+                var entry = GitRepository.ReadTreeEntry(repository, commit, file.RelativePath,
+                    "Could not inspect committed capture");
                 if (entry != $"{modes[file.RelativePath]} blob {file.Blob}\t{file.RelativePath}\0")
                 {
                     throw new InvalidOperationException("Committed capture bytes or file mode differ from review.");
@@ -95,7 +96,7 @@ internal static class MigrationLegacyCaptureCommitter
             AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
             AecApplication.EnsureNoLinksInExistingPath(Path.Combine(repository, ".git"), "Git metadata path");
             MigrationFastForward.EnsureSafeGitConfiguration(repository);
-            if (ApplyCommand.ResolveHeadCommit(repository) != expectedHead ||
+            if (GitRepository.ResolveHeadCommit(repository) != expectedHead ||
                 MigrationLegacyCapturePreview.ReadBranch(repository) != reviewed.Branch ||
                 AecApplication.ReadOptionalTextFile(Path.Combine(repository, MigrationPreflight.FormatRelativePath),
                     "Repository format marker") is not null ||
@@ -119,10 +120,8 @@ internal static class MigrationLegacyCaptureCommitter
             }
         }
 
-        void VerifyPaths(params string[] arguments)
+        void VerifyExactPaths(string[] actual)
         {
-            var actual = GitProcess.RunRequired(repository, "Could not inspect exact capture paths", arguments)
-                .Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
             if (!actual.Order(StringComparer.Ordinal).SequenceEqual(paths.Order(StringComparer.Ordinal)))
             {
                 throw new InvalidOperationException("Capture changes are not the exact reviewed canonical path set.");
@@ -132,7 +131,7 @@ internal static class MigrationLegacyCaptureCommitter
 
     private static void EnsureEmptyIndex(string repository)
     {
-        var result = GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv");
+        var result = GitRepository.InspectUnfilteredStagedChanges(repository);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException("Legacy capture requires an empty staged diff; inspect the existing index before retrying. No automatic unstaging was performed.");

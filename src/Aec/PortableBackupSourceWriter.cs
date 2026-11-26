@@ -28,7 +28,7 @@ internal static class PortableBackupSourceWriter
         var sourcePath = Path.Combine(reviewed.Repository, attribution.SourceRelativePath);
         AecApplication.EnsureNoLinksInExistingPath(
             Path.GetDirectoryName(sourcePath)!, "Authored source path");
-        var original = ApplyCommand.ReadCommittedFile(
+        var original = CommittedFileReader.ReadCommittedFile(
             reviewed.Repository, reviewed.Commit, attribution.SourceRelativePath,
             "Authored source");
         var proposed = StrictUtf8.GetBytes(attribution.ProposedContent);
@@ -70,7 +70,7 @@ internal static class PortableBackupSourceWriter
             }
 
             var actual = PortableBackupAttributionPreview.Create(current);
-            if (!string.Equals(current.Commit, ApplyCommand.ResolveHeadCommit(current.Repository),
+            if (!string.Equals(current.Commit, GitRepository.ResolveHeadCommit(current.Repository),
                     StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(

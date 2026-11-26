@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Aec;
@@ -43,7 +42,7 @@ internal static class CopilotInstructionBlock
     {
         ValidateText(content);
         var target = RemoveManagedBlock(content, ReadBlock(content));
-        var targetDigest = Convert.ToHexStringLower(SHA256.HashData(target));
+        var targetDigest = InstructionTargetDigest.Compute(target);
         var merged = MergeVersion(content, NormalizeRepository(repository),
             version: StampedPortableVersion,
             ValidatePlatform(platform), targetDigest);
@@ -228,8 +227,7 @@ internal static class CopilotInstructionBlock
             }
 
             targetDigest = digestLine[digestPrefix.Length..^RepositorySuffix.Length];
-            if (targetDigest.Length != 64 || !targetDigest.All(character =>
-                    character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+            if (!InstructionTargetDigest.IsValid(targetDigest))
             {
                 throw new InvalidDataException(
                     "Copilot instructions contain an unsupported managed AEC block.");
@@ -307,24 +305,7 @@ internal static class CopilotInstructionBlock
             return content;
         }
 
-        var bodyOffset = content.AsSpan().StartsWith(Utf8Bom) ? Utf8Bom.Length : 0;
-        var newLine = Encoding.ASCII.GetBytes(block.NewLine);
-        var suffix = block.End;
-        if (block.Start == bodyOffset &&
-            content.AsSpan(suffix).StartsWith(newLine) &&
-            content.AsSpan(suffix + newLine.Length).StartsWith(newLine))
-        {
-            suffix += newLine.Length * 2;
-        }
-        else if (content.AsSpan(suffix).StartsWith(newLine))
-        {
-            suffix += newLine.Length;
-        }
-
-        var result = new byte[block.Start + content.Length - suffix];
-        content.AsSpan(0, block.Start).CopyTo(result);
-        content.AsSpan(suffix).CopyTo(result.AsSpan(block.Start));
-        return result;
+        return ManagedBlockRemoval.Remove(content, block.Start, block.End, block.NewLine);
     }
 
     private static byte[] Prepend(byte[] content, byte[] block)

@@ -11,15 +11,14 @@ internal static class CopilotInitCommand
         ChatGptInitCommand.ValidateRepository(repository);
         AecApplication.EnsureNoLinksInExistingPath(copilotHome, "Copilot home path");
         AecApplication.EnsureRealDirectory(copilotHome, "Copilot home");
-        ApplyCommand.EnsureRuntimeOutsideRepository(
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(
             repository,
             copilotHome,
             "copilot-instructions.md",
             "Copilot runtime target");
 
         var platform = RenderCommand.CurrentPlatform();
-        var head = GitProcess.Run(repository, "rev-parse", "--verify", "--quiet",
-            "HEAD^{commit}");
+        var head = GitRepository.InspectOptionalHeadCommit(repository);
         if (head.ExitCode is not (0 or 1))
         {
             throw new InvalidOperationException(
@@ -81,8 +80,8 @@ internal static class CopilotInitCommand
 
                 // A pulled checkout retains the original machine's canonical path.
                 // Bind this machine's runtime only; never commit a path-only change.
-                expectedCommit = ApplyCommand.ResolveHeadCommit(repository);
-                var committed = ApplyCommand.ReadCommittedFile(
+                expectedCommit = GitRepository.ResolveHeadCommit(repository);
+                var committed = CommittedFileReader.ReadCommittedFile(
                     repository,
                     expectedCommit,
                     AecApplication.CopilotSourceRelativePath,
@@ -123,7 +122,7 @@ internal static class CopilotInitCommand
 
         VerifyResult(canonicalPath, runtimePath, canonical ?? desired, desired);
         if (expectedCommit is not null &&
-            !string.Equals(expectedCommit, ApplyCommand.ResolveHeadCommit(repository),
+            !string.Equals(expectedCommit, GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal))
         {
             throw new IOException("Repository HEAD changed during Copilot attachment.");
@@ -140,7 +139,7 @@ internal static class CopilotInitCommand
         string platform,
         TextWriter output)
     {
-        var canonical = ApplyCommand.ReadCommittedFile(
+        var canonical = CommittedFileReader.ReadCommittedFile(
             repository, commit, AecApplication.CopilotSourceRelativePath,
             "Canonical Copilot instructions");
         var canonicalBinding = CopilotInstructionBlock.ReadManagedBinding(canonical)
@@ -213,9 +212,9 @@ internal static class CopilotInitCommand
         byte[] canonical,
         byte[] target)
     {
-        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
+        if (!string.Equals(commit, GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal) ||
-            !ApplyCommand.ReadCommittedFile(
+            !CommittedFileReader.ReadCommittedFile(
                 repository, commit, AecApplication.CopilotSourceRelativePath,
                 "Canonical Copilot instructions").AsSpan().SequenceEqual(canonical) ||
             !CommittedTargetValidator.Read(repository, platform, AecIdentifiers.Copilot)

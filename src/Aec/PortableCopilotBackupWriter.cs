@@ -13,14 +13,7 @@ internal static class PortableCopilotBackupWriter
             throw new InvalidOperationException("Copilot backup has no reviewed changes.");
         }
 
-        var repository = current.Snapshot.Repository;
-        PortableBackupCommitter.RequireLocalBranch(repository);
-        var staged = GitProcess.Run(repository, "diff", "--cached", "--quiet", "--exit-code");
-        if (staged.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                "The repository already has staged changes; Copilot backup stopped before writing.");
-        }
+        PortableBackupCommitter.EnsureReadyToWrite(current.Snapshot.Repository, "Copilot");
 
         try
         {
@@ -52,11 +45,7 @@ internal static class PortableCopilotBackupWriter
         // Attribution is derived from the reviewed snapshot. Compare the
         // underlying inputs, then use the fresh plan instead of trusting
         // mutable fields in the caller's proposal.
-        if (!string.Equals(original.Repository, fresh.Repository, StringComparison.Ordinal) ||
-            !string.Equals(original.RuntimePath, fresh.RuntimePath, StringComparison.Ordinal) ||
-            !string.Equals(original.Commit, fresh.Commit, StringComparison.Ordinal) ||
-            original.Runtime is null || fresh.Runtime is null ||
-            !original.Runtime.AsSpan().SequenceEqual(fresh.Runtime))
+        if (!original.HasSameBackupInputs(fresh))
         {
             throw new InvalidOperationException(
                 "Copilot backup inputs changed after review; no canonical file was replaced.");

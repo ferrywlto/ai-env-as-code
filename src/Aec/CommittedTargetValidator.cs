@@ -16,10 +16,8 @@ internal static class CommittedTargetValidator
     {
         var fileName = TargetFileName(provider);
         var relativePath = $"environment/targets/{platform}/{provider}/{fileName}";
-        var entries = GitProcess.RunRequired(
-            repository,
-            "Git could not inspect the enrolled target",
-            "ls-tree", "-z", "--name-only", commit, "--", relativePath).Output;
+        var entries = GitRepository.ReadNullDelimitedTreePathMatches(repository, commit, relativePath,
+            "Git could not inspect the enrolled target");
         return string.Equals(entries, relativePath + '\0', StringComparison.Ordinal);
     }
 
@@ -42,11 +40,11 @@ internal static class CommittedTargetValidator
 
         AecApplication.EnsureNoLinksInExistingPath(repository, "Repository path");
         AecApplication.EnsureRealDirectory(repository, "Repository");
-        ApplyCommand.ValidateRepositoryRoot(repository);
-        var commit = ApplyCommand.ResolveHeadCommit(repository);
+        GitRepository.ValidateRepositoryRoot(repository);
+        var commit = GitRepository.ResolveHeadCommit(repository);
 
         var targetRelativePath = $"environment/targets/{platform}/{provider}/{fileName}";
-        var files = ApplyCommand.ReadCommittedFiles(repository, commit,
+        var files = CommittedFileReader.ReadCommittedFiles(repository, commit,
             ("environment/shared/instructions.md", "Authored shared instructions"),
             ($"environment/platforms/{platform}/policy.md", "Authored platform policy"),
             ($"environment/providers/{provider}/overlay.md", "Authored provider overlay"),
@@ -66,7 +64,7 @@ internal static class CommittedTargetValidator
                 "Run `aec render`, review, and commit the regenerated target.");
         }
 
-        if (!string.Equals(commit, ApplyCommand.ResolveHeadCommit(repository),
+        if (!string.Equals(commit, GitRepository.ResolveHeadCommit(repository),
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Repository HEAD changed during target validation.");

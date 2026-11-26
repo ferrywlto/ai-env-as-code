@@ -1251,33 +1251,9 @@ public sealed class InitTests
         var exception = Assert.Throws<InvalidOperationException>(() =>
             BackupCommand.CommitCanonicalEnvironment(
                 layout.Target,
-                "Initialize AEC instructions",
                 baseline,
                 expectedSource,
-                expectedConfig,
-                allowEmpty: true));
-
-        Assert.Contains("changed before", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
-        Assert.Equal(runtime, File.ReadAllBytes(layout.Runtime));
-    }
-
-    [Fact]
-    public void InitializationCommitRejectsUnexpectedCanonicalContent()
-    {
-        using var layout = new InitLayout();
-        var baseline = CreateBaselineOnlyInitialization(layout);
-        var runtime = File.ReadAllBytes(layout.Runtime);
-        var expected = AecInstructionBlock.Merge(runtime, layout.Target);
-        File.WriteAllText(layout.Source, "concurrent canonical edit\n");
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            BackupCommand.CommitCanonicalSource(
-                layout.Target,
-                "Initialize AEC instructions",
-                baseline,
-                expected,
-                allowEmpty: true));
+                expectedConfig));
 
         Assert.Contains("changed before", exception.Message, StringComparison.Ordinal);
         Assert.Equal(baseline, TestGit.Run(layout.Target, "rev-parse", "HEAD").Output.Trim());
@@ -1890,7 +1866,7 @@ public sealed class InitProcessStateTests
                 output,
                 error);
 
-            Assert.Equal(0, exitCode);
+            Assert.True(exitCode == 0, error.ToString());
             Assert.Equal($"initialized{Environment.NewLine}", output.ToString());
             Assert.Empty(error.ToString());
             Assert.Equal(

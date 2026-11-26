@@ -194,8 +194,8 @@ public sealed class ApplyTests
         using var layout = new ApplyLayout(
             "desired\n"u8.ToArray(),
             "runtime\n"u8.ToArray(),
-            canonicalConfig: "personality = \"friendly\"\n"u8.ToArray(),
-            runtimeConfig: "[personality]\nvalue = \"nested\"\n"u8.ToArray());
+            canonicalConfig: "personality = \"friendly\"\n"u8.ToArray());
+        File.WriteAllText(layout.RuntimeConfig, "[personality]\nvalue = \"nested\"\n");
         var agentsBefore = File.ReadAllBytes(layout.Runtime);
         var configBefore = File.ReadAllBytes(layout.RuntimeConfig);
 
@@ -335,8 +335,7 @@ public sealed class ApplyTests
         var desired = AecInstructionBlock.Merge("desired\n"u8.ToArray(), recordedRepository);
         using var layout = new ApplyLayout(desired, "preserve runtime\n"u8.ToArray());
         File.Delete(layout.ConfigSource);
-        Assert.Equal(0, Git(layout, "add", "--", ConfigSourceRelativePath).ExitCode);
-        Assert.Equal(0, Git(layout, "commit", "--quiet", "--message", "Remove config").ExitCode);
+        var statusBefore = Git(layout, "status", "--porcelain").Output;
         var headBefore = Git(layout, "rev-parse", "HEAD").Output.Trim();
         var sourceBefore = File.ReadAllBytes(layout.Source);
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
@@ -351,7 +350,7 @@ public sealed class ApplyTests
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());
-        Assert.Equal(string.Empty, Git(layout, "status", "--porcelain").Output);
+        Assert.Equal(statusBefore, Git(layout, "status", "--porcelain").Output);
     }
 
     [Fact]
@@ -787,8 +786,8 @@ public sealed class ApplyTests
 
     private static CommandResult Run(ApplyLayout layout)
     {
-        // Ordinary public apply now uses the 2.0 rendered target. These
-        // fixtures still exercise the 1.x writer retained by init/attachment.
+        // Exercise the legacy writer through its live attachment entry point
+        // using the fixture state captured before each test's changes.
         var output = new StringWriter();
         var error = new StringWriter();
         try
@@ -798,7 +797,14 @@ public sealed class ApplyTests
             AecApplication.EnsureRealDirectory(layout.Repository, "Repository");
             AecApplication.EnsureSourceDirectories(layout.Repository);
             AecApplication.EnsureRealDirectory(layout.CodexHome, "Codex home");
-            var exitCode = ApplyCommand.Run(layout.Repository, layout.CodexHome, output, error);
+            var commit = GitRepository.ResolveHeadCommit(layout.Repository);
+            var expectedPersonality = layout.InitialRuntimeConfig is null
+                ? null
+                : CodexPersonalityConfig.ReadRuntime(layout.InitialRuntimeConfig, layout.RuntimeConfig);
+            var exitCode = ApplyCommand.RunForAttachment(
+                layout.Repository, layout.CodexHome, output, error,
+                layout.InitialRuntime, expectedPersonality, commit,
+                layout.InitialSource, layout.InitialConfig);
             return new CommandResult(exitCode, output.ToString(), error.ToString());
         }
         catch (Exception exception)
@@ -837,6 +843,12 @@ public sealed class ApplyTests
             ConfigSource = Path.Combine(Repository, ConfigSourceRelativePath);
             Runtime = Path.Combine(CodexHome, "AGENTS.md");
             RuntimeConfig = Path.Combine(CodexHome, "config.toml");
+            InitialSource = desired;
+            InitialConfig = canonicalConfig ?? "personality = \"none\"\n"u8.ToArray();
+            InitialRuntime = runtime;
+            InitialRuntimeConfig = createRuntimeConfig
+                ? runtimeConfig ?? "personality = \"none\"\n"u8.ToArray()
+                : null;
 
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
             Directory.CreateDirectory(CodexHome);
@@ -872,6 +884,11 @@ public sealed class ApplyTests
                 File.WriteAllBytes(RuntimeConfig, runtimeConfig ?? "personality = \"none\"\n"u8.ToArray());
             }
         }
+
+        public byte[] InitialSource { get; }
+        public byte[] InitialConfig { get; }
+        public byte[]? InitialRuntime { get; }
+        public byte[]? InitialRuntimeConfig { get; }
 
         public string Root { get; }
 

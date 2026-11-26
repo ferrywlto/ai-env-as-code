@@ -61,8 +61,8 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         return new MigrationLegacyCapturePreview(preparation, branch, files);
     }
 
-    internal static string ReadBranch(string repository) => GitProcess.RunRequired(repository,
-        "Git could not inspect migration branch", "symbolic-ref", "--quiet", "HEAD").Output.TrimEnd('\r', '\n');
+    internal static string ReadBranch(string repository) => GitProcess.RequireSuccess(
+        GitRepository.InspectSymbolicHead(repository), "Git could not inspect migration branch").Output.TrimEnd('\r', '\n');
 
     private static MigrationLegacyCaptureFile ReadPersonality(MigrationPreparation preparation, MigrationHarness harness)
     {
@@ -74,7 +74,7 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         var originalValue = CodexPersonalityConfig.ReadCanonical(before, canonicalPath);
         var currentValue = CodexPersonalityConfig.ReadCanonical(canonical, canonicalPath);
         AecApplication.EnsureNoLinksInExistingPath(harness.Home, "Runtime config home path");
-        ApplyCommand.EnsureRuntimeOutsideRepository(current.Repository, harness.Home,
+        RuntimePathGuard.EnsureRuntimeOutsideRepository(current.Repository, harness.Home,
             "config.toml", "Codex runtime config");
         var runtimePath = Path.Combine(harness.Home, "config.toml");
         var runtime = AecApplication.ReadOptionalTextFile(runtimePath, "Runtime config");
@@ -123,10 +123,10 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         {
             throw new InvalidDataException("Original migration commit is not a full Git object ID.");
         }
-        var type = GitProcess.RunRequired(repository, "Git could not inspect original migration commit",
-            "--no-replace-objects", "cat-file", "-t", original).Output.Trim();
+        var type = GitRepository.ReadObjectType(repository, original,
+            "Git could not inspect original migration commit");
         if (type != "commit") throw new InvalidDataException("Original migration object is not a commit.");
-        var ancestry = GitProcess.Run(repository, "--no-replace-objects", "merge-base", "--is-ancestor", original, current);
+        var ancestry = GitRepository.InspectAncestry(repository, original, current);
         if (ancestry.ExitCode != 0)
         {
             throw new InvalidOperationException(ancestry.ExitCode == 1
@@ -139,7 +139,7 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
     {
         AecApplication.EnsureNoLinksInExistingPath(
             Path.GetDirectoryName(Path.Combine(current.Repository, relative))!, "Canonical migration source path");
-        var bytes = ApplyCommand.ReadCommittedFile(current.Repository, current.Commit, relative, "Canonical migration source");
+        var bytes = CommittedFileReader.ReadCommittedFile(current.Repository, current.Commit, relative, "Canonical migration source");
         if (!bytes.AsSpan().SequenceEqual(ReadHistoricalFile(current.Repository, current.Commit, relative)))
         {
             throw new InvalidOperationException("Canonical bytes differ from the actual Git object; replacement objects are not capture provenance.");
@@ -151,8 +151,14 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
     {
         // Inspect tree kind before reading bytes: git show alone also accepts
         // links, oversized blobs and replacement objects as if they were files.
-        var tree = GitProcess.RunRequired(repository, "Git could not inspect historical migration source",
-            "--no-replace-objects", "ls-tree", "-z", commit, "--", relative).Output;
+        var tree = GitRepository.ReadTreeEntry(repository, commit, relative,
+            "Git could not inspect historical migration source");
+        return ReadHistoricalBlob(repository, relative, tree).Content;
+    }
+
+    internal static (byte[] Content, string Mode, string Blob) ReadHistoricalBlob(
+        string repository, string relative, string tree)
+    {
         var tab = tree.IndexOf('\t');
         if (tab < 0 || !tree.EndsWith('\0') || tree[..^1].Contains('\0') || tree[(tab + 1)..^1] != relative)
         {
@@ -163,15 +169,15 @@ internal sealed record MigrationLegacyCapturePreview(MigrationPreparation Prepar
         {
             throw new InvalidDataException($"Historical migration source must be a regular Git file: {relative}.");
         }
-        var size = GitProcess.RunRequired(repository, "Git could not inspect historical source size",
-            "--no-replace-objects", "cat-file", "-s", fields[2]).Output.Trim();
+        var size = GitRepository.ReadObjectSizeText(repository, fields[2],
+            "Git could not inspect historical source size");
         if (!long.TryParse(size, NumberStyles.None, CultureInfo.InvariantCulture, out var length) || length > AecApplication.MaximumTextBytes)
         {
             throw new InvalidDataException($"Historical migration source exceeds the supported text size: {relative}.");
         }
-        var content = GitProcess.RunRequiredBytes(repository, "Git could not read historical migration source",
-            "--no-replace-objects", "cat-file", "blob", fields[2]);
+        var content = GitRepository.ReadBlob(repository, fields[2],
+            "Git could not read historical migration source");
         MigrationLfsPointer.Reject(content, $"Historical migration source {relative}");
-        return content;
+        return (content, fields[0], fields[2]);
     }
 }
