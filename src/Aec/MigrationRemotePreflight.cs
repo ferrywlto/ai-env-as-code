@@ -26,7 +26,7 @@ internal sealed record MigrationRemotePreflight(string Remote, string BranchRef,
         // Require a real configured remote. Otherwise ls-remote can interpret an
         // undefined remote name as a repository path/URL instead of an upstream.
         var url = ReadSingleConfig(repository, $"remote.{remote}.url");
-        var advertised = GitProcess.ReadRemoteHead(repository, remote);
+        var advertised = GitRepository.ReadRemoteHead(repository, remote);
         if (advertised.ExitCode != 0)
         {
             // Transport stderr can contain credential-bearing URLs. Report the

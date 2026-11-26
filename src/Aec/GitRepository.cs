@@ -65,6 +65,11 @@ internal static class GitRepository
         GitProcess.Run(repository,
             ["--no-replace-objects", "ls-tree", "-z", treeish, "--", .. paths]);
 
+    internal static string ReadNullDelimitedTreePathMatches(
+        string repository, string commit, string path, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "ls-tree", "--name-only", "-z", commit, "--", path).Output;
+
     internal static GitResult CompareStagedPathsToCommit(
         string repository, string commit, params string[] paths) =>
         GitProcess.Run(repository,
@@ -296,6 +301,16 @@ internal static class GitRepository
             "--no-replace-objects", "rev-parse", "--verify", "HEAD").Output.Trim();
 
     // Migration and checkout inspection.
+    internal static GitResult ReadRemoteHead(string repository, string remote, TimeSpan? timeout = null) =>
+        GitProcess.RunRemoteCommand(repository, ["ls-remote", "--symref", "--", remote, "HEAD"],
+            "Remote HEAD query", timeout ?? TimeSpan.FromSeconds(30));
+
+    internal static GitResult FetchRemoteCommit(string repository, string remote, string commit, TimeSpan? timeout = null) =>
+        GitProcess.RunRemoteCommand(repository,
+            ["fetch", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--refmap=",
+                "--no-auto-maintenance", "--no-write-commit-graph", "--", remote, commit],
+            "Remote fetch", timeout ?? TimeSpan.FromMinutes(2));
+
     internal static string ReadObjectType(string repository, string objectId, string failureMessage) =>
         GitProcess.RunRequired(repository, failureMessage,
             "--no-replace-objects", "cat-file", "-t", objectId).Output.Trim();
@@ -326,10 +341,6 @@ internal static class GitRepository
         GitProcess.RunRequired(repository, failureMessage,
             "--no-replace-objects", "ls-tree", "-r", "--name-only", "-z", commit, "--", path)
             .Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-
-    internal static bool HasPathAtTreeish(string repository, string commit, string path, string failureMessage) =>
-        GitProcess.RunRequired(repository, failureMessage,
-            "ls-tree", "--name-only", "-z", commit, "--", path).Output.Length != 0;
 
     internal static string ReadMigrationCheckoutStatus(string repository, string failureMessage) =>
         GitProcess.RunRequired(repository, failureMessage,
@@ -384,8 +395,4 @@ internal static class GitRepository
     internal static GitResult InspectTargetHistory(string repository, string commit, string path) =>
         GitProcess.RunRequired(repository, "Git could not inspect target history",
             "ls-tree", "--name-only", commit, "--", path);
-
-    internal static GitResult InspectEnrolledTarget(string repository, string commit, string path) =>
-        GitProcess.RunRequired(repository, "Git could not inspect the enrolled target",
-            "ls-tree", "-z", "--name-only", commit, "--", path);
 }

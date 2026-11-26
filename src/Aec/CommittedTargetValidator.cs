@@ -16,7 +16,8 @@ internal static class CommittedTargetValidator
     {
         var fileName = TargetFileName(provider);
         var relativePath = $"environment/targets/{platform}/{provider}/{fileName}";
-        var entries = GitRepository.InspectEnrolledTarget(repository, commit, relativePath).Output;
+        var entries = GitRepository.ReadNullDelimitedTreePathMatches(repository, commit, relativePath,
+            "Git could not inspect the enrolled target");
         return string.Equals(entries, relativePath + '\0', StringComparison.Ordinal);
     }
 

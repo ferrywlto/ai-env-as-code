@@ -115,7 +115,7 @@ public sealed class MigrationFetchPreparationTests
         using var layout = new FetchLayout();
         var tip = layout.AdvanceRemote("refs/heads/trunk", layout.Head());
         layout.Git("commit", "--quiet", "--allow-empty", "-m", "Local divergent work");
-        Assert.Equal(0, GitProcess.FetchRemoteCommit(layout.Repository, "shared", tip).ExitCode);
+        Assert.Equal(0, GitRepository.FetchRemoteCommit(layout.Repository, "shared", tip).ExitCode);
         var tree = layout.Git("rev-parse", "HEAD^{tree}").Trim();
         var substitute = layout.Git("commit-tree", tree, "-p", layout.Head(), "-m", "Forged ancestry").Trim();
         layout.Git("replace", tip, substitute);
@@ -141,7 +141,7 @@ public sealed class MigrationFetchPreparationTests
         layout.Git("remote", "add", "missing", Path.Combine(layout.Root, "absent.git"));
 
         layout.AssertOnlyLocalObjectsMayChange(() =>
-            Assert.NotEqual(0, GitProcess.FetchRemoteCommit(layout.Repository, "missing", tip).ExitCode));
+            Assert.NotEqual(0, GitRepository.FetchRemoteCommit(layout.Repository, "missing", tip).ExitCode));
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class MigrationFetchPreparationTests
         layout.AssertOnlyLocalObjectsMayChange(() =>
         {
             var error = Assert.Throws<InvalidOperationException>(() =>
-                GitProcess.FetchRemoteCommit(layout.Repository, "shared", layout.Head(), TimeSpan.FromTicks(1)));
+                GitRepository.FetchRemoteCommit(layout.Repository, "shared", layout.Head(), TimeSpan.FromTicks(1)));
             Assert.Contains("timed out", error.Message, StringComparison.Ordinal);
         });
     }

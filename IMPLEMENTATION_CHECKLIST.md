@@ -167,6 +167,10 @@
   covering the complete routine suite and focused legacy migration paths.
   macOS ARM64 Native AOT build and installer, lifecycle, render, and migration
   smoke passed. The 1,382-case full-suite result above covers an earlier revision.
+- [x] Ferry reviewed moving remote command construction into `GitRepository`,
+  sharing Git failure formatting, and reusing a tree path query for enrollment
+  and migration preflight. All 133 focused Debug tests passed in 3m 42s. A
+  source scan found no raw Git launcher calls in production workflows.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor

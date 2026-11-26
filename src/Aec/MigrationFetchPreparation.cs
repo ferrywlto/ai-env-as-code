@@ -12,7 +12,7 @@ internal sealed record MigrationFetchPreparation(MigrationRemotePreflight Remote
         // Fetch the verified default-branch tip by immutable object ID. Empty
         // refmap and disabled FETCH_HEAD prevent configured wildcard/mirror
         // refspecs from redirecting updates into local branches or other refs.
-        var fetched = GitProcess.FetchRemoteCommit(preflight.Repository, approvedRemote.Remote,
+        var fetched = GitRepository.FetchRemoteCommit(preflight.Repository, approvedRemote.Remote,
             approvedRemote.AdvertisedCommit);
         if (fetched.ExitCode != 0)
         {
