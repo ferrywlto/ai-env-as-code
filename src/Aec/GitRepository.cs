@@ -114,6 +114,34 @@ internal static class GitRepository
     internal static void StagePaths(string repository, string failureMessage, params string[] paths) =>
         GitProcess.RunRequired(repository, failureMessage, ["add", "--", .. paths]);
 
+    internal static string WriteIndexTree(string repository, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage, "--no-replace-objects", "write-tree")
+            .Output.Trim();
+
+    internal static string CreateCommitFromTree(
+        string repository, string tree, string? parent, bool sign, string message, string failureMessage)
+    {
+        var arguments = new List<string> { "--no-replace-objects", "commit-tree", tree };
+        if (parent is not null)
+        {
+            arguments.AddRange(["-p", parent]);
+        }
+
+        if (sign)
+        {
+            arguments.Add("-S");
+        }
+
+        arguments.AddRange(["-m", message]);
+        return GitProcess.RunRequired(repository, failureMessage, [.. arguments]).Output.Trim();
+    }
+
+    internal static void UpdateReferenceIfUnchanged(
+        string repository, string reference, string newValue, string expectedOldValue,
+        string reflogMessage, string failureMessage) =>
+        GitProcess.RunRequired(repository, failureMessage,
+            "--no-replace-objects", "update-ref", "-m", reflogMessage, reference, newValue, expectedOldValue);
+
     internal static string ReadIndexEntry(
         string repository, string path, string failureMessage) =>
         GitProcess.RunRequired(repository, failureMessage,

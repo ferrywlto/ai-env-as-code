@@ -155,6 +155,11 @@
   committed-file and parent reads. Exact-content checks, publication and
   diagnostics stay in the committer. All 389 unit and focused backup and
   provenance tests passed.
+- [x] Ferry reviewed named Git commit publication operations. The shared publisher
+  uses named APIs to write the index tree, create a commit with optional
+  signing and publish only if the branch still has the expected old value.
+  The publisher retains tree validation and its branch and parent checks.
+  All 374 unit and focused backup, initialization and migration tests passed.
 - [ ] Complete Ferry's final review and ticket acceptance.
 
 ## Routine regression refactor

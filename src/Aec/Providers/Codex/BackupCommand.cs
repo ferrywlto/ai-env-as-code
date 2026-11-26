@@ -377,33 +377,15 @@ internal static class BackupCommand
 
         EnsureBranchMatches(repository, expectedBranch);
         EnsureParentMatches(repository, expectedParent);
-        var expectedTree = RunRequired(
-            repository,
-            "Git could not pin the verified canonical index",
-            "write-tree").Output.Trim();
+        var expectedTree = GitRepository.WriteIndexTree(repository,
+            "Git could not pin the verified canonical index");
         VerifyPinnedTree(repository, expectedTree, expectedParent, expectedFiles, expectedModes);
 
-        var arguments = new List<string> { "commit-tree", expectedTree };
-        if (expectedParent is not null)
-        {
-            arguments.AddRange(["-p", expectedParent]);
-        }
-
-        if (ShouldSignCommit(repository))
-        {
-            // commit-tree does not read commit.gpgSign automatically. Supplying
-            // -S retains Git's configured signing format, key, and failure behavior.
-            arguments.Add("-S");
-        }
-
-        arguments.AddRange(["-m", commitMessage]);
-
-        // commit-tree records the already-verified index tree. Unlike
-        // `git commit --only`, it cannot reread a concurrently changed working file.
-        var commit = RunRequired(
-            repository,
-            "Git could not commit the canonical source",
-            [.. arguments]).Output.Trim();
+        // commit-tree uses the verified tree and needs an explicit signing flag.
+        // It cannot reread a concurrently changed working file.
+        var commit = GitRepository.CreateCommitFromTree(
+            repository, expectedTree, expectedParent, ShouldSignCommit(repository), commitMessage,
+            "Git could not commit the canonical source");
         if (commit.Length == 0)
         {
             throw new InvalidOperationException("Git returned an empty canonical commit identifier.");
@@ -415,15 +397,9 @@ internal static class BackupCommand
         // update-ref compares the old value before moving the branch, so a
         // concurrent commit cannot be silently replaced by this backup.
         var expectedOld = expectedParent ?? new string('0', commit.Length);
-        RunRequired(
-            repository,
-            "Git could not publish the canonical source commit",
-            "update-ref",
-            "-m",
-            $"commit: {commitMessage}",
-            expectedBranch,
-            commit,
-            expectedOld);
+        GitRepository.UpdateReferenceIfUnchanged(
+            repository, expectedBranch, commit, expectedOld, $"commit: {commitMessage}",
+            "Git could not publish the canonical source commit");
         EnsureBranchMatches(repository, expectedBranch);
     }
 
