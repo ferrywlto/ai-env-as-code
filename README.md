@@ -121,6 +121,30 @@ Current 2.0 Codex and Copilot real-harness verification is deferred to
 checkpoint and isolated tests do not establish it. See [verification details
 and historical runs](docs/reference.md#local-harness-verification).
 
+## Product roadmap
+
+```mermaid
+timeline
+    section Delivered
+        1.x : Codex environment in Git
+        1.4 alpha : Copilot CLI instructions
+    section Merged, release pending
+        2.0 : Shared instructions and migration
+    section Planned
+        3.0 Part 1 : Provider-first CLI
+        3.0 Part 2 : Personal skills across Codex and Copilot CLI
+        Later : Gemini and Claude integration
+```
+
+[Part 1](https://github.com/ferrywlto/ai-env-as-code/issues/3) aligns existing
+commands, installers, and bundled guidance around explicit providers.
+[Part 2](https://github.com/ferrywlto/ai-env-as-code/issues/23) starts with the
+[manual-only greeting skill](docs/examples/skills/greeting/SKILL.md). AEC will
+keep its `SKILL.md` and
+supporting files in canonical Git, report drift, and deploy the committed skill
+to both harnesses. The first milestone is explicit invocation in both while
+preserving the user's automatic invocation preference.
+
 ## Read more
 
 - [Shared-instruction design](docs/shared-instructions-design.md): ownership,
@@ -128,8 +152,7 @@ and historical runs](docs/reference.md#local-harness-verification).
 - [Detailed reference](docs/reference.md): commands, workflows and release history.
 - [Migration guide](docs/migration.md): migration steps and safety requirements.
 - [Build and test guide](docs/development.md): platform builds, tests and troubleshooting.
-- [Implementation checklist](IMPLEMENTATION_CHECKLIST.md): completed increments
-  and the immediate next work.
+- [Implementation checklist](IMPLEMENTATION_CHECKLIST.md): current work and open gates.
 - [Landing page](docs/index.html).
 
 AEC is licensed under [AGPL-3.0](LICENSE). If it helps you, please consider
