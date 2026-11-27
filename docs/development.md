@@ -31,7 +31,7 @@ and the default console logger may stay quiet until the final summary.
 
 Integration tests use real Git repositories and check filesystem safety. Some
 groups run sequentially because they change process-wide settings. See
-`IMPLEMENTATION_CHECKLIST.md` for recorded regression runs.
+[historical regression runs](https://github.com/ferrywlto/ai-env-as-code/blob/9b4ad529f07f38639304270f3198ba21579853b0/IMPLEMENTATION_CHECKLIST.md).
 
 Managed test fixtures default to the `test-work` directory next to the test
 binaries. Set `AEC_TEST_TEMP_ROOT` to an absolute, writable path without symbolic
@@ -77,7 +77,7 @@ signing failure, concurrent runtime drift, and scaffold retry.
 Prepend `/usr/bin/time -p` to the `dotnet test` invocation on macOS to measure
 wall time. Add `--logger trx` to save per-test timings in the test results
 directory. The inactivity guard aborts an unresponsive run. See the
-[coverage map](../IMPLEMENTATION_CHECKLIST.md#focused-real-git-regression-checks)
+[coverage map](https://github.com/ferrywlto/ai-env-as-code/blob/9b4ad529f07f38639304270f3198ba21579853b0/IMPLEMENTATION_CHECKLIST.md#focused-real-git-regression-checks)
 for the selected checks and measured times.
 
 #### Routine regression
@@ -184,8 +184,7 @@ version/help, and the complete isolated installer lifecycle. Neither test scope
 skipped tests. This is Windows runner/native proof, not real-harness verification.
 The [earlier run](https://github.com/ferrywlto/ai-env-as-code/actions/runs/40141526871)
 failed two clone-attachment tests; preserving committed bytes before clone checkout
-resolved them without weakening production checks. Detailed evidence is indexed
-in `IMPLEMENTATION_CHECKLIST.md`.
+resolved them without weakening production checks. See the [historical checklist](https://github.com/ferrywlto/ai-env-as-code/blob/9b4ad529f07f38639304270f3198ba21579853b0/IMPLEMENTATION_CHECKLIST.md) for detailed evidence.
 The workflow keeps the Git-heavy migration
 rehearsal separate with a two-minute hang guard; smaller tests retain 30 seconds.
 
@@ -314,7 +313,7 @@ passed the previous lifecycle; it is not verification of this updated 2.0 sequen
 The updated sequence passed locally through the freshly built Native AOT artifact
 on 2026-10-24. After an approved retry with local socket permission, the separated
 managed scopes also passed: 110 focused lifecycle tests and one legacy migration
-rehearsal. Current verification details are in `IMPLEMENTATION_CHECKLIST.md`.
+rehearsal. See the [historical checklist](https://github.com/ferrywlto/ai-env-as-code/blob/9b4ad529f07f38639304270f3198ba21579853b0/IMPLEMENTATION_CHECKLIST.md) for recorded verification.
 See [the verification boundary](architecture.md#platform-lifecycle-verification-boundary).
 The Git-heavy migration rehearsal runs separately with a two-minute hang guard;
 smaller focused tests retain 30 seconds. A watchdog abort is not a passing run

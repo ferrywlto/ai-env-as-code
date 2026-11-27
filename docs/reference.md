@@ -298,7 +298,7 @@ fixtures on [macOS ARM64](https://github.com/ferrywlto/ai-env-as-code/actions/ru
 and [Windows x64](https://github.com/ferrywlto/ai-env-as-code/actions/runs/36789513384).
 After a fixture cleanup fix, the Windows rerun passed 41/41 focused tests,
 the Native AOT build and isolated smoke checks. Each Native AOT smoke invokes
-`aec render` in an isolated fixture. See the [implementation checklist](../IMPLEMENTATION_CHECKLIST.md)
+`aec render` in an isolated fixture. See the [historical verification record](https://github.com/ferrywlto/ai-env-as-code/blob/9b4ad529f07f38639304270f3198ba21579853b0/IMPLEMENTATION_CHECKLIST.md)
 for later migration and platform evidence.
 
 ## version
