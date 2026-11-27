@@ -228,6 +228,6 @@ public sealed class PortableCodexApplyCommandTests
     }
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>
-        TestApplication.Run("apply", "--repo", layout.Repository,
-            "--codex-home", layout.ProviderHome);
+        TestApplication.Run("codex", "apply", "--repo", layout.Repository,
+            "--home", layout.ProviderHome);
 }

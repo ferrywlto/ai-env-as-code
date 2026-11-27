@@ -283,7 +283,7 @@ public sealed class MigrationPreflightTests
             Directory.CreateDirectory(home);
             File.WriteAllText(Path.Combine(home, "AGENTS.md"), "Personal instructions.\n");
             File.WriteAllText(Path.Combine(home, "config.toml"), "personality = \"friendly\"\n");
-            var init = TestApplication.Run("init", "--repo", Repository, "--codex-home", home);
+            var init = TestApplication.Run("codex", "init", "--repo", Repository, "--home", home);
             Assert.True(init.ExitCode == 0, init.Error);
         }
 

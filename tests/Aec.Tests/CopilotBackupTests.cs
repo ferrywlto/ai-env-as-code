@@ -3,35 +3,34 @@ namespace Aec.Tests;
 public sealed class CopilotBackupArgumentTests
 {
     [Fact]
-    public void RejectsCodexHomeForCopilotBackup()
+    public void RejectsLegacyCodexHomeForCopilotBackup()
     {
         var repository = Path.GetFullPath("repository");
         var home = Path.GetFullPath("copilot-home");
 
         var result = TestApplication.Run(
-            "backup",
+            "copilot", "backup",
             "--repo",
             repository,
-            "--provider=copilot",
             "--codex-home",
             home);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
         Assert.Contains(
-            "--codex-home is not valid with --provider=copilot",
+            "Unknown argument: --codex-home",
             result.Error,
             StringComparison.Ordinal);
     }
 
     [Fact]
-    public void RejectsCopilotHomeWithoutTheProvider()
+    public void RejectsLegacyCopilotHomeForCodexBackup()
     {
         var repository = Path.GetFullPath("repository");
         var home = Path.GetFullPath("copilot-home");
 
         var result = TestApplication.Run(
-            "backup",
+            "codex", "backup",
             "--repo",
             repository,
             "--copilot-home",
@@ -40,7 +39,7 @@ public sealed class CopilotBackupArgumentTests
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
         Assert.Contains(
-            "--copilot-home requires --provider=copilot",
+            "Unknown argument: --copilot-home",
             result.Error,
             StringComparison.Ordinal);
     }

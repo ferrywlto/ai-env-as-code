@@ -2,6 +2,11 @@
 
 ## Current progress
 
+- [ ] **Land the provider-first CLI.** Ferry approved the
+  [#26](https://github.com/ferrywlto/ai-env-as-code/issues/26) routing slice
+  after 415 focused and 767 routine Debug checks passed. Complete installer and
+  bundled guidance alignment in [#27](https://github.com/ferrywlto/ai-env-as-code/issues/27)
+  before merging the breaking CLI.
 - [ ] **Publish the official 2.0 release.** Version `2.0.0` is already merged
   and Ferry verified the migrated Codex setup. GitHub publication awaits
   Ferry's request. See the [draft release notes](docs/release-notes-2.0-draft.md).

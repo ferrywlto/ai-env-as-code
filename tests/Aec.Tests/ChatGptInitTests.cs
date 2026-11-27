@@ -11,7 +11,7 @@ public sealed class ChatGptInitTests
         var skillsDirectory = Path.Combine(layout.CodexHome, "skills");
         var runtimeBefore = File.ReadAllBytes(layout.Runtime);
 
-        var result = TestApplication.Run("init", "--provider=chatgpt", "--repo", layout.Repository);
+        var result = TestApplication.Run("chatgpt", "init", "--repo", layout.Repository);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
@@ -43,7 +43,7 @@ public sealed class ChatGptInitTests
         {
             Environment.CurrentDirectory = layout.Repository;
 
-            var result = TestApplication.Run("init", "--provider=chatgpt");
+            var result = TestApplication.Run("chatgpt", "init");
 
             Assert.Equal(1, result.ExitCode);
             Assert.Contains("init requires --repo", result.Error, StringComparison.Ordinal);
@@ -388,19 +388,15 @@ public sealed class ChatGptInitTests
               aec version
               aec render --repo ABSOLUTE_PATH
               aec migrate VERSION --repo ABSOLUTE_PATH
-              aec skill upgrade [--codex-home ABSOLUTE_PATH]
-              aec uninstall [--codex-home ABSOLUTE_PATH]
-              aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
-              aec init --repo ABSOLUTE_PATH --provider=chatgpt
-              aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
-              aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
-              aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
-              aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
-              aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
-              aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
-              aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
-              aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
-              aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+              aec codex init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change | --enroll-shared]
+              aec copilot init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change | --enroll-shared]
+              aec chatgpt init --repo ABSOLUTE_PATH
+              aec codex (status | backup | apply) --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
+              aec copilot (status | backup | apply) --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
+              aec codex upgrade [--home ABSOLUTE_PATH]
+              aec codex uninstall [--home ABSOLUTE_PATH]
+
+            Codex upgrade updates only the bundled AEC skill guidance.
 
             Shared instruction scope:
               shared: every enrolled harness
@@ -463,10 +459,9 @@ public sealed class ChatGptInitTests
     {
         var arguments = new[]
         {
-            "init",
+            "chatgpt", "init",
             "--repo",
-            repository,
-            "--provider=chatgpt"
+            repository
         }.Concat(extraArguments).ToArray();
         return TestApplication.Run(arguments);
     }

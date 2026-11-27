@@ -193,7 +193,7 @@ public sealed class InitTests
         Assert.False(Directory.Exists(Path.Combine(layout.Target, "environment", "providers", "chatgpt")));
         AssertBundledSkillInstalled(layout.CodexHome);
 
-        var status = TestApplication.Run("status", "--repo", layout.Target, "--codex-home", layout.CodexHome);
+        var status = TestApplication.Run("codex", "status", "--repo", layout.Target, "--home", layout.CodexHome);
         Assert.Equal(1, status.ExitCode);
         Assert.Empty(status.Output);
         Assert.Contains("Authored shared instructions", status.Error, StringComparison.Ordinal);
@@ -444,13 +444,13 @@ public sealed class InitTests
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", secondCodexHome);
             Environment.SetEnvironmentVariable("COPILOT_HOME", copilotHome);
-            var unconfirmed = TestApplication.Run("init", "--repo", pulled);
+            var unconfirmed = TestApplication.Run("codex", "init", "--repo", pulled);
             Assert.Equal(1, unconfirmed.ExitCode);
             Assert.Contains("--force-path-change", unconfirmed.Error,
                 StringComparison.Ordinal);
             Assert.False(File.Exists(Path.Combine(secondCodexHome, "AGENTS.md")));
 
-            var confirmed = TestApplication.Run("init", "--repo", pulled,
+            var confirmed = TestApplication.Run("codex", "init", "--repo", pulled,
                 "--force-path-change");
             Assert.Equal(0, confirmed.ExitCode);
             Assert.Equal(pulled, AecInstructionBlock.ReadRepositoryBinding(
@@ -488,7 +488,7 @@ public sealed class InitTests
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", secondCodexHome);
             Environment.SetEnvironmentVariable("COPILOT_HOME", copilotHome);
-            var arguments = new List<string> { "init", "--repo", selected };
+            var arguments = new List<string> { "codex", "init", "--repo", selected };
             if (forcePathChange)
             {
                 arguments.Add("--force-path-change");
@@ -1442,10 +1442,10 @@ public sealed class InitTests
     {
         var arguments = new List<string>
         {
-            "init",
+            "codex", "init",
             "--repo",
             target,
-            "--codex-home",
+            "--home",
             codexHome
         };
         if (forcePathChange)
@@ -1713,7 +1713,7 @@ public sealed class InitProcessStateTests
             var error = new StringWriter();
 
             var exitCode = AecApplication.Run(
-                ["init", "--codex-home", directory.CodexHome, "--repo", target],
+                ["codex", "init", "--home", directory.CodexHome, "--repo", target],
                 output,
                 error);
 
@@ -1793,7 +1793,7 @@ public sealed class InitProcessStateTests
             var error = new StringWriter();
 
             var exitCode = AecApplication.Run(
-                ["init", "--repo", target, "--codex-home", directory.CodexHome],
+                ["codex", "init", "--repo", target, "--home", directory.CodexHome],
                 output,
                 error);
 
@@ -1862,7 +1862,7 @@ public sealed class InitProcessStateTests
             var output = new StringWriter();
             var error = new StringWriter();
             var exitCode = AecApplication.Run(
-                ["init", "--repo", target, "--codex-home", directory.CodexHome],
+                ["codex", "init", "--repo", target, "--home", directory.CodexHome],
                 output,
                 error);
 

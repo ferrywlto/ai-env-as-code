@@ -206,8 +206,7 @@ public sealed class PortableCopilotApplyCommandTests
             var runtimePath = Path.Combine(repository, "copilot-instructions.md");
             File.WriteAllText(runtimePath, "Preserve instructions.\n");
 
-            var result = TestApplication.Run("apply", "--repo", repository,
-                "--provider=copilot", "--copilot-home", repository);
+            var result = TestApplication.Run("copilot", "apply", "--repo", repository, "--home", repository);
 
             Assert.Equal(1, result.ExitCode);
             Assert.Empty(result.Output);
@@ -222,8 +221,7 @@ public sealed class PortableCopilotApplyCommandTests
     }
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>
-        TestApplication.Run("apply", "--repo", layout.Repository,
-            "--provider=copilot", "--copilot-home", layout.ProviderHome);
+        TestApplication.Run("copilot", "apply", "--repo", layout.Repository, "--home", layout.ProviderHome);
 
     private static void Commit(SharedTargetStatusTests.StatusLayout layout, string message) =>
         GitProcess.RunRequired(layout.Repository, "Could not commit fixture change",

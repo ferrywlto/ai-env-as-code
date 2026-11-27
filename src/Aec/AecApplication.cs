@@ -39,18 +39,10 @@ public static class AecApplication
                 "migrate" => RunMigration(args, input, output, error, cancellationToken),
                 "render" => RenderCommand.Run(
                     RequireAbsolutePath(ParseRenderRepository(args), "--repo"), output),
-                "skill" => RunSkill(args, output),
-                "uninstall" => RunUninstall(ParseCodexHomeArguments(args, 1), output),
-                "status" => RunStatus(ParseProviderRepositoryArguments(args, "status"), output),
-                "backup" => RunBackup(
-                    ParseProviderRepositoryArguments(args, "backup"),
-                    output,
-                    error),
-                "apply" => RunApply(
-                    ParseProviderRepositoryArguments(args, "apply"),
-                    output,
-                    error),
-                "init" => RunInit(ParseInitArguments(args), output, error),
+                AecIdentifiers.Codex or AecIdentifiers.Copilot or AecIdentifiers.ChatGpt =>
+                    RunProvider(args, output, error),
+                "init" or "status" or "backup" or "apply" or "uninstall" or "skill" =>
+                    throw LegacyCommandError(args),
                 _ => throw new ArgumentException($"Unknown command: {args[0]}")
             };
         }
@@ -88,19 +80,109 @@ public static class AecApplication
         return 1;
     }
 
+    private static int RunProvider(string[] args, TextWriter output, TextWriter warning)
+    {
+        var provider = args[0];
+        if (args.Length < 2)
+        {
+            throw new ArgumentException($"A {provider} command is required. Use `aec help` for usage.");
+        }
+
+        var command = args[1];
+        if (provider == AecIdentifiers.ChatGpt)
+        {
+            if (command != "init")
+            {
+                throw new ArgumentException($"Unknown {provider} command: {command}");
+            }
+
+            var options = ParseProviderRepositoryArguments(args);
+            return ChatGptInitCommand.Run(RequireAbsolutePath(options.Repository, "--repo"), output);
+        }
+
+        return command switch
+        {
+            "init" => RunInit(ParseProviderRepositoryArguments(args), output, warning),
+            "status" => RunStatus(ParseProviderRepositoryArguments(args), output),
+            "backup" => RunBackup(ParseProviderRepositoryArguments(args), output, warning),
+            "apply" => RunApply(ParseProviderRepositoryArguments(args), output, warning),
+            "upgrade" when provider == AecIdentifiers.Codex =>
+                RunCodexUpgrade(ParseCodexHomeArguments(args), output),
+            "uninstall" when provider == AecIdentifiers.Codex =>
+                UninstallCommand.Run(ResolveCodexHome(ParseCodexHomeArguments(args)), output),
+            _ => throw new ArgumentException($"Unknown {provider} command: {command}")
+        };
+    }
+
+    // Recognize old forms only to provide a diagnostic. They never reach a workflow.
+    private static ArgumentException LegacyCommandError(string[] args)
+    {
+        var replacement = args[0] switch
+        {
+            "uninstall" => "codex uninstall [--home PATH]",
+            "skill" when args.Length > 1 && args[1] == "upgrade" => "codex upgrade [--home PATH]",
+            "init" or "status" or "backup" or "apply" => LegacyProviderReplacement(args),
+            _ => null
+        };
+
+        return new ArgumentException(replacement is null
+            ? "Legacy command syntax. Use `aec help` for usage."
+            : $"Legacy command syntax. Use `aec {replacement}`.");
+    }
+
+    private static string? LegacyProviderReplacement(string[] args)
+    {
+        var command = args[0];
+        var providers = args.Skip(1).Where(arg => arg.StartsWith("--provider", StringComparison.Ordinal)).ToArray();
+        var provider = providers.Length switch
+        {
+            0 => AecIdentifiers.Codex,
+            1 when providers[0] == "--provider=copilot" => AecIdentifiers.Copilot,
+            1 when providers[0] == "--provider=chatgpt" && command == "init" => AecIdentifiers.ChatGpt,
+            _ => null
+        };
+        if (provider is null ||
+            (provider != AecIdentifiers.Codex && args.Contains("--codex-home")) ||
+            (provider != AecIdentifiers.Copilot && args.Contains("--copilot-home")))
+        {
+            return null;
+        }
+
+        var replacement = $"{provider} {command} --repo PATH";
+        if (args.Contains("--codex-home") || args.Contains("--copilot-home"))
+        {
+            replacement += " --home PATH";
+        }
+
+        if (command == "init")
+        {
+            if (args.Contains("--enroll-shared"))
+            {
+                replacement += " --enroll-shared";
+            }
+
+            if (args.Contains("--force-path-change"))
+            {
+                replacement += " --force-path-change";
+            }
+        }
+
+        return replacement;
+    }
+
     private static int RunStatus(ProviderRepositoryOptions options, TextWriter output)
     {
         var repository = RequireAbsolutePath(options.Repository, "--repo");
         if (options.Provider == AecIdentifiers.Copilot)
         {
-            var copilotHome = ResolveCopilotHome(options.CopilotHome);
+            var copilotHome = ResolveCopilotHome(options.Home);
             var status = PortableEnvironmentStatus.Inspect(
                 repository, AecIdentifiers.Copilot, copilotHome);
             output.WriteLine($"copilot/copilot-instructions.md {status.Instructions}");
             return status.InSync ? 0 : 2;
         }
 
-        var codexHome = ResolveCodexHome(options.CodexHome);
+        var codexHome = ResolveCodexHome(options.Home);
         var codexStatus = PortableEnvironmentStatus.Inspect(
             repository, AecIdentifiers.Codex, codexHome);
         output.WriteLine($"codex/AGENTS.md   {codexStatus.Instructions}");
@@ -119,30 +201,11 @@ public static class AecApplication
         return 0;
     }
 
-    private static int RunSkill(string[] args, TextWriter output)
+    private static int RunCodexUpgrade(string? home, TextWriter output)
     {
-        if (args.Length == 1)
-        {
-            throw new ArgumentException(
-                "skill requires a subcommand. Use `aec help` for usage.");
-        }
-
-        if (args[1] != "upgrade")
-        {
-            throw new ArgumentException($"Unknown skill command: {args[1]}");
-        }
-
-        var options = ParseCodexHomeArguments(args, 2);
-        var codexHome = ResolveCodexHome(options.CodexHome);
-        var changed = AecSkillInstaller.Upgrade(codexHome);
+        var changed = AecSkillInstaller.Upgrade(ResolveCodexHome(home));
         output.WriteLine(changed ? "upgraded" : "unchanged");
         return 0;
-    }
-
-    private static int RunUninstall(CodexHomeOptions options, TextWriter output)
-    {
-        var codexHome = ResolveCodexHome(options.CodexHome);
-        return UninstallCommand.Run(codexHome, output);
     }
 
     private static int RunBackup(
@@ -154,7 +217,7 @@ public static class AecApplication
 
         if (options.Provider == AecIdentifiers.Copilot)
         {
-            var copilotHome = ResolveCopilotHome(options.CopilotHome);
+            var copilotHome = ResolveCopilotHome(options.Home);
             var copilotPreview = PortableCopilotBackupPreview.Create(repository, copilotHome);
             PortableBackupCommitter.RequireLocalBranch(repository);
             if (copilotPreview.Instructions.Section is null)
@@ -168,7 +231,7 @@ public static class AecApplication
             return 0;
         }
 
-        var codexHome = ResolveCodexHome(options.CodexHome);
+        var codexHome = ResolveCodexHome(options.Home);
         PortableCodexBackupPreview preview;
         try
         {
@@ -193,7 +256,7 @@ public static class AecApplication
     }
 
     private static int RunInit(
-        InitOptions options,
+        ProviderRepositoryOptions options,
         TextWriter output,
         TextWriter warning)
     {
@@ -201,24 +264,17 @@ public static class AecApplication
 
         if (options.EnrollShared)
         {
-            var provider = options.Provider ?? AecIdentifiers.Codex;
+            var provider = options.Provider;
             var providerHome = provider == AecIdentifiers.Copilot
-                ? ResolveCopilotHome(options.CopilotHome)
-                : ResolveCodexHome(options.CodexHome);
+                ? ResolveCopilotHome(options.Home)
+                : ResolveCodexHome(options.Home);
             return SharedEnrollmentCommand.Run(repository, provider, providerHome, output);
-        }
-
-        // ChatGPT has no local runtime. Copilot is a local provider and needs its
-        // explicit runtime home only for this provider-specific initialization flow.
-        if (options.Provider == AecIdentifiers.ChatGpt)
-        {
-            return ChatGptInitCommand.Run(repository, output);
         }
 
         if (options.Provider == AecIdentifiers.Copilot)
         {
-            var copilotHome = ResolveCopilotHome(options.CopilotHome);
-            if (options.CopilotHome is null)
+            var copilotHome = ResolveCopilotHome(options.Home);
+            if (options.Home is null)
             {
                 EnsureOtherImplicitHarnessUsesRepository(repository, AecIdentifiers.Codex);
             }
@@ -227,8 +283,8 @@ public static class AecApplication
                 repository, copilotHome, options.ForcePathChange, output);
         }
 
-        var codexHome = ResolveCodexHome(options.CodexHome);
-        if (options.CodexHome is null)
+        var codexHome = ResolveCodexHome(options.Home);
+        if (options.Home is null)
         {
             EnsureOtherImplicitHarnessUsesRepository(repository, AecIdentifiers.Copilot);
         }
@@ -290,7 +346,7 @@ public static class AecApplication
 
         if (options.Provider == AecIdentifiers.Copilot)
         {
-            var copilotHome = ResolveCopilotHome(options.CopilotHome);
+            var copilotHome = ResolveCopilotHome(options.Home);
             // Ordinary apply consumes the enrolled, committed rendered target;
             // provider init retains its separate first-installation flow.
             var copilotPreview = PortableApplyPreview.Create(repository, AecIdentifiers.Copilot, copilotHome);
@@ -304,7 +360,7 @@ public static class AecApplication
             return 0;
         }
 
-        var codexHome = ResolveCodexHome(options.CodexHome);
+        var codexHome = ResolveCodexHome(options.Home);
         // Ordinary apply now consumes the enrolled rendered target. Init and
         // attachment retain their checkpointed legacy writer separately.
         var preview = PortableApplyPreview.Create(repository, AecIdentifiers.Codex, codexHome);
@@ -340,66 +396,47 @@ public static class AecApplication
         return args[2];
     }
 
-    private static ProviderRepositoryOptions ParseProviderRepositoryArguments(
-        string[] args,
-        string command)
+    private static ProviderRepositoryOptions ParseProviderRepositoryArguments(string[] args)
     {
+        var provider = args[0];
+        var command = args[1];
+        var local = provider != AecIdentifiers.ChatGpt;
         string? repository = null;
-        string? codexHome = null;
-        string? copilotHome = null;
-        string? provider = null;
+        string? home = null;
+        var forcePathChange = false;
+        var enrollShared = false;
 
-        for (var index = 1; index < args.Length; index++)
+        for (var index = 2; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument.StartsWith("--provider=", StringComparison.Ordinal))
+            switch (argument)
             {
-                if (provider is not null)
-                {
-                    throw new ArgumentException("--provider may be specified only once.");
-                }
+                case "--repo":
+                    if (repository is not null)
+                    {
+                        throw new ArgumentException("--repo may be specified only once.");
+                    }
 
-                provider = argument["--provider=".Length..];
-                if (provider != AecIdentifiers.Copilot)
-                {
-                    throw new ArgumentException($"Unsupported {command} provider: {provider}");
-                }
+                    repository = ReadRequiredOptionValue(args, ref index, argument);
+                    break;
+                case "--home" when local:
+                    if (home is not null)
+                    {
+                        throw new ArgumentException("--home may be specified only once.");
+                    }
 
-                continue;
-            }
-
-            if (argument is not ("--repo" or "--codex-home" or "--copilot-home"))
-            {
-                throw new ArgumentException($"Unknown argument: {argument}");
-            }
-
-            var value = ReadRequiredOptionValue(args, ref index, argument);
-            if (argument == "--repo")
-            {
-                if (repository is not null)
-                {
-                    throw new ArgumentException("--repo may be specified only once.");
-                }
-
-                repository = value;
-            }
-            else if (argument == "--codex-home")
-            {
-                if (codexHome is not null)
-                {
-                    throw new ArgumentException("--codex-home may be specified only once.");
-                }
-
-                codexHome = value;
-            }
-            else
-            {
-                if (copilotHome is not null)
-                {
-                    throw new ArgumentException("--copilot-home may be specified only once.");
-                }
-
-                copilotHome = value;
+                    home = ReadRequiredOptionValue(args, ref index, argument);
+                    break;
+                case "--force-path-change" when local && command == "init" && !forcePathChange:
+                    forcePathChange = true;
+                    break;
+                case "--enroll-shared" when local && command == "init" && !enrollShared:
+                    enrollShared = true;
+                    break;
+                case "--force-path-change" or "--enroll-shared" when local && command == "init":
+                    throw new ArgumentException($"{argument} may be specified only once.");
+                default:
+                    throw new ArgumentException($"Unknown argument: {argument}");
             }
         }
 
@@ -409,180 +446,36 @@ public static class AecApplication
                 $"{command} requires --repo with the source-of-truth data repository.");
         }
 
-        if (provider == AecIdentifiers.Copilot && codexHome is not null)
-        {
-            throw new ArgumentException("--codex-home is not valid with --provider=copilot.");
-        }
-
-        if (provider is null && copilotHome is not null)
-        {
-            throw new ArgumentException("--copilot-home requires --provider=copilot.");
-        }
-
-        return new ProviderRepositoryOptions(repository, codexHome, copilotHome, provider);
-    }
-
-    private static InitOptions ParseInitArguments(string[] args)
-    {
-        string? repository = null;
-        string? codexHome = null;
-        string? provider = null;
-        var forcePathChange = false;
-        var enrollShared = false;
-        string? copilotHome = null;
-
-        for (var index = 1; index < args.Length; index++)
-        {
-            var argument = args[index];
-            if (argument == "--repo")
-            {
-                if (repository is not null)
-                {
-                    throw new ArgumentException("--repo may be specified only once.");
-                }
-
-                repository = ReadRequiredOptionValue(args, ref index, argument);
-                continue;
-            }
-
-            if (argument.StartsWith("--provider=", StringComparison.Ordinal))
-            {
-                if (provider is not null)
-                {
-                    throw new ArgumentException("--provider may be specified only once.");
-                }
-
-                provider = argument["--provider=".Length..];
-                if (provider is not (AecIdentifiers.ChatGpt or AecIdentifiers.Copilot))
-                {
-                    throw new ArgumentException($"Unsupported provider: {provider}");
-                }
-
-                continue;
-            }
-
-            if (argument == "--codex-home")
-            {
-                if (codexHome is not null)
-                {
-                    throw new ArgumentException("--codex-home may be specified only once.");
-                }
-
-                codexHome = ReadRequiredOptionValue(args, ref index, argument);
-                continue;
-            }
-
-            if (argument == "--copilot-home")
-            {
-                if (copilotHome is not null)
-                {
-                    throw new ArgumentException("--copilot-home may be specified only once.");
-                }
-
-                copilotHome = ReadRequiredOptionValue(args, ref index, argument);
-                continue;
-            }
-
-            if (argument == "--force-path-change")
-            {
-                if (forcePathChange)
-                {
-                    throw new ArgumentException(
-                        "--force-path-change may be specified only once.");
-                }
-
-                forcePathChange = true;
-                continue;
-            }
-
-            if (argument == "--enroll-shared")
-            {
-                if (enrollShared)
-                {
-                    throw new ArgumentException("--enroll-shared may be specified only once.");
-                }
-
-                enrollShared = true;
-                continue;
-            }
-
-            throw new ArgumentException($"Unknown argument: {argument}");
-        }
-
-        if (repository is null)
-        {
-            throw new ArgumentException(
-                "init requires --repo with the source-of-truth data repository.");
-        }
-
-        if (provider == AecIdentifiers.ChatGpt && codexHome is not null)
-        {
-            throw new ArgumentException("--codex-home is not valid with --provider=chatgpt.");
-        }
-
-        if (provider == AecIdentifiers.ChatGpt && copilotHome is not null)
-        {
-            throw new ArgumentException("--copilot-home is not valid with --provider=chatgpt.");
-        }
-
-        if (provider == AecIdentifiers.Copilot && codexHome is not null)
-        {
-            throw new ArgumentException("--codex-home is not valid with --provider=copilot.");
-        }
-
-        if (provider is null && copilotHome is not null)
-        {
-            throw new ArgumentException("--copilot-home requires --provider=copilot.");
-        }
-
-        if (provider == AecIdentifiers.ChatGpt && forcePathChange)
-        {
-            throw new ArgumentException(
-                "--force-path-change is not valid with --provider=chatgpt.");
-        }
-
         if (enrollShared && forcePathChange)
         {
-            throw new ArgumentException(
-                "--enroll-shared cannot be combined with --force-path-change.");
+            throw new ArgumentException("--enroll-shared cannot be combined with --force-path-change.");
         }
 
-        if (enrollShared && provider == AecIdentifiers.ChatGpt)
-        {
-            throw new ArgumentException(
-                "--enroll-shared supports only local Codex or Copilot providers.");
-        }
-
-        return new InitOptions(
-            repository,
-            codexHome,
-            copilotHome,
-            provider,
-            forcePathChange,
-            enrollShared);
+        return new ProviderRepositoryOptions(repository, home, provider, forcePathChange, enrollShared);
     }
 
-    private static CodexHomeOptions ParseCodexHomeArguments(string[] args, int startIndex)
+    private static string? ParseCodexHomeArguments(string[] args)
     {
-        string? codexHome = null;
-
-        for (var index = startIndex; index < args.Length; index++)
+        if (args.Length == 2)
         {
-            var argument = args[index];
-            if (argument != "--codex-home")
-            {
-                throw new ArgumentException($"Unknown argument: {argument}");
-            }
-
-            if (codexHome is not null)
-            {
-                throw new ArgumentException("--codex-home may be specified only once.");
-            }
-
-            codexHome = ReadRequiredOptionValue(args, ref index, argument);
+            return null;
         }
 
-        return new CodexHomeOptions(codexHome);
+        if (args[2] != "--home")
+        {
+            throw new ArgumentException($"Unknown argument: {args[2]}");
+        }
+
+        var index = 2;
+        var home = ReadRequiredOptionValue(args, ref index, "--home");
+        if (args.Length > 4)
+        {
+            throw new ArgumentException(args[4] == "--home"
+                ? "--home may be specified only once."
+                : $"Unknown argument: {args[4]}");
+        }
+
+        return home;
     }
 
     private static string ReadRequiredOptionValue(
@@ -603,7 +496,7 @@ public static class AecApplication
     {
         if (explicitPath is not null)
         {
-            return RequireAbsolutePath(explicitPath, "--codex-home");
+            return RequireAbsolutePath(explicitPath, "--home");
         }
 
         var environmentPath = Environment.GetEnvironmentVariable("CODEX_HOME");
@@ -625,7 +518,7 @@ public static class AecApplication
     {
         if (explicitPath is not null)
         {
-            return RequireAbsolutePath(explicitPath, "--copilot-home");
+            return RequireAbsolutePath(explicitPath, "--home");
         }
 
         var environmentPath = Environment.GetEnvironmentVariable("COPILOT_HOME");
@@ -820,19 +713,15 @@ public static class AecApplication
               aec version
               aec render --repo ABSOLUTE_PATH
               aec migrate VERSION --repo ABSOLUTE_PATH
-              aec skill upgrade [--codex-home ABSOLUTE_PATH]
-              aec uninstall [--codex-home ABSOLUTE_PATH]
-              aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
-              aec init --repo ABSOLUTE_PATH --provider=chatgpt
-              aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
-              aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
-              aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
-              aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
-              aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
-              aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
-              aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
-              aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
-              aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+              aec codex init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change | --enroll-shared]
+              aec copilot init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change | --enroll-shared]
+              aec chatgpt init --repo ABSOLUTE_PATH
+              aec codex (status | backup | apply) --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
+              aec copilot (status | backup | apply) --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
+              aec codex upgrade [--home ABSOLUTE_PATH]
+              aec codex uninstall [--home ABSOLUTE_PATH]
+
+            Codex upgrade updates only the bundled AEC skill guidance.
 
             Shared instruction scope:
               shared: every enrolled harness
@@ -860,17 +749,8 @@ public static class AecApplication
 
     private sealed record ProviderRepositoryOptions(
         string Repository,
-        string? CodexHome,
-        string? CopilotHome,
-        string? Provider);
-
-    private sealed record CodexHomeOptions(string? CodexHome);
-
-    private sealed record InitOptions(
-        string Repository,
-        string? CodexHome,
-        string? CopilotHome,
-        string? Provider,
+        string? Home,
+        string Provider,
         bool ForcePathChange,
         bool EnrollShared);
 }

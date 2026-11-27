@@ -4,12 +4,13 @@ namespace Aec.Tests;
 public sealed class SharedEnrollmentDecisionTests
 {
     [Theory]
-    [InlineData("--provider=chatgpt", "--enroll-shared", "only local Codex or Copilot")]
-    [InlineData("--force-path-change", "--enroll-shared", "cannot be combined")]
-    [InlineData("--enroll-shared", "--enroll-shared", "only once")]
-    public void RejectsUnsupportedEnrollmentArguments(string first, string second, string message)
+    [InlineData("chatgpt", "--enroll-shared", null, "Unknown argument: --enroll-shared")]
+    [InlineData("codex", "--force-path-change", "--enroll-shared", "cannot be combined")]
+    [InlineData("codex", "--enroll-shared", "--enroll-shared", "only once")]
+    public void RejectsUnsupportedEnrollmentArguments(string provider, string first, string? second, string message)
     {
-        var result = TestApplication.Run("init", "--repo", "unused-relative-path", first, second);
+        string[] arguments = [provider, "init", "--repo", "unused-relative-path", first];
+        var result = TestApplication.Run(second is null ? arguments : [.. arguments, second]);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains(message, result.Error, StringComparison.Ordinal);

@@ -691,7 +691,7 @@ public sealed class ApplyTests
         var error = new StringWriter();
 
         var exitCode = AecApplication.Run(
-            ["apply", "--repo", nested, "--codex-home", layout.CodexHome],
+            ["codex", "apply", "--repo", nested, "--home", layout.CodexHome],
             output,
             error);
 
@@ -722,7 +722,7 @@ public sealed class ApplyTests
             }
 
             var home = throughLinkedAncestor ? Path.Combine(alias, "data repository") : repository;
-            var result = TestApplication.Run("apply", "--repo", repository, "--codex-home", home);
+            var result = TestApplication.Run("codex", "apply", "--repo", repository, "--home", home);
 
             Assert.Equal(1, result.ExitCode);
             Assert.Empty(result.Output);
@@ -770,7 +770,7 @@ public sealed class ApplyTests
             var error = new StringWriter();
 
             var exitCode = AecApplication.Run(
-                ["apply", "--repo", layout.Repository],
+                ["codex", "apply", "--repo", layout.Repository],
                 output,
                 error);
 

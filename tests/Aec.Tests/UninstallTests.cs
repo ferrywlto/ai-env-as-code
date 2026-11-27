@@ -22,7 +22,7 @@ public sealed class UninstallTests
         File.WriteAllText(notes, "personal skill notes\n");
         File.WriteAllText(otherSkill, "another skill\n");
 
-        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
@@ -44,9 +44,9 @@ public sealed class UninstallTests
             layout.Agents,
             AecInstructionBlock.Merge("outside\n"u8.ToArray(), layout.Repository));
 
-        var first = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var first = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
         var agentsAfterFirst = File.ReadAllBytes(layout.Agents);
-        var second = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var second = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(0, first.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", first.Output);
@@ -67,7 +67,7 @@ public sealed class UninstallTests
         var skill = File.ReadAllBytes(layout.Skill);
         var metadata = File.ReadAllBytes(layout.Metadata);
 
-        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -88,7 +88,7 @@ public sealed class UninstallTests
         File.AppendAllText(layout.Skill, "# local customization\n");
         var modifiedSkill = File.ReadAllBytes(layout.Skill);
 
-        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -116,7 +116,7 @@ public sealed class UninstallTests
         File.Delete(layout.Metadata);
         File.CreateSymbolicLink(layout.Metadata, referent);
 
-        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -134,7 +134,7 @@ public sealed class UninstallTests
         File.WriteAllBytes(layout.Agents, instructions);
         var skill = File.ReadAllBytes(layout.Skill);
 
-        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -150,7 +150,7 @@ public sealed class UninstallTests
         File.WriteAllText(layout.Agents, "outside\n");
         File.Delete(layout.Skill);
 
-        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
@@ -171,7 +171,7 @@ public sealed class UninstallTests
                 "Skills",
                 "1.0.0.md")));
 
-        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
@@ -192,7 +192,7 @@ public sealed class UninstallTests
                 "Skills",
                 "1.1.0.md")));
 
-        var result = TestApplication.Run("uninstall", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
@@ -218,7 +218,7 @@ public sealed class UninstallTests
         try
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", poison.CodexHome);
-            var result = TestApplication.Run("uninstall", "--codex-home", selected.CodexHome);
+            var result = TestApplication.Run("codex", "uninstall", "--home", selected.CodexHome);
 
             Assert.Equal(0, result.ExitCode);
             Assert.Equal("selected\n", File.ReadAllText(selected.Agents));
@@ -245,16 +245,16 @@ public sealed class UninstallTests
 
     public static TheoryData<string[], string> InvalidArguments => new()
     {
-        { ["uninstall", "--codex-home"], "--codex-home requires a value." },
-        { ["uninstall", "--codex-home", ""], "--codex-home requires a non-empty path." },
-        { ["uninstall", "--codex-home", "relative"], "--codex-home must be an absolute path." },
+        { ["codex", "uninstall", "--home"], "--home requires a value." },
+        { ["codex", "uninstall", "--home", ""], "--home requires a non-empty path." },
+        { ["codex", "uninstall", "--home", "relative"], "--home must be an absolute path." },
         {
-            ["uninstall", "--codex-home", Path.GetTempPath(), "--codex-home", Path.GetTempPath()],
-            "--codex-home may be specified only once."
+            ["codex", "uninstall", "--home", Path.GetTempPath(), "--home", Path.GetTempPath()],
+            "--home may be specified only once."
         },
-        { ["uninstall", "--repo", Path.GetTempPath()], "Unknown argument: --repo" },
-        { ["uninstall", "unexpected"], "Unknown argument: unexpected" },
-        { ["uninstall", "--codex-home=/tmp/codex"], "Unknown argument: --codex-home=/tmp/codex" }
+        { ["codex", "uninstall", "--repo", Path.GetTempPath()], "Unknown argument: --repo" },
+        { ["codex", "uninstall", "unexpected"], "Unknown argument: unexpected" },
+        { ["codex", "uninstall", "--home=/tmp/codex"], "Unknown argument: --home=/tmp/codex" }
     };
 
     private sealed class UninstallLayout : IDisposable

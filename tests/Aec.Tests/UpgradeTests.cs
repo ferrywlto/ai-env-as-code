@@ -26,7 +26,7 @@ public sealed class UpgradeTests
         Assert.Equal(expectedHash, Hash(predecessor));
         File.WriteAllBytes(layout.Skill, predecessor);
 
-        var first = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var first = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(0, first.ExitCode);
         Assert.Equal($"upgraded{Environment.NewLine}", first.Output);
@@ -35,7 +35,7 @@ public sealed class UpgradeTests
         Assert.Equal(expectedMetadata, File.ReadAllBytes(layout.Metadata));
         AssertNoTemporaryFiles(layout);
 
-        var second = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var second = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(0, second.ExitCode);
         Assert.Equal($"unchanged{Environment.NewLine}", second.Output);
@@ -57,7 +57,7 @@ public sealed class UpgradeTests
         try
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
-            var result = TestApplication.Run("skill", "upgrade");
+            var result = TestApplication.Run("codex", "upgrade");
 
             Assert.Equal(0, result.ExitCode);
             Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
@@ -82,7 +82,7 @@ public sealed class UpgradeTests
         var skillBefore = File.ReadAllBytes(layout.Skill);
         var metadataBefore = File.ReadAllBytes(layout.Metadata);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -107,7 +107,7 @@ public sealed class UpgradeTests
         var otherBefore = File.ReadAllBytes(other);
         File.Delete(missing);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -128,7 +128,7 @@ public sealed class UpgradeTests
         File.WriteAllBytes(layout.Skill, predecessor);
         var metadataBefore = File.ReadAllBytes(layout.Metadata);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -163,7 +163,7 @@ public sealed class UpgradeTests
             File.SetUnixFileMode(layout.Skill, expectedMode.Value);
         }
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"upgraded{Environment.NewLine}", result.Output);
@@ -185,7 +185,7 @@ public sealed class UpgradeTests
             layout.Metadata,
             Enumerable.Repeat((byte)'x', AecApplication.MaximumTextBytes + 1).ToArray());
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -212,7 +212,7 @@ public sealed class UpgradeTests
         File.Delete(layout.Metadata);
         File.CreateSymbolicLink(layout.Metadata, referent);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -238,7 +238,7 @@ public sealed class UpgradeTests
         Directory.CreateSymbolicLink(agentsDirectory, referentDirectory);
         var metadataBefore = File.ReadAllBytes(layout.Metadata);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = TestApplication.Run("codex", "upgrade", "--home", layout.CodexHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -261,7 +261,7 @@ public sealed class UpgradeTests
         try
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", poison.CodexHome);
-            var result = TestApplication.Run("skill", "upgrade", "--codex-home", selected.CodexHome);
+            var result = TestApplication.Run("codex", "upgrade", "--home", selected.CodexHome);
 
             Assert.Equal(0, result.ExitCode);
             Assert.Equal($"upgraded{Environment.NewLine}", result.Output);
@@ -285,7 +285,7 @@ public sealed class UpgradeTests
 
         try
         {
-            var result = TestApplication.Run("skill", "upgrade", "--codex-home", root);
+            var result = TestApplication.Run("codex", "upgrade", "--home", root);
 
             Assert.Equal(1, result.ExitCode);
             Assert.Empty(result.Output);
@@ -304,9 +304,9 @@ public sealed class UpgradeTests
         using var layout = new UpgradeLayout();
 
         var result = TestApplication.Run(
-            "skill",
+            "codex",
             "upgrade",
-            "--codex-home",
+            "--home",
             layout.CodexHome,
             "--repo",
             layout.Root);
@@ -331,17 +331,17 @@ public sealed class UpgradeTests
 
     public static TheoryData<string[], string> InvalidArguments => new()
     {
-        { ["skill"], "skill requires a subcommand. Use `aec help` for usage." },
-        { ["skill", "unknown"], "Unknown skill command: unknown" },
-        { ["skill", "upgrade", "--codex-home"], "--codex-home requires a value." },
-        { ["skill", "upgrade", "--codex-home", ""], "--codex-home requires a non-empty path." },
-        { ["skill", "upgrade", "--codex-home", "relative"], "--codex-home must be an absolute path." },
+        { ["codex"], "A codex command is required. Use `aec help` for usage." },
+        { ["codex", "unknown"], "Unknown codex command: unknown" },
+        { ["codex", "upgrade", "--home"], "--home requires a value." },
+        { ["codex", "upgrade", "--home", ""], "--home requires a non-empty path." },
+        { ["codex", "upgrade", "--home", "relative"], "--home must be an absolute path." },
         {
-            ["skill", "upgrade", "--codex-home", Path.GetTempPath(), "--codex-home", Path.GetTempPath()],
-            "--codex-home may be specified only once."
+            ["codex", "upgrade", "--home", Path.GetTempPath(), "--home", Path.GetTempPath()],
+            "--home may be specified only once."
         },
-        { ["skill", "upgrade", "unexpected"], "Unknown argument: unexpected" },
-        { ["skill", "upgrade", "--codex-home=/tmp/codex"], "Unknown argument: --codex-home=/tmp/codex" }
+        { ["codex", "upgrade", "unexpected"], "Unknown argument: unexpected" },
+        { ["codex", "upgrade", "--home=/tmp/codex"], "Unknown argument: --home=/tmp/codex" }
     };
 
     private static byte[] ReadFixture(string version)
