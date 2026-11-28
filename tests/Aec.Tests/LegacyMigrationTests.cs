@@ -144,7 +144,7 @@ public sealed class LegacyMigrationTests
             // Ordinary unenrolled init still writes the historical 1.x layout.
             // Assert that shape above so this test cannot silently start in v2.
             Success(Run("codex", "init"));
-            Success(TestApplication.Run("init", "--repo", Repository, "--provider=chatgpt"));
+            Success(TestApplication.Run("chatgpt", "init", "--repo", Repository));
             foreach (var fileName in ChatGptInitCommand.ScaffoldFileNames)
             {
                 File.WriteAllBytes(Path.Combine(Repository, "environment", "providers", "chatgpt",
@@ -184,11 +184,7 @@ public sealed class LegacyMigrationTests
         private string Home(string provider) => Path.Combine(root, provider + "-home");
 
         public CommandResult Run(string provider, string command, params string[] options) =>
-            provider == "codex"
-                ? TestApplication.Run([command, "--repo", Repository,
-                    "--codex-home", Home(provider), .. options])
-                : TestApplication.Run([command, "--repo", Repository, "--provider=copilot",
-                    "--copilot-home", Home(provider), .. options]);
+            TestApplication.Run([provider, command, "--repo", Repository, "--home", Home(provider), .. options]);
 
         public void WriteReviewedSplit()
         {

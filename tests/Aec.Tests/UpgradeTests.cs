@@ -26,7 +26,7 @@ public sealed class UpgradeTests
         Assert.Equal(expectedHash, Hash(predecessor));
         File.WriteAllBytes(layout.Skill, predecessor);
 
-        var first = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var first = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(0, first.ExitCode);
         Assert.Equal($"upgraded{Environment.NewLine}", first.Output);
@@ -35,7 +35,7 @@ public sealed class UpgradeTests
         Assert.Equal(expectedMetadata, File.ReadAllBytes(layout.Metadata));
         AssertNoTemporaryFiles(layout);
 
-        var second = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var second = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(0, second.ExitCode);
         Assert.Equal($"unchanged{Environment.NewLine}", second.Output);
@@ -52,25 +52,15 @@ public sealed class UpgradeTests
         File.SetLastWriteTimeUtc(layout.Metadata, timestamp);
         var skillMode = GetUnixMode(layout.Skill);
         var metadataMode = GetUnixMode(layout.Metadata);
-        var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
-        try
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
-            var result = TestApplication.Run("skill", "upgrade");
-
-            Assert.Equal(0, result.ExitCode);
-            Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
-            Assert.Empty(result.Error);
-            Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.Skill));
-            Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.Metadata));
-            Assert.Equal(skillMode, GetUnixMode(layout.Skill));
-            Assert.Equal(metadataMode, GetUnixMode(layout.Metadata));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", previous);
-        }
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal($"unchanged{Environment.NewLine}", result.Output);
+        Assert.Empty(result.Error);
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.Skill));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(layout.Metadata));
+        Assert.Equal(skillMode, GetUnixMode(layout.Skill));
+        Assert.Equal(metadataMode, GetUnixMode(layout.Metadata));
     }
 
     [Fact]
@@ -82,7 +72,7 @@ public sealed class UpgradeTests
         var skillBefore = File.ReadAllBytes(layout.Skill);
         var metadataBefore = File.ReadAllBytes(layout.Metadata);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -107,7 +97,7 @@ public sealed class UpgradeTests
         var otherBefore = File.ReadAllBytes(other);
         File.Delete(missing);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -128,7 +118,7 @@ public sealed class UpgradeTests
         File.WriteAllBytes(layout.Skill, predecessor);
         var metadataBefore = File.ReadAllBytes(layout.Metadata);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -163,7 +153,7 @@ public sealed class UpgradeTests
             File.SetUnixFileMode(layout.Skill, expectedMode.Value);
         }
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"upgraded{Environment.NewLine}", result.Output);
@@ -185,7 +175,7 @@ public sealed class UpgradeTests
             layout.Metadata,
             Enumerable.Repeat((byte)'x', AecApplication.MaximumTextBytes + 1).ToArray());
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -212,7 +202,7 @@ public sealed class UpgradeTests
         File.Delete(layout.Metadata);
         File.CreateSymbolicLink(layout.Metadata, referent);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -238,7 +228,7 @@ public sealed class UpgradeTests
         Directory.CreateSymbolicLink(agentsDirectory, referentDirectory);
         var metadataBefore = File.ReadAllBytes(layout.Metadata);
 
-        var result = TestApplication.Run("skill", "upgrade", "--codex-home", layout.CodexHome);
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -248,101 +238,99 @@ public sealed class UpgradeTests
     }
 
     [Fact]
-    public void ExplicitCodexHomeOverridesEnvironmentSelection()
-    {
-        using var selected = new UpgradeLayout();
-        using var poison = new UpgradeLayout();
-        var selectedOld = ReadFixture("0.9.0");
-        var poisonOld = ReadFixture("0.10.0");
-        File.WriteAllBytes(selected.Skill, selectedOld);
-        File.WriteAllBytes(poison.Skill, poisonOld);
-        var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
-
-        try
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", poison.CodexHome);
-            var result = TestApplication.Run("skill", "upgrade", "--codex-home", selected.CodexHome);
-
-            Assert.Equal(0, result.ExitCode);
-            Assert.Equal($"upgraded{Environment.NewLine}", result.Output);
-            Assert.NotEqual(selectedOld, File.ReadAllBytes(selected.Skill));
-            Assert.Equal(poisonOld, File.ReadAllBytes(poison.Skill));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("CODEX_HOME", previous);
-        }
-    }
-
-    [Fact]
-    public void EmptyCodexHomeFailsWithoutInstallingTheSkill()
-    {
-        var root = Path.Combine(
-            TestTemporaryDirectory.Root,
-            "aec-upgrade-empty-tests",
-            Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-
-        try
-        {
-            var result = TestApplication.Run("skill", "upgrade", "--codex-home", root);
-
-            Assert.Equal(1, result.ExitCode);
-            Assert.Empty(result.Output);
-            Assert.Contains("Codex skills directory does not exist", result.Error, StringComparison.Ordinal);
-            Assert.False(Directory.Exists(Path.Combine(root, "skills")));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void RejectsRepositoryArguments()
+    public void RefreshesBothEnrolledProviderSkills()
     {
         using var layout = new UpgradeLayout();
+        var expectedCodex = File.ReadAllBytes(layout.Skill);
+        var expectedMetadata = File.ReadAllBytes(layout.Metadata);
+        AecSkillInstaller.InstallCopilot(layout.CopilotHome);
+        var expectedCopilot = File.ReadAllBytes(layout.CopilotSkill);
+        File.WriteAllBytes(layout.Skill, ReadFixture("0.9.0"));
+        File.WriteAllBytes(layout.CopilotSkill, ReadFixture("Copilot-1.4.0-alpha.1"));
 
-        var result = TestApplication.Run(
-            "skill",
-            "upgrade",
-            "--codex-home",
-            layout.CodexHome,
-            "--repo",
-            layout.Root);
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Equal(
-            $"error: Unknown argument: --repo{Environment.NewLine}",
-            result.Error);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Error);
+        Assert.Equal(expectedCodex, File.ReadAllBytes(layout.Skill));
+        Assert.Equal(expectedMetadata, File.ReadAllBytes(layout.Metadata));
+        Assert.Equal(expectedCopilot, File.ReadAllBytes(layout.CopilotSkill));
     }
 
     [Theory]
-    [MemberData(nameof(InvalidArguments))]
-    public void RejectsInvalidSkillUpgradeArguments(string[] arguments, string message)
+    [InlineData("codex")]
+    [InlineData("copilot")]
+    public void PreflightsBothProvidersBeforeRefreshingEither(string modifiedProvider)
     {
-        var result = TestApplication.Run(arguments);
+        using var layout = new UpgradeLayout();
+        AecSkillInstaller.InstallCopilot(layout.CopilotHome);
+        File.WriteAllBytes(layout.Skill, ReadFixture("0.9.0"));
+        File.WriteAllBytes(layout.CopilotSkill, ReadFixture("Copilot-1.4.0-alpha.1"));
+        var modifiedSkill = modifiedProvider == "codex" ? layout.Skill : layout.CopilotSkill;
+        File.AppendAllText(modifiedSkill, "# local customization\n");
+        var codexBefore = File.ReadAllBytes(layout.Skill);
+        var copilotBefore = File.ReadAllBytes(layout.CopilotSkill);
+        var metadataBefore = File.ReadAllBytes(layout.Metadata);
+
+        var result = RunUpgrade(layout.CodexHome, layout.CopilotHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
-        Assert.Equal($"error: {message}{Environment.NewLine}", result.Error);
+        Assert.Contains("exact supported official bundle", result.Error, StringComparison.Ordinal);
+        Assert.Equal(codexBefore, File.ReadAllBytes(layout.Skill));
+        Assert.Equal(copilotBefore, File.ReadAllBytes(layout.CopilotSkill));
+        Assert.Equal(metadataBefore, File.ReadAllBytes(layout.Metadata));
     }
 
-    public static TheoryData<string[], string> InvalidArguments => new()
+    [Fact]
+    public void SkipsAbsentCodexEnrollmentWhileRefreshingCopilot()
     {
-        { ["skill"], "skill requires a subcommand. Use `aec help` for usage." },
-        { ["skill", "unknown"], "Unknown skill command: unknown" },
-        { ["skill", "upgrade", "--codex-home"], "--codex-home requires a value." },
-        { ["skill", "upgrade", "--codex-home", ""], "--codex-home requires a non-empty path." },
-        { ["skill", "upgrade", "--codex-home", "relative"], "--codex-home must be an absolute path." },
+        using var layout = new UpgradeLayout();
+        AecSkillInstaller.InstallCopilot(layout.CopilotHome);
+        var expectedCopilot = File.ReadAllBytes(layout.CopilotSkill);
+        File.WriteAllBytes(layout.CopilotSkill, ReadFixture("Copilot-1.4.0-alpha.1"));
+        var absentCodex = Path.Combine(layout.Root, "absent codex");
+
+        var result = RunUpgrade(absentCodex, layout.CopilotHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Error);
+        Assert.False(Directory.Exists(absentCodex));
+        Assert.Equal(expectedCopilot, File.ReadAllBytes(layout.CopilotSkill));
+    }
+
+    [Fact]
+    public void NoEnrollmentsDoesNotInstallEitherSkill()
+    {
+        using var layout = new UpgradeLayout();
+        var emptyCodex = Path.Combine(layout.Root, "empty codex");
+        Directory.CreateDirectory(emptyCodex);
+
+        var result = RunUpgrade(emptyCodex, layout.CopilotHome);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Error);
+        Assert.False(Directory.Exists(Path.Combine(emptyCodex, "skills")));
+        Assert.False(Directory.Exists(Path.Combine(layout.CopilotHome, "skills")));
+    }
+
+    private static CommandResult RunUpgrade(string codexHome, string copilotHome)
+    {
+        var previousCodex = Environment.GetEnvironmentVariable("CODEX_HOME");
+        var previousCopilot = Environment.GetEnvironmentVariable("COPILOT_HOME");
+
+        try
         {
-            ["skill", "upgrade", "--codex-home", Path.GetTempPath(), "--codex-home", Path.GetTempPath()],
-            "--codex-home may be specified only once."
-        },
-        { ["skill", "upgrade", "unexpected"], "Unknown argument: unexpected" },
-        { ["skill", "upgrade", "--codex-home=/tmp/codex"], "Unknown argument: --codex-home=/tmp/codex" }
-    };
+            Environment.SetEnvironmentVariable("CODEX_HOME", codexHome);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", copilotHome);
+            return TestApplication.Run("upgrade");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CODEX_HOME", previousCodex);
+            Environment.SetEnvironmentVariable("COPILOT_HOME", previousCopilot);
+        }
+    }
 
     private static byte[] ReadFixture(string version)
     {
@@ -379,16 +367,23 @@ public sealed class UpgradeTests
                 "aec-upgrade-tests",
                 Guid.NewGuid().ToString("N"));
             CodexHome = Path.Combine(Root, "codex home");
+            CopilotHome = Path.Combine(Root, "copilot home");
+            CopilotSkill = Path.Combine(CopilotHome, "skills", "aec", "SKILL.md");
             Skill = Path.Combine(CodexHome, "skills", "aec", "SKILL.md");
             Metadata = Path.Combine(CodexHome, "skills", "aec", "agents", "openai.yaml");
 
             Directory.CreateDirectory(CodexHome);
+            Directory.CreateDirectory(CopilotHome);
             AecSkillInstaller.Install(CodexHome);
         }
 
         public string Root { get; }
 
         public string CodexHome { get; }
+
+        public string CopilotHome { get; }
+
+        public string CopilotSkill { get; }
 
         public string Skill { get; }
 

@@ -72,19 +72,19 @@ public sealed class SharedEnrollmentTests
         var canonicalBefore = File.ReadAllBytes(canonicalPath);
         var headBefore = TestGit.Run(pulled, "rev-parse", "HEAD").Output.Trim();
         var attached = provider == "codex"
-            ? TestApplication.Run("init", "--repo", pulled, "--codex-home", secondHome,
+            ? TestApplication.Run("codex", "init", "--repo", pulled, "--home", secondHome,
                 "--force-path-change")
-            : TestApplication.Run("init", "--repo", pulled, "--provider=copilot",
-                "--copilot-home", secondHome, "--force-path-change");
+            : TestApplication.Run("copilot", "init", "--repo", pulled,
+                "--home", secondHome, "--force-path-change");
         Assert.True(attached.ExitCode == 0, attached.Error);
         var runtimePath = Path.Combine(secondHome, provider == "codex"
             ? "AGENTS.md" : "copilot-instructions.md");
         var runtimeBefore = File.ReadAllBytes(runtimePath);
         CommandResult EnrollPulled() => provider == "codex"
-            ? TestApplication.Run("init", "--repo", pulled, "--codex-home", secondHome,
+            ? TestApplication.Run("codex", "init", "--repo", pulled, "--home", secondHome,
                 "--enroll-shared")
-            : TestApplication.Run("init", "--repo", pulled, "--provider=copilot",
-                "--copilot-home", secondHome, "--enroll-shared");
+            : TestApplication.Run("copilot", "init", "--repo", pulled,
+                "--home", secondHome, "--enroll-shared");
 
         var enrollment = EnrollPulled();
 
@@ -268,9 +268,9 @@ public sealed class SharedEnrollmentTests
 
         public CommandResult Enroll(string provider) => provider == "codex"
             ? TestApplication.Run(
-                "init", "--repo", Repository, "--codex-home", CodexHome, "--enroll-shared")
+                "codex", "init", "--repo", Repository, "--home", CodexHome, "--enroll-shared")
             : TestApplication.Run(
-                "init", "--repo", Repository, "--provider=copilot", "--copilot-home", CopilotHome,
+                "copilot", "init", "--repo", Repository, "--home", CopilotHome,
                 "--enroll-shared");
 
         public string Head() => GitProcess.RunRequired(

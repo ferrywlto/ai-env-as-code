@@ -60,7 +60,7 @@ public sealed class StatusTests
         try
         {
             Environment.SetEnvironmentVariable("CODEX_HOME", layout.CodexHome);
-            result = TestApplication.Run("status", "--repo", layout.Repository);
+            result = TestApplication.Run("codex", "status", "--repo", layout.Repository);
         }
         finally
         {
@@ -309,10 +309,10 @@ public sealed class StatusTests
     private static CommandResult Run(string repository, string codexHome)
     {
         return TestApplication.Run(
-            "status",
+            "codex", "status",
             "--repo",
             repository,
-            "--codex-home",
+            "--home",
             codexHome);
     }
 

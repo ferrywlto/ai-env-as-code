@@ -19,8 +19,8 @@ public sealed class FifoProbeTests
         layout.WriteRuntime(portableBlock: true);
         var runtimeConfig = Path.Combine(layout.ProviderHome, "config.toml");
         File.WriteAllText(runtimeConfig, "personality = \"none\"\n");
-        var arguments = new[] { "status", "--repo", layout.Repository,
-            "--codex-home", layout.ProviderHome };
+        var arguments = new[] { "codex", "status", "--repo", layout.Repository,
+            "--home", layout.ProviderHome };
         var baseline = TestApplication.Run(arguments);
         Assert.True(baseline.ExitCode == 0, baseline.Error);
         var head = layout.Head();

@@ -208,10 +208,8 @@ public sealed class GitRoundTripTests
         public string TargetPath(string checkout) => Path.Combine(checkout, TargetRelativePath);
 
         public CommandResult Run(string checkout, string home, string command,
-            params string[] options) => Provider == "codex"
-            ? TestApplication.Run([command, "--repo", checkout, "--codex-home", home, .. options])
-            : TestApplication.Run([command, "--repo", checkout, "--provider=copilot",
-                "--copilot-home", home, .. options]);
+            params string[] options) =>
+            TestApplication.Run([Provider, command, "--repo", checkout, "--home", home, .. options]);
 
         public void AssertLocalRuntime(string checkout, string home)
         {

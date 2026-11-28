@@ -8,25 +8,25 @@ public sealed class ChatGptInitArgumentTests
     private const string Repository = "unused-relative-repository";
 
     [Theory]
-    [InlineData("--provider=other", "Unsupported provider")]
+    [InlineData("--provider=other", "Unknown argument: --provider=other")]
     [InlineData("--provider", "Unknown argument")]
     public void RejectsUnsupportedProviderSyntax(string providerArgument, string expectedError)
     {
-        AssertRejected(expectedError, "init", "--repo", Repository, providerArgument);
+        AssertRejected(expectedError, "chatgpt", "init", "--repo", Repository, providerArgument);
     }
 
     [Fact]
-    public void RejectsDuplicateProvider()
+    public void RejectsDuplicateRepository()
     {
-        AssertRejected("--provider may be specified only once",
-            "init", "--repo", Repository, "--provider=chatgpt", "--provider=chatgpt");
+        AssertRejected("--repo may be specified only once",
+            "chatgpt", "init", "--repo", Repository, "--repo", Repository);
     }
 
     [Fact]
-    public void ProviderModeRejectsCodexHome()
+    public void ScaffoldRejectsHome()
     {
-        AssertRejected("--codex-home is not valid with --provider=chatgpt",
-            "init", "--repo", Repository, "--provider=chatgpt", "--codex-home", "unused-relative-home");
+        AssertRejected("Unknown argument: --home",
+            "chatgpt", "init", "--repo", Repository, "--home", "unused-relative-home");
     }
 
     private static void AssertRejected(string expectedError, params string[] args)

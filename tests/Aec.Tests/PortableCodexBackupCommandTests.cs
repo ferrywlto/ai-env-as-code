@@ -287,7 +287,7 @@ public sealed class PortableCodexBackupCommandTests
                 codexHome = Path.Combine(alias, "provider-home");
             }
 
-            var result = TestApplication.Run("backup", "--repo", repository, "--codex-home", codexHome);
+            var result = TestApplication.Run("codex", "backup", "--repo", repository, "--home", codexHome);
 
             Assert.Equal(1, result.ExitCode);
             Assert.Empty(result.Output);
@@ -314,8 +314,8 @@ public sealed class PortableCodexBackupCommandTests
         Directory.CreateDirectory(nested);
         var head = layout.Head();
 
-        var result = TestApplication.Run("backup", "--repo", nested,
-            "--codex-home", layout.ProviderHome);
+        var result = TestApplication.Run("codex", "backup", "--repo", nested,
+            "--home", layout.ProviderHome);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -344,7 +344,7 @@ public sealed class PortableCodexBackupCommandTests
         {
             Environment.SetEnvironmentVariable("CODEX_HOME",
                 explicitHome ? Path.Combine(layout.Root, "missing-home") : layout.ProviderHome);
-            return explicitHome ? Run(layout) : TestApplication.Run("backup", "--repo", layout.Repository);
+            return explicitHome ? Run(layout) : TestApplication.Run("codex", "backup", "--repo", layout.Repository);
         }
         finally
         {
@@ -353,8 +353,8 @@ public sealed class PortableCodexBackupCommandTests
     }
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>
-        TestApplication.Run("backup", "--repo", layout.Repository,
-            "--codex-home", layout.ProviderHome);
+        TestApplication.Run("codex", "backup", "--repo", layout.Repository,
+            "--home", layout.ProviderHome);
 
     private static string RuntimeConfigPath(SharedTargetStatusTests.StatusLayout layout) =>
         Path.Combine(layout.ProviderHome, "config.toml");

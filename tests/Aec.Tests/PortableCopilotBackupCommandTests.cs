@@ -232,8 +232,8 @@ public sealed class PortableCopilotBackupCommandTests
     }
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>
-        TestApplication.Run("backup", "--repo", layout.Repository, "--provider=copilot",
-            "--copilot-home", layout.ProviderHome);
+        TestApplication.Run("copilot", "backup", "--repo", layout.Repository,
+            "--home", layout.ProviderHome);
 
     private static string[] CommittedPaths(SharedTargetStatusTests.StatusLayout layout) =>
         GitProcess.RunRequired(layout.Repository, "Could not inspect backup paths",

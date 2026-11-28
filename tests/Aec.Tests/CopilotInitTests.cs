@@ -14,9 +14,8 @@ public sealed class CopilotInitTests
             layout.Repository);
 
         var result = TestApplication.Run(
-            "init",
-            "--provider=copilot",
-            "--copilot-home",
+            "copilot", "init",
+            "--home",
             layout.CopilotHome,
             "--repo",
             layout.Repository);
@@ -54,7 +53,7 @@ public sealed class CopilotInitTests
             Environment.SetEnvironmentVariable("COPILOT_HOME", layout.CopilotHome);
             var arguments = new List<string>
             {
-                "init", "--repo", pulled, "--provider=copilot"
+                "copilot", "init", "--repo", pulled
             };
             if (forcePathChange)
             {
@@ -335,7 +334,7 @@ public sealed class CopilotInitTests
     {
         var arguments = new List<string>
         {
-            "init", "--repo", repository, "--provider=copilot", "--copilot-home", copilotHome
+            "copilot", "init", "--repo", repository, "--home", copilotHome
         };
         if (forcePathChange)
         {

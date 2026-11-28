@@ -5,20 +5,20 @@ public sealed class InitArgumentTests
 {
     public static TheoryData<string[], string> InvalidArguments => new()
     {
-        { ["init"], "init requires --repo" },
-        { ["init", "--repo", "relative"], "--repo must be an absolute path" },
-        { ["init", "--repo"], "--repo requires a value" },
-        { ["init", "--repo", ""], "--repo requires a non-empty path" },
-        { ["init", "--repo", "first", "--repo", "second"], "--repo may be specified only once" },
-        { ["apply", "--repo", "repository", "--force-path-change"], "Unknown argument: --force-path-change" },
-        { ["init", "--repo", "repository", "--provider=chatgpt", "--force-path-change"],
-            "--force-path-change is not valid with --provider=chatgpt" },
-        { ["init", "--repo", "repository", "--force-path-change", "--force-path-change"],
+        { ["codex", "init"], "init requires --repo" },
+        { ["codex", "init", "--repo", "relative"], "--repo must be an absolute path" },
+        { ["codex", "init", "--repo"], "--repo requires a value" },
+        { ["codex", "init", "--repo", ""], "--repo requires a non-empty path" },
+        { ["codex", "init", "--repo", "first", "--repo", "second"], "--repo may be specified only once" },
+        { ["codex", "apply", "--repo", "repository", "--force-path-change"], "Unknown argument: --force-path-change" },
+        { ["chatgpt", "init", "--repo", "repository", "--force-path-change"],
+            "Unknown argument: --force-path-change" },
+        { ["codex", "init", "--repo", "repository", "--force-path-change", "--force-path-change"],
             "--force-path-change may be specified only once" },
-        { ["init", "--repo", "repository", "--codex-home", "first", "--codex-home", "second"],
-            "--codex-home may be specified only once" },
-        { ["init", "--unknown"], "Unknown argument: --unknown" },
-        { ["init", "positional"], "Unknown argument: positional" }
+        { ["codex", "init", "--repo", "repository", "--home", "first", "--home", "second"],
+            "--home may be specified only once" },
+        { ["codex", "init", "--unknown"], "Unknown argument: --unknown" },
+        { ["codex", "init", "positional"], "Unknown argument: positional" }
     };
 
     [Theory]

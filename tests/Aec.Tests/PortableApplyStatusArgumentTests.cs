@@ -6,7 +6,7 @@ public sealed class PortableApplyStatusArgumentTests
     [Fact]
     public void StatusRejectsRelativeRepositoryPaths()
     {
-        var result = TestApplication.Run("status", "--repo", "relative/path");
+        var result = TestApplication.Run("codex", "status", "--repo", "relative/path");
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -16,7 +16,7 @@ public sealed class PortableApplyStatusArgumentTests
     [Fact]
     public void StatusRejectsDuplicateRepositoryArguments()
     {
-        var result = TestApplication.Run("status", "--repo", "first", "--repo", "second");
+        var result = TestApplication.Run("codex", "status", "--repo", "first", "--repo", "second");
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
@@ -27,36 +27,35 @@ public sealed class PortableApplyStatusArgumentTests
     public void StatusRejectsAnEmptyExplicitCodexHome()
     {
         var repository = Path.GetFullPath("unused-status-repository");
-        var result = TestApplication.Run("status", "--repo", repository, "--codex-home", "");
+        var result = TestApplication.Run("codex", "status", "--repo", repository, "--home", "");
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
-        Assert.Contains("--codex-home requires a non-empty path", result.Error, StringComparison.Ordinal);
+        Assert.Contains("--home requires a non-empty path", result.Error, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("apply")]
     [InlineData("status")]
-    public void CopilotRejectsCodexHome(string command)
+    public void CopilotRejectsLegacyCodexHomeFlag(string command)
     {
-        var result = TestApplication.Run(command, "--repo", "unused-relative-repository",
-            "--provider=copilot", "--codex-home", "unused-relative-home");
+        var result = TestApplication.Run("copilot", command, "--repo", "unused-relative-repository", "--codex-home", "unused-relative-home");
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
-        Assert.Contains("--codex-home is not valid with --provider=copilot", result.Error, StringComparison.Ordinal);
+        Assert.Contains("Unknown argument: --codex-home", result.Error, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("apply")]
     [InlineData("status")]
-    public void CopilotHomeRequiresCopilotProvider(string command)
+    public void CodexRejectsLegacyCopilotHomeFlag(string command)
     {
-        var result = TestApplication.Run(command, "--repo", "unused-relative-repository",
+        var result = TestApplication.Run("codex", command, "--repo", "unused-relative-repository",
             "--copilot-home", "unused-relative-home");
 
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
-        Assert.Contains("--copilot-home requires --provider=copilot", result.Error, StringComparison.Ordinal);
+        Assert.Contains("Unknown argument: --copilot-home", result.Error, StringComparison.Ordinal);
     }
 }

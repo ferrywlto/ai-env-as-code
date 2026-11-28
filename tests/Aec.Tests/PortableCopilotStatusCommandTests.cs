@@ -17,7 +17,7 @@ public sealed class PortableCopilotStatusCommandTests
         try
         {
             Environment.SetEnvironmentVariable("COPILOT_HOME", layout.ProviderHome);
-            result = TestApplication.Run("status", "--repo", layout.Repository, "--provider=copilot");
+            result = TestApplication.Run("copilot", "status", "--repo", layout.Repository);
         }
         finally
         {
@@ -128,8 +128,7 @@ public sealed class PortableCopilotStatusCommandTests
     }
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>
-        TestApplication.Run("status", "--repo", layout.Repository,
-            "--provider=copilot", "--copilot-home", layout.ProviderHome);
+        TestApplication.Run("copilot", "status", "--repo", layout.Repository, "--home", layout.ProviderHome);
 
     private static string StatusOutput(string status) =>
         $"copilot/copilot-instructions.md {status}{Environment.NewLine}";

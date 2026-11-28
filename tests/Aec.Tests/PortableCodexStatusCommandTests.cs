@@ -164,6 +164,6 @@ public sealed class PortableCodexStatusCommandTests
         $"codex/AGENTS.md   {instructions}{Environment.NewLine}codex/config.toml {config}{Environment.NewLine}";
 
     private static CommandResult Run(SharedTargetStatusTests.StatusLayout layout) =>
-        TestApplication.Run("status", "--repo", layout.Repository,
-            "--codex-home", layout.ProviderHome);
+        TestApplication.Run("codex", "status", "--repo", layout.Repository,
+            "--home", layout.ProviderHome);
 }
