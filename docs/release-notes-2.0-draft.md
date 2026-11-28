@@ -1,6 +1,6 @@
 # AEC 2.0 release notes — draft
 
-The development executable is versioned `2.0.0`. These notes remain a draft;
+The 2.0 development executable was versioned `2.0.0`. These notes remain a draft;
 the official release requires a separate request.
 
 ## Changes

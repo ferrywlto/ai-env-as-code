@@ -241,7 +241,7 @@ public sealed class StatusTests
         Assert.Equal(1, result.ExitCode);
         Assert.Empty(result.Output);
         Assert.Contains("Canonical config does not exist", result.Error, StringComparison.Ordinal);
-        Assert.DoesNotContain("aec init --repo", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("aec codex init --repo", result.Error, StringComparison.Ordinal);
     }
 
     [Fact]

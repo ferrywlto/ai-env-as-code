@@ -217,7 +217,7 @@ internal static class InitCommand
                 "Initialized AEC instructions are bound to a different data repository. " +
                 $"Recorded repository: {completed.Binding.Repository}. " +
                 $"Selected repository: {repository}. " +
-                "Confirm the path change, then rerun `aec init` with --force-path-change.");
+                "Confirm the path change, then rerun `aec codex init` with --force-path-change.");
         }
 
         // Preflight both managed runtime inputs before installing the skill or
@@ -339,7 +339,7 @@ internal static class InitCommand
         {
             throw new InvalidOperationException(
                 "Codex instructions record a different data repository. " +
-                "Confirm the local path change, then rerun `aec init` with --force-path-change.");
+                "Confirm the local path change, then rerun `aec codex init` with --force-path-change.");
         }
 
         var configPath = Path.Combine(codexHome, "config.toml");

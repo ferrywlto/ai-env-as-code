@@ -4,7 +4,8 @@ This is the command and workflow reference. Detailed [migration](migration.md) a
 [build and test](development.md) guides are separate.
 For the diagram-first overview, see the [project README](../README.md).
 Shell commands with relative paths assume the engine repository root unless
-their section says otherwise.
+their section says otherwise. The command forms below use the v3 development
+CLI. The data migration target remains `2.0`.
 
 AEC keeps instructions in a Git repository and copies reviewed, committed
 versions to your local AI tools. See the [README](../README.md) for the workflow.
@@ -77,8 +78,9 @@ used by your local AI tool. Safety checks and previews do not apply changes.
 | 2.0.0-alpha.2 | Add section boundaries and repository-only rendering for enrolled targets |
 | 2.0.0-alpha.3 | Enroll one current-platform/provider target from committed authored sources |
 | 2.0.0-alpha.4 | Guide safe remote preflight and separately approved publication through the bundled skills |
+| 3.0.0-alpha.1 | Provider-first CLI and bundled skill maintenance across enrolled harnesses |
 
-The development executable reports `2.0.0` through `aec version`.
+The development executable reports `3.0.0-alpha.1` through `aec version`.
 
 </details>
 
@@ -116,17 +118,17 @@ local-only with a warning. Before a separately approved push, show its
 destination and ask if it differs from the fetch remote.
 
 For routine source-first instruction edits, publish an approved commit before
-`aec apply` so another machine can retrieve the same canonical version. Ordinary
-Codex `init` and explicit `migrate` commit and apply locally before a
-separately approved external push. `aec status` remains
-a local canonical/runtime comparison, not a remote-status check.
+the provider's `apply` command so another machine can retrieve the same
+canonical version. Ordinary Codex `init` and explicit `migrate` commit and
+apply locally before a separately approved external push. The provider's
+`status` command compares the local canonical and runtime files.
 
-## Shared-instruction enrollment (2.0 development)
+## Shared-instruction enrollment
 
 ```mermaid
 flowchart LR
     Legacy[Complete ordinary init] --> Sources[Review and commit three authored sources]
-    Sources --> Enroll["aec init --enroll-shared"]
+    Sources --> Enroll["Provider init --enroll-shared"]
     Enroll --> Target[One portable target for this platform and provider]
     Target --> Review[Review and separately commit target]
 ```
@@ -141,8 +143,8 @@ After the ordinary Codex or Copilot provider initialization is complete and
 the three sources exactly match committed Git files, opt in with one of:
 
 ```text
-aec init --repo ABSOLUTE_PATH --enroll-shared [--codex-home ABSOLUTE_PATH]
-aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
+aec codex init --repo ABSOLUTE_PATH --enroll-shared [--home ABSOLUTE_PATH]
+aec copilot init --repo ABSOLUTE_PATH --enroll-shared [--home ABSOLUTE_PATH]
 ```
 
 The selected provider home and its managed runtime instruction file must exist
@@ -152,7 +154,7 @@ creates only the selected target under
 `environment/targets/<platform>/<provider>/`. It never changes runtime,
 stages, commits, or pushes. A repeat with the same target reports `unchanged`;
 a different existing target is not overwritten. `--force-path-change` and
-`--provider=chatgpt` cannot be combined with `--enroll-shared`.
+the `chatgpt` command group cannot be used with `--enroll-shared`.
 For a pulled checkout at a different path, first confirm ordinary provider
 `init` so this machine's runtime binds to `--repo`. Enrollment can then proceed
 even if the clean committed legacy provider block still names the original
@@ -181,7 +183,7 @@ flowchart LR
     A["A: review source edit<br/>render and commit"] -->|"approved Git push"| Remote[(Git remote)]
     Remote -->|"B: exact-byte clone<br/>or fetch + fast-forward"| B["B: local committed target"]
     B --> Confirm["First attachment: confirm local checkout path"]
-    Confirm --> Apply["aec apply, then status"]
+    Confirm --> Apply["Provider apply, then status"]
     Apply --> Runtime["B runtime: shared target<br/>plus B's local AEC block"]
 ```
 
@@ -198,14 +200,13 @@ Git may use any host; AEC does not perform the transport. On another machine:
    already-converted bytes. Install/select
    the selected local harness home separately; a pulled target does not create
    or activate it.
-2. Run `aec init --repo ABSOLUTE_PATH` for Codex, or add `--provider=copilot` for
-   Copilot. If the recorded checkout path differs,
+2. Run `aec codex init --repo ABSOLUTE_PATH` for Codex or
+   `aec copilot init --repo ABSOLUTE_PATH` for Copilot. If the recorded checkout path differs,
    obtain confirmation and rerun with `--force-path-change`. This changes local
    runtime instructions/config as needed, while committed canonical files and
    Git HEAD stay unchanged. A conflicting other implicit harness still stops.
-3. Run `aec apply --repo ABSOLUTE_PATH` and `aec status --repo ABSOLUTE_PATH`;
-   add `--provider=copilot` to both for Copilot. Use the selected provider's home
-   option consistently when custom homes are required.
+3. Run the selected provider's `apply` and `status` commands with the same
+   `--repo ABSOLUTE_PATH`. Use `--home` consistently when a custom home is required.
    Both machines share committed authored text; each runtime block names its own
    checkout. The initial apply may report `unchanged` because init already used
    the committed portable target.
@@ -230,7 +231,7 @@ on one host, not verification on two machines or with actual harness application
 
 </details>
 
-## Shared-instruction rendering (2.0 development)
+## Shared-instruction rendering
 
 ```text
 aec render --repo ABSOLUTE_PATH
@@ -311,77 +312,73 @@ aec version
 a data repository or runtime state. It accepts no options or operands. The former
 `aec --version` form is unsupported.
 
-## skill upgrade
+## upgrade
 
 ```text
-aec skill upgrade [--codex-home ABSOLUTE_PATH]
+aec upgrade
 ```
 
-Executable installation and skill-guidance upgrade are deliberately separate:
+The installation script runs `aec upgrade` with the candidate executable
+before replacing the installed binary. Run it separately with the installed
+executable to refresh the bundled guidance on demand:
 
 ```mermaid
 flowchart LR
-    Pull["Pull the latest source"] --> Build["Build the newer executable"]
-    Build --> Install["Run the installer to replace the executable"]
-    Install --> Upgrade["Run aec skill upgrade"]
-    Upgrade --> Use["Use the upgraded skill normally"]
+    Build[Build the new executable] --> Install[Run the platform installer]
+    Install --> Upgrade["Candidate runs aec upgrade"]
+    Upgrade --> Check{Refresh succeeded?}
+    Check -->|Yes| Replace[Install the executable and uninstallation helper]
+    Check -->|No| Keep[Keep the existing executable and helper]
 ```
 
-The newly installed executable supplies the latest bundled guidance. The user may
-run `aec skill upgrade` directly or explicitly ask Codex to run it; the command is
-never inferred merely because a newer release may exist. It updates only:
+`upgrade` takes no flags or other arguments. It selects the Codex and Copilot
+homes from `CODEX_HOME` and `COPILOT_HOME`, or falls back to `~/.codex` and
+`~/.copilot`. Set the appropriate environment variables before running the
+installer or `aec upgrade` if you use custom homes.
+
+The command skips absent enrollments and checks both bundles before replacing
+any recognized official predecessor. An incomplete, modified, unsupported, or
+linked bundle stops the refresh. Replaced files retain their Unix permission
+bits. The command reports `upgraded` when it replaces guidance and
+`unchanged` when neither bundle needs a refresh. Running it again can finish
+an interrupted refresh when the remaining files are still recognized.
+
+The bundled file set is:
+
+| Harness | Files relative to its home |
+|---|---|
+| Codex | `skills/aec/SKILL.md`, `skills/aec/agents/openai.yaml` |
+| Copilot | `skills/aec/SKILL.md` |
+
+This operation leaves the AEC data repository, Git history, runtime instructions,
+settings, and unrelated skills intact.
+
+## Skill enrollment and removal
 
 ```text
-<codex-home>/skills/aec/SKILL.md
-<codex-home>/skills/aec/agents/openai.yaml
+aec codex install [--home ABSOLUTE_PATH]
+aec codex uninstall [--home ABSOLUTE_PATH]
+aec copilot install [--home ABSOLUTE_PATH]
+aec copilot uninstall [--home ABSOLUTE_PATH]
 ```
 
-It takes no `--repo` because it neither reads nor changes an AEC data repository.
-An explicit absolute `--codex-home` takes precedence over a non-empty `CODEX_HOME`;
-when both are absent, the command uses `~/.codex`.
-Both managed files are checked before either changes. Only exact official v0.9.0,
-v0.10.0, v0.11.4, v0.12.0, v0.13.0, v1.0.0, v1.1.0, and v1.2.3 predecessors—or the current bundle—are
-accepted. Missing, modified, unsupported, linked, or otherwise invalid managed
-state fails closed. A retry safely completes a recognized old/current mixture,
-unrelated files are preserved, and replaced files retain their existing Unix
-permission bits.
+Provider `install` adds missing files in an existing harness home. A conflicting
+bundle is preserved and reported as an error. Provider `uninstall` removes
+only recognized official bundled files and leaves extra files in the skill
+directory alone. Both use `--home` when provided, then the provider's home
+environment variable, then its default home. They accept no `--repo` and
+leave canonical Git data, runtime instructions, and settings intact. Repeating
+a completed operation reports `unchanged`.
 
-The command writes `upgraded` when it replaces guidance or `unchanged` when both
-files are already current. It does not download, build, or install the executable;
-change Git, AEC data, runtime `AGENTS.md` or `config.toml`; or touch other skills.
-No Codex restart or new task is required for this skill-only update. The next
-request that selects `$aec` reads the updated installed `SKILL.md` guidance.
-
-## uninstall
-
-```text
-aec uninstall [--codex-home ABSOLUTE_PATH]
-```
-
-`uninstall` removes AEC's Codex runtime integration while the executable is still
-available to perform the cleanup. It accepts no `--repo` and never reads, changes,
-commits, or deletes an AEC data repository.
-
-After preflighting every target, the command:
-
-- removes an exact supported legacy or portable AEC block from runtime `AGENTS.md`;
-- preserves every non-AEC instruction byte;
-- removes only exact current or recognized official predecessor copies of
-  `skills/aec/SKILL.md` and `skills/aec/agents/openai.yaml`;
-- preserves unrelated skills and extra files under the AEC skill directory; and
-- leaves runtime `config.toml`, including `personality`, byte-for-byte unchanged.
-
-An unmanaged `$aec` reference outside the managed instruction block, a customized
-managed skill file, malformed instructions, linked paths, or another invalid target
-stops the command before its first mutation. Instructions are removed before skill
-files, so a retry can finish a recognized interrupted cleanup. It writes
-`uninstalled` when anything was removed and `unchanged` when no managed integration
-remains.
+Use the platform's generated [uninstallation helper](development.md) to
+uninstall AEC itself. It verifies the recorded executable and helper paths,
+runs both provider skill removal commands, then removes that executable and
+helper on success. Other AEC binaries and runtime and Git data are preserved.
 
 ## apply
 
 ```text
-aec apply --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+aec codex apply --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 `apply` has the opposite data-flow direction from `backup`:
@@ -395,7 +392,7 @@ committed <repo>/environment/providers/codex/config.toml personality
 
 Use the data repository's root path. Its target, source files and managed config
 must be committed and unchanged. The local tool must already be bound to that
-repository and platform; use `aec init` if it is missing or bound elsewhere.
+repository and platform; use `aec codex init` if it is missing or bound elsewhere.
 `apply` does not accept `--force-path-change`. Unrelated repository edits stay
 untouched.
 
@@ -403,7 +400,7 @@ The managed configuration decision is intentionally non-interactive:
 
 ```mermaid
 flowchart TD
-    Start["Run aec apply with an explicit --repo"] --> Validate["Validate committed target, authored sources, config<br/>and bound runtime files"]
+    Start["Run aec codex apply with an explicit --repo"] --> Validate["Validate committed target, authored sources, config<br/>and bound runtime files"]
     Validate --> Valid{"Are all inputs valid?"}
     Valid -->|"No"| Stop["Stop without changing runtime"]
     Valid -->|"Yes"| Present{"Does runtime have a root personality?"}
@@ -449,7 +446,7 @@ The two files are not updated as one transaction.
 ## backup
 
 ```text
-aec backup --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+aec codex backup --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 `backup` has one explicit runtime-to-repository direction:
@@ -491,7 +488,7 @@ separate repository-to-runtime command.
 ## init
 
 ```text
-aec init --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH] [--force-path-change]
+aec codex init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change]
 ```
 
 `init` creates a data repository in a missing or empty directory. It may also resume
@@ -500,7 +497,7 @@ completed AEC repository pulled to the selected path. Other non-empty targets ar
 rejected. `--repo` is required and must be the absolute path of that source-of-truth
 repository. The current working directory and engine repository are never inferred.
 
-`--codex-home` selects the runtime root. When omitted, `init` uses a non-empty
+`--home` selects the runtime root. When omitted, `init` uses a non-empty
 `CODEX_HOME` and then `~/.codex`, matching the other commands. The Codex home must
 already exist. Fresh and baseline-only initialization require its regular
 `AGENTS.md`; a missing runtime fails before repository or skill mutation. Runtime
@@ -535,7 +532,7 @@ The skill invokes `aec` by command name and stops if it is unavailable on Codex'
 `PATH`. The developer-built macOS ARM64 Native AOT workflow is documented below,
 but `init` does not search for, build, or run an engine checkout as a fallback. It
 still fails closed when either managed skill file differs. After installing a newer
-AEC executable, use `aec skill upgrade` to replace an exact recognized official
+AEC executable, use `aec upgrade` to replace an exact recognized official
 predecessor; modified or unknown files are never overwritten.
 
 A resumable target must be a `main` repository containing one recognized root
@@ -564,7 +561,7 @@ Later commits and committed provider files are allowed.
 The AEC-managed instruction block is delimited and versioned explicitly:
 
 <details>
-<summary>Generated instruction block example</summary>
+<summary>Historical instruction block example (2.0 command spelling)</summary>
 
 ```markdown
 <!-- AEC:BEGIN version=5 -->
@@ -654,7 +651,7 @@ flowchart TD
     Stop --> Confirm{"User confirms the path change?"}
 
     Confirm -->|"No"| Unchanged["Leave repository and runtime unchanged"]
-    Confirm -->|"Yes"| Rerun["Run aec init with<br/>--force-path-change"]
+    Confirm -->|"Yes"| Rerun["Run aec codex init with<br/>--force-path-change"]
     Rerun --> RebindSkill["Install the bundled $aec skill"]
     RebindSkill --> Rebind["Bind the local runtime AEC block to --repo<br/>Leave committed canonical bytes and HEAD unchanged"]
     Rebind --> Ready
@@ -662,12 +659,12 @@ flowchart TD
     State -->|"Other non-empty state"| Reject["Reject without mutation"]
 
     Apply --> Ready["Local AEC environment is ready"]
-    Ready --> Routine["Later: run aec apply --repo PATH"]
+    Ready --> Routine["Later: run aec codex apply --repo PATH"]
     Routine --> ApplyPath{"Runtime binding equals --repo?"}
     ApplyPath -->|"Yes"| PortableApply["Apply committed portable target<br/>with this machine's local binding"]
     PortableApply --> Ready
-    ApplyPath -->|"No"| Redirect["Stop without changes<br/>Prompt the user to run aec init --repo PATH"]
-    Redirect -->|"User invokes aec init"| Read
+    ApplyPath -->|"No"| Redirect["Stop without changes<br/>Prompt the user to run aec codex init --repo PATH"]
+    Redirect -->|"User invokes aec codex init"| Read
 ```
 
 When a current-platform Codex target is committed, attachment instead uses
@@ -702,20 +699,20 @@ changing the shared Git history.
 Once this machine's runtime block is already bound to the selected checkout,
 repeating Codex `init` needs no flag and leaves runtime instructions and config
 unchanged. This also preserves a newer portable block installed by `apply`;
-use `aec status` to inspect drift and `aec apply` for deployment. A different
+use `aec codex status` to inspect drift and `aec codex apply` for deployment. A different
 implicit Copilot-home binding still stops init, with or without the flag.
 
 Before a routine `apply` writes runtime instructions, it compares the repository
 path recorded in the local runtime AEC block with the selected `--repo`. A mismatch returns an
 error without changing Git, canonical instructions, installed skills, or runtime,
-and prompts the user to run `aec init --repo PATH`. The `--force-path-change` switch
+and prompts the user to run `aec codex init --repo PATH`. The `--force-path-change` switch
 is valid only with ordinary `init`; fresh, partial-baseline, and provider modes
 reject it. `apply` remains Git-read-only and cannot confirm or perform a path change.
 
 ### ChatGPT provider initialization
 
 ```text
-aec init --repo ABSOLUTE_PATH --provider=chatgpt
+aec chatgpt init --repo ABSOLUTE_PATH
 ```
 
 Provider initialization extends an existing AEC data repository, so the directory
@@ -737,19 +734,17 @@ supported version 3 through v5—to the current provider-aware version 6:
 
 ### Upgrading an older managed instruction block
 
-`aec skill upgrade` updates only Codex's installed `$aec` skill files. It does
-not update the canonical instructions in the data repository or the runtime.
-When a newer AEC release introduces an incompatible managed-block version, use
-the provider initialization command as the explicit canonical migration:
+`aec upgrade` refreshes enrolled bundled skill files while preserving canonical
+and runtime instructions. The ChatGPT initialization command is the explicit
+step for upgrading the supported older canonical ChatGPT block:
 
 ```mermaid
 flowchart LR
-    Install[Install newer AEC executable] --> Skill[Run aec skill upgrade]
-    Skill --> Migrate[Run aec init --repo PATH --provider=chatgpt]
+    Install[Run the installer, which refreshes bundled guidance] --> Migrate[Run aec chatgpt init --repo PATH]
     Migrate --> Review[Review canonical AGENTS.md]
     Review --> Commit[Commit the canonical change]
-    Commit --> Apply[Run aec apply --repo PATH]
-    Apply --> Verify[Run aec status --repo PATH]
+    Commit --> Apply[Run aec codex apply --repo PATH]
+    Apply --> Verify[Run aec codex status --repo PATH]
 ```
 
 The migration changes only the canonical AEC block and creates any missing
@@ -759,7 +754,7 @@ source of truth. This is the path used to upgrade provider-aware v4 instructions
 to v6.
 
 <details>
-<summary>Generated instruction block example</summary>
+<summary>Historical instruction block example (2.0 command spelling)</summary>
 
 ```markdown
 <!-- AEC:BEGIN version=6 -->
@@ -784,11 +779,9 @@ Never automatically capture from or deploy to ChatGPT, and never claim account-s
 
 </details>
 
-Instructions outside that block are preserved. Provider mode never reads or writes
-`CODEX_HOME`, even when the environment variable is set, and combining it with
-`--codex-home` is an error. Ordinary `init` remains provider-neutral and does not
-create ChatGPT paths or add ChatGPT guidance. Provider mode also does not install,
-repair, or inspect the Codex skill.
+Instructions outside that block are preserved. `aec chatgpt init` accepts only
+`--repo` and does not access a Codex home or its skill. Ordinary
+`aec codex init` does not create ChatGPT paths or add ChatGPT guidance.
 
 If an existing supported block records another repository path, provider mode stops
 before creating files or changing canonical instructions and directs the caller to
@@ -803,7 +796,7 @@ staging, commit, push, or ChatGPT account operation.
 ### GitHub Copilot provider initialization (alpha)
 
 ```text
-aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
+aec copilot init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change]
 ```
 
 ```mermaid
@@ -826,7 +819,7 @@ instruction contract:
 <copilot-home>/skills/aec/SKILL.md
 ```
 
-`--copilot-home` takes precedence over an absolute `COPILOT_HOME`; otherwise AEC
+`--home` takes precedence over an absolute `COPILOT_HOME`; otherwise AEC
 uses `~/.copilot`. The selected home must already exist and must be outside the data
 repository. AEC captures the existing runtime instruction file when the canonical
 file is first absent, prepends its Copilot-specific managed block while preserving
@@ -842,7 +835,7 @@ it against committed shared, platform, and Copilot-authored sources, then uses i
 instead of legacy canonical instruction bytes for runtime attachment. The local
 AEC block names this machine's checkout; the historical canonical file and Git
 `HEAD` remain unchanged. A locally bound portable runtime is left alone on
-repeat init, so use `aec status` and `aec apply` for later drift. Dirty or stale
+repeat init, so use `aec copilot status` and `aec copilot apply` for later drift. Dirty or stale
 targets and wrong-platform runtime blocks stop before replacement.
 A customized `skills/aec/SKILL.md` stops before instruction files are changed.
 With an implicit home, a conflicting Codex checkout stops even with the flag.
@@ -856,7 +849,7 @@ completed enrollment and stamped runtime baseline; it does not initialize one.
 Read-only Copilot status uses the same selected repository and home:
 
 ```text
-aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec copilot status --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 It validates the current-platform enrolled target against its committed shared,
@@ -872,7 +865,7 @@ commit, push, or invoke Copilot.
 Copilot backup is the explicit runtime-to-repository direction:
 
 ```text
-aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec copilot backup --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 It requires a committed current-platform enrolled target and a stamped runtime
@@ -889,7 +882,7 @@ them before retrying.
 Copilot apply is the explicit committed repository-to-runtime direction:
 
 ```text
-aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec copilot apply --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 It requires a clean, enrolled rendered target for the current platform that
@@ -903,18 +896,18 @@ bytes report `unchanged` without a rewrite.
 It never captures runtime changes, changes canonical data, stages, commits, pushes,
 manages `config.json`, or installs/upgrades the skill.
 
-Exact official initialization-only, status-only, and backup-only Copilot skills
-are upgraded during the next provider `init`; customized skills still fail closed.
-Copilot `uninstall` and standalone skill upgrade are not part of this alpha slice.
-The support matrix remains unverified until a local Copilot CLI harness is installed
-and exercised.
+Exact official predecessor Copilot skills are upgraded during ordinary provider
+`init`; customized skills still fail closed. See [upgrade](#upgrade) and
+[skill enrollment and removal](#skill-enrollment-and-removal) for operations
+that touch only bundled skill files. Copilot real-harness verification is tracked
+in [#4](https://github.com/ferrywlto/ai-env-as-code/issues/4).
 
 ## status
 
 The `status` command is read-only:
 
 ```text
-aec status --repo ABSOLUTE_PATH [--codex-home ABSOLUTE_PATH]
+aec codex status --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 `--repo` identifies the committed current-platform target and its authored
@@ -928,7 +921,7 @@ inputs, plus the managed Codex config source:
 <repo>/environment/providers/codex/config.toml
 ```
 
-`--codex-home` identifies the observed runtime root. When omitted, the tool uses a
+`--home` identifies the observed runtime root. When omitted, the tool uses a
 non-empty `CODEX_HOME` environment variable and then falls back to `~/.codex`. It
 observes `<codex-home>/AGENTS.md` and `<codex-home>/config.toml`. Explicit paths and
 `CODEX_HOME` must be absolute; neither the executable nor current working directory

@@ -1,7 +1,7 @@
 # Shared instructions — 2.0 development direction
 
-Status: approved direction; implementation remains incremental on
-`development/2.0`.
+This design record describes `development/2.0` and retains its historical
+command syntax. Use the [command reference](reference.md) for v3 examples.
 
 ```mermaid
 flowchart LR

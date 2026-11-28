@@ -26,7 +26,7 @@ public sealed class CopilotInitTests
         Assert.Equal(expected, File.ReadAllBytes(layout.CanonicalInstructions));
         Assert.Equal(expected, File.ReadAllBytes(layout.RuntimeInstructions));
         Assert.Contains(
-            "aec status --repo ABSOLUTE_PATH --provider=copilot",
+            "aec copilot status --repo ABSOLUTE_PATH",
             File.ReadAllText(layout.Skill),
             StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(layout.CopilotHome, "config.json")));
@@ -149,7 +149,7 @@ public sealed class CopilotInitTests
         Assert.Equal(0, result.ExitCode);
         Assert.Equal($"initialized{Environment.NewLine}", result.Output);
         Assert.Contains(
-            "aec apply --repo ABSOLUTE_PATH --provider=copilot",
+            "aec copilot apply --repo ABSOLUTE_PATH",
             File.ReadAllText(layout.Skill),
             StringComparison.Ordinal);
     }

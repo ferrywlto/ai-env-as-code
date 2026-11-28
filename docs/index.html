@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="AEC 2.0 is a local .NET CLI for authoring shared AI instructions, rendering portable Codex and Copilot targets, and controlling runtime changes through Git."
+      content="AEC is a local .NET CLI for authoring shared AI instructions, rendering portable Codex and Copilot targets, and controlling runtime changes through Git."
     >
     <meta name="theme-color" content="#07111f">
     <title>AI Environment as Code</title>
@@ -23,7 +23,7 @@
 
     <main id="main">
       <section id="top" class="hero" aria-labelledby="hero-title">
-        <p class="eyebrow">AEC 2.0 · Local .NET CLI</p>
+        <p class="eyebrow">AEC v3 development · Local .NET CLI</p>
         <h1 id="hero-title">Version your AI setup with clear control.</h1>
         <p class="hero-copy">
           Write shared instructions once, add platform and provider guidance,
@@ -35,14 +35,14 @@
           <a class="button secondary" href="https://github.com/ferrywlto/ai-env-as-code">Explore the repository</a>
         </div>
         <p class="verification-note">
-          The source currently reports version 2.0.0. No official 2.0 release
-          has been published; the release notes are still a draft.
+          The development executable reports 3.0.0-alpha.1. The shared
+          instruction data format remains 2.0.
         </p>
       </section>
 
       <section class="flow-section" aria-labelledby="flow-title">
         <div class="section-heading">
-          <p class="eyebrow">The 2.0 workflow</p>
+          <p class="eyebrow">The shared instruction workflow</p>
           <h2 id="flow-title">From authored instructions to your runtime.</h2>
         </div>
         <div class="flow" role="img" aria-label="Shared instructions, platform policy and provider overlays are reviewed and rendered into portable Codex or GitHub Copilot targets. Committed targets apply to the local runtime. Backup captures runtime changes into authored sources. Status compares the runtime and committed targets.">
@@ -54,9 +54,9 @@
           <div class="flow-steps">
             <span><code>aec render</code> creates enrolled portable targets in the repository</span>
             <span>Review and commit the source and target changes</span>
-            <span><code>aec apply</code> deploys committed targets to an enrolled runtime</span>
-            <span><code>aec backup</code> captures attributable runtime changes into sources and commits them</span>
-            <span><code>aec status</code> compares runtime state with committed content</span>
+            <span><code>aec codex apply</code> (or <code>aec copilot apply</code>) deploys committed targets to an enrolled runtime</span>
+            <span>Provider <code>backup</code> captures attributable runtime changes into sources and commits them</span>
+            <span>Provider <code>status</code> compares runtime state with committed content</span>
           </div>
           <article class="flow-card runtime">
             <p>Selected local runtime</p>
@@ -111,7 +111,8 @@
         <p>
           You need Git, the .NET 10 SDK, and Xcode Command Line Tools. The
           installer places a self-contained Native AOT executable in your user
-          directory; it does not install the .NET runtime.
+          directory and refreshes enrolled bundled AEC skills. It does not install
+          the .NET runtime.
         </p>
         <pre><code>git clone https://github.com/ferrywlto/ai-env-as-code.git
 cd ai-env-as-code
@@ -122,7 +123,7 @@ aec version</code></pre>
           Choose a data repository, initialize AEC, and review and commit the
           shared instructions, platform policy, and provider overlay before
           enrolling a target with
-          <code>aec init --repo /absolute/path/to/aec-data --enroll-shared</code>.
+          <code>aec codex init --repo /absolute/path/to/aec-data --enroll-shared</code>.
           The setup guide explains the complete order.
         </p>
         <p>

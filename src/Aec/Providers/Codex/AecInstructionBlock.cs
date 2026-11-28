@@ -7,6 +7,8 @@ internal static class AecInstructionBlock
 {
     // Each adjacent pair is the same format with or without manual ChatGPT guidance.
     // These are managed-block format versions, not AEC CLI release versions.
+    // Keep versioned template text exact so existing managed blocks remain readable.
+    // The bundled skill supplies the current CLI syntax.
     private const int LegacyStandardVersion = 3;
     private const int LegacyChatGptVersion = 4;
     private const int CanonicalStandardVersion = 5;

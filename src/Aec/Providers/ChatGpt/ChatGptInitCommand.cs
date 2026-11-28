@@ -30,7 +30,7 @@ internal static class ChatGptInitCommand
                 "Canonical AEC instructions are bound to a different data repository. " +
                 $"Recorded repository: {binding.Repository}. " +
                 $"Selected repository: {repository}. " +
-                "Run ordinary `aec init` to confirm the path change first.");
+                "Run ordinary `aec codex init` to confirm the path change first.");
         }
 
         var providerDirectory = Path.Combine(repository, "environment", "providers", AecIdentifiers.ChatGpt);

@@ -92,7 +92,7 @@ internal static class ApplyCommand
                     "Committed AEC instructions are bound to a different data repository. " +
                     $"Recorded repository: {binding.Repository}. " +
                     $"Selected repository: {repository}. " +
-                    "Run `aec init` with the selected --repo path before applying it.");
+                    "Run `aec codex init` with the selected --repo path before applying it.");
             }
 
             desiredRuntimeSource = localSource;

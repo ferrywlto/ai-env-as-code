@@ -118,9 +118,8 @@ flowchart TD
     Apply --> Status["Status: in_sync<br/>Review unchanged legacy files and backups"]
 ```
 
-This is the supported **2.0 development-branch data migration** using the current
-command syntax. Installing the executable or upgrading a skill does not migrate
-the data. Instruction classification is manual in both migration flows.
+This is the manual migration to the **2.0 data format** using v3 CLI syntax.
+Installing the executable or upgrading a skill does not migrate the data. Instruction classification is manual in both migration flows.
 Meet the [migration operating precondition](#migration-operating-precondition)
 before starting this sequence; current individual commands do not print the
 top-level migration warning.
@@ -131,12 +130,11 @@ Copilot source, enrollment, and deployment when that harness is not used.
    Resolve any drift with a separately approved 1.x capture or deployment. Start
    from a clean, committed data repository; retain its commit ID and the old
    executable. Pending manual ChatGPT backups require their own review and commit.
-   The 2.0 `status`, `backup`, and `apply` require committed targets, so they cannot
-   reconcile a legacy-only repository before enrollment. If already upgraded,
-   pause for that baseline review rather than trying 2.0 backup as a bootstrap.
-2. Install the 2.0 development executable and upgrade the Codex skill separately
-   with `aec skill upgrade`. Confirm each selected local home belongs to this
-   checkout. If attaching a different checkout path, use ordinary provider `init`
+   The current provider `status`, `backup`, and `apply` require committed
+   targets. If you already upgraded, pause for the baseline review.
+2. Run the installer for the current development executable. The installer also
+   refreshes enrolled bundled skills. Confirm each selected local home belongs to
+   this checkout. If attaching a different checkout path, use ordinary provider `init`
    and obtain approval before `--force-path-change`, as described below. Keep
    both local harnesses on the same checkout.
 3. Review a complete split of the **existing committed** instruction bodies,
@@ -160,24 +158,24 @@ Copilot source, enrollment, and deployment when that harness is not used.
    target before enrolling another. Enrollment writes no runtime or Git commit:
 
    ```text
-   aec init --repo ABSOLUTE_PATH --enroll-shared
+   aec codex init --repo ABSOLUTE_PATH --enroll-shared
    # Review and commit environment/targets/<platform>/codex/AGENTS.md
 
-   aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared
+   aec copilot init --repo ABSOLUTE_PATH --enroll-shared
    # Review and commit environment/targets/<platform>/copilot/copilot-instructions.md
    ```
 
    `<platform>` is `macos-arm64`, `windows-x64`, or `linux-arm64` for the current
-   machine. Use the selected `--codex-home`/`--copilot-home` consistently if custom
+   machine. Use the provider-specific `--home` consistently if custom
    homes are required. Attempting the second enrollment while the first target
    is uncommitted stops with `changes outside the selected enrollment target`.
 5. After reviewing and committing the targets, separately approve deployment:
 
    ```text
-   aec apply --repo ABSOLUTE_PATH
-   aec status --repo ABSOLUTE_PATH
-   aec apply --repo ABSOLUTE_PATH --provider=copilot
-   aec status --repo ABSOLUTE_PATH --provider=copilot
+   aec codex apply --repo ABSOLUTE_PATH
+   aec codex status --repo ABSOLUTE_PATH
+   aec copilot apply --repo ABSOLUTE_PATH
+   aec copilot status --repo ABSOLUTE_PATH
    ```
 
    Require `in_sync` for instructions and Codex config. Before the first apply,

@@ -145,8 +145,8 @@ trap 'cleanup; exit 1' HUP INT TERM
   printf "installed_aec_hash='%s'\n" "$artifact_hash"
   printf "installed_uninstaller='%s'\n" "$(printf '%s' "$uninstaller" | sed "s/'/'\\\\''/g")"
   cat <<'EOF'
-# This script first lets AEC remove its managed runtime integration. Only when
-# that succeeds does it remove the installed executable and then this script.
+# Remove the bundled skills for both providers before removing the executable
+# and this helper.
 set -eu
 
 usage()
@@ -171,7 +171,7 @@ else
   exit 1
 fi
 
-# Verify the helper and binary before changing runtime.
+# Verify the helper and binary before removing the bundled skills.
 case "$0" in
   /*) invocation_path=$0 ;;
   */*) invocation_path="$(pwd -P)/$0" ;;
@@ -211,10 +211,11 @@ if [ "$actual_hash" != "$installed_aec_hash" ]; then
 fi
 
 if [ -n "$codex_home" ]; then
-  "$installed_aec" uninstall --codex-home "$codex_home"
+  "$installed_aec" codex uninstall --home "$codex_home"
 else
-  "$installed_aec" uninstall
+  "$installed_aec" codex uninstall
 fi
+"$installed_aec" copilot uninstall
 
 rm -f -- "$installed_aec"
 rm -f -- "$script_path"
@@ -234,6 +235,7 @@ if [ -f "$uninstaller" ] && cmp -s "$uninstaller_temporary" "$uninstaller"; then
   needs_uninstaller_install=false
 fi
 
+upgrade_aec=$target
 if [ "$needs_binary_install" = true ]; then
   # mkdir -p creates the directory and any missing parents but succeeds if they
   # already exist. The temporary sibling makes the final move atomic.
@@ -243,6 +245,19 @@ if [ "$needs_binary_install" = true ]; then
   chmod 0755 "$temporary"
   cmp -s "$artifact" "$temporary"
   "$temporary" version >/dev/null
+  upgrade_aec=$temporary
+fi
+
+# Refresh both selected homes before publishing either install file.
+# An identical reinstall uses the existing executable to retry the refresh.
+upgrade_hash=$(/usr/bin/shasum -a 256 <"$upgrade_aec")
+if [ "${upgrade_hash%% *}" != "$artifact_hash" ]; then
+  echo "Error: candidate AEC executable differs from the verified artifact: $upgrade_aec" >&2
+  exit 1
+fi
+"$upgrade_aec" upgrade >/dev/null
+
+if [ "$needs_binary_install" = true ]; then
   mv -f -- "$temporary" "$target"
   temporary=
   printf 'installed %s\n' "$target"
@@ -259,4 +274,5 @@ if [ "$needs_binary_install" = false ] && [ "$needs_uninstaller_install" = false
   printf 'unchanged %s\n' "$target"
 fi
 
+cleanup
 trap - 0 HUP INT TERM

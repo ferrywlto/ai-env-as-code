@@ -7,16 +7,18 @@ description: Use for AEC-managed local GitHub Copilot CLI instructions, includin
 
 Require an explicitly selected absolute AEC data-repository path for `--repo`;
 never infer it from the engine checkout, current directory, executable, or
-skill. Use only for local Copilot CLI instruction work through AEC.
+skill. Use for local Copilot CLI instruction and bundled skill work through AEC.
+Versioned AEC instruction blocks may contain historical 2.0 command names.
+Use the v3 commands in this skill when a block shows older syntax.
 
 ## Git remote preflight
 
 For ordinary commands, before an AEC canonical write (`init`, `backup`,
 `render`, or a manual edit)
-or runtime `apply`, inspect Git state and use `aec status` for an existing
+or runtime `apply`, inspect Git state and use `aec copilot status` for an existing
 enrolled provider to identify local drift and confirm direction. Skip status
 for a new repository without a baseline. Do not run preflight on unrelated
-replies. `aec status` never checks the remote.
+replies. `aec copilot status` never checks the remote.
 
 For a remote-backed repository, identify the remote from the current branch's
 upstream and query its advertised default-branch `HEAD`; assume neither
@@ -60,7 +62,7 @@ reviewed them. EOF or cancellation stops before completion. Inspect retained
 commits, files, staging and runtime before starting a fresh invocation. A fresh
 invocation starts at preflight and may require a new Preserve/Overwrite choice.
 
-## Shared instructions (2.0 development)
+## Shared instructions
 
 Propose the source of each rule for review: shared across enrolled harnesses,
 platform-specific paths/OS policy, or Copilot-only overlay. Never infer a
@@ -70,7 +72,7 @@ After all three authored sources are reviewed and committed, enroll Copilot
 on the current platform only with authorization:
 
 ```text
-aec init --repo ABSOLUTE_PATH --provider=copilot --enroll-shared [--copilot-home ABSOLUTE_PATH]
+aec copilot init --repo ABSOLUTE_PATH --enroll-shared [--home ABSOLUTE_PATH]
 ```
 
 Enrollment creates only the portable target: no runtime write, commit, or
@@ -83,10 +85,10 @@ committed target; stop if enrollment is absent.
 Ordinary Copilot initialization:
 
 ```text
-aec init --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH] [--force-path-change]
+aec copilot init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change]
 ```
 
-Copilot home resolves from `--copilot-home`, absolute `COPILOT_HOME`, then
+Copilot home resolves from `--home`, absolute `COPILOT_HOME`, then
 `~/.copilot`. Init reconciles only native/canonical
 `copilot-instructions.md` and this skill, not `config.json`.
 With an implicit home, init stops if implicit Codex is bound to another data
@@ -101,7 +103,7 @@ Read-only comparison with the committed current-platform target and local AEC
 block:
 
 ```text
-aec status --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec copilot status --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 `in_sync` exits 0; `different`/`missing` exit 2; validation failure exits 1.
@@ -110,7 +112,7 @@ Status never changes runtime or canonical files.
 Only with approval for runtime-to-repository capture and commit:
 
 ```text
-aec backup --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec copilot backup --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 Backup requires a stamped runtime block bound to the selected repository and
@@ -123,7 +125,7 @@ inspect the repository before retrying after a partial write failure.
 Only with approval for committed repository-to-runtime deployment:
 
 ```text
-aec apply --repo ABSOLUTE_PATH --provider=copilot [--copilot-home ABSOLUTE_PATH]
+aec copilot apply --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
 ```
 
 Apply requires the clean, committed current-platform target and matching
@@ -132,6 +134,24 @@ repository/platform runtime binding, then replaces only runtime
 captures runtime, commits, pushes,
 manages `config.json`, or installs/upgrades the skill.
 
-Copilot support is alpha; uninstall and skill upgrade are unavailable. Do
-not substitute Codex flags or claim real-harness verification without testing
-the installed Copilot CLI on the target machine.
+## Bundled AEC skill maintenance
+
+The install script runs `aec upgrade` when installing a new executable. Run
+`aec upgrade` separately only with explicit authorization. It accepts no flags,
+checks both selected homes (`COPILOT_HOME` and `CODEX_HOME`, or their defaults),
+and refreshes recognized official bundles. It skips absent enrollments and does
+not change the executable, runtime instructions, settings, or Git data.
+
+With explicit authorization, enroll or remove only the bundled AEC skill:
+
+```text
+aec copilot install [--home ABSOLUTE_PATH]
+aec copilot uninstall [--home ABSOLUTE_PATH]
+```
+
+These commands take no `--repo`. Install adds a missing bundle and refuses to
+overwrite existing guidance. Uninstall removes only recognized official files.
+Use the platform's generated uninstallation script with explicit authorization
+to remove both skill enrollments and the executable. Runtime instructions,
+settings, unrelated skills, and Git data stay intact. For a custom Copilot home,
+set `COPILOT_HOME` when running the script.

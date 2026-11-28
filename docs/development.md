@@ -118,39 +118,31 @@ dotnet test tests/Aec.Tests/Aec.Tests.csproj \
 ### Build and try commands
 
 Use class-name filters above for focused testing. Replace example paths below
-with your own. `backup` copies runtime changes into the data repository; `apply`
-updates runtime files from committed repository content.
+with your own. Set `CODEX_HOME` and `COPILOT_HOME` to your fixture homes before
+trying `upgrade`. Provider `backup` copies runtime changes into the data
+repository, and provider `apply` updates runtime files from committed content.
 
 ```bash
 dotnet build src/Aec/Aec.csproj
 dotnet run --project src/Aec/Aec.csproj -- version
 dotnet run --project src/Aec/Aec.csproj -- help
-dotnet run --project src/Aec/Aec.csproj -- \
-  skill upgrade \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  uninstall \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  init \
+dotnet run --project src/Aec/Aec.csproj -- upgrade
+dotnet run --project src/Aec/Aec.csproj -- codex install --home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- codex uninstall --home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- codex init \
   --repo /absolute/path/to/new-data-repository \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  init \
+  --home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- chatgpt init \
+  --repo /absolute/path/to/data-repository
+dotnet run --project src/Aec/Aec.csproj -- codex status \
   --repo /absolute/path/to/data-repository \
-  --provider=chatgpt
-dotnet run --project src/Aec/Aec.csproj -- \
-  status \
+  --home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- codex backup \
   --repo /absolute/path/to/data-repository \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  backup \
+  --home /absolute/path/to/codex-home
+dotnet run --project src/Aec/Aec.csproj -- codex apply \
   --repo /absolute/path/to/data-repository \
-  --codex-home /absolute/path/to/codex-home
-dotnet run --project src/Aec/Aec.csproj -- \
-  apply \
-  --repo /absolute/path/to/data-repository \
-  --codex-home /absolute/path/to/codex-home
+  --home /absolute/path/to/codex-home
 ```
 
 ### Experimental Native AOT build on Windows x64
@@ -217,8 +209,10 @@ Run the generated helper by its explicit path:
 .\scripts\uninstall-aec-win-x64.ps1 -CodexHome 'C:\Users\me\.codex'
 ```
 
-It uses the exact installed binary to run `aec uninstall` before removing the
-binary and helper script. The cleanup preserves the AEC data repository and `config.toml`.
+It verifies the exact installed binary and helper paths before removing both
+bundled skill enrollments. When both operations succeed, it removes the binary
+and helper. Set `COPILOT_HOME` to select a custom Copilot home. Runtime
+instructions, settings, unrelated skills, and Git data are preserved.
 
 ### Experimental Native AOT build on Ubuntu Linux ARM64
 
@@ -273,7 +267,7 @@ Installation is idempotent and does not change `PATH` or shell profiles. A
 custom directory produces a warning because the `$aec` skill finds `aec`
 through the `PATH` inherited by Codex. The installer generates
 `scripts/uninstall-aec-linux-arm64.sh` beside itself; run that exact path to
-remove AEC runtime integration before deleting the installed binary and helper:
+remove the enrolled AEC skills before deleting the installed binary and helper:
 
 ```sh
 ./scripts/uninstall-aec-linux-arm64.sh
@@ -281,9 +275,10 @@ remove AEC runtime integration before deleting the installed binary and helper:
 ```
 
 The helper verifies its own generated path and the installed executable digest.
-It preserves the AEC data repository and `config.toml`, and stops without
-deleting installation files if AEC runtime cleanup fails. A real Linux Codex
-harness remains unverified, so the matrix entry stays ⚠.
+Set `COPILOT_HOME` to select a custom Copilot home. The helper preserves runtime
+instructions, settings, unrelated skills, and Git data. A skill removal error
+leaves the executable and helper in place. A real Linux Codex harness remains
+unverified.
 
 ### Native AOT on Apple-silicon macOS
 
@@ -357,8 +352,8 @@ report that `aec` is unavailable even though a new terminal can execute it. Full
 quit and restart Codex, then run `aec help` again. Starting a new task is not
 enough because it stays in the existing app process.
 
-This restart is only for executable discovery. After `aec skill upgrade` replaces
-`SKILL.md`, no restart or new task is required.
+This restart is only for executable discovery. Refreshing bundled guidance
+through `aec upgrade` needs no Codex restart or new task.
 
 After building, validate both the default and custom installation behavior with:
 
@@ -367,13 +362,16 @@ After building, validate both the default and custom installation behavior with:
 ```
 
 The installed Native AOT executable does not require .NET. To upgrade, update the
-source checkout, rerun the build and installer scripts, then run
-`aec skill upgrade`. Reinstalling identical executable bytes reports
-`unchanged`; upgrading already-current skill guidance also reports `unchanged`.
+source checkout and rerun the build and installer scripts. The installer runs
+`aec upgrade` for both selected harness homes. Set `CODEX_HOME` or `COPILOT_HOME`
+before running it if you use custom homes. The installer checks enrolled bundled
+guidance before replacing the executable, and it refreshes skills on an identical
+reinstall as well. Run `aec upgrade` separately to refresh skills without
+reinstalling the executable.
 
 The macOS ARM64 installer generates `scripts/uninstall-aec.sh` in the same folder
 as `scripts/install-osx-arm64.sh`. Run it by its explicit path, so it can safely
-remove itself after the runtime cleanup succeeds:
+remove itself after both skill removal commands succeed:
 
 ```bash
 ./scripts/uninstall-aec.sh
@@ -385,10 +383,10 @@ For a non-default Codex home, pass its absolute path:
 ./scripts/uninstall-aec.sh --codex-home /absolute/path/to/.codex
 ```
 
-The script calls the exact binary selected by the latest installation; it does not
-depend on `PATH`. It first runs `aec uninstall`, then removes that binary and the
-generated script only on success. It preserves every AEC data repository and all
-runtime `config.toml` bytes. Reinstalling at a new directory updates this generated
-script to that latest binary; an earlier binary remains untouched and can be removed
-manually if no longer wanted.
+The script verifies and calls the exact binary selected by the latest
+installation. It removes the recognized bundled AEC skill files from both
+harnesses before deleting the binary and helper. Set `COPILOT_HOME` to select
+a custom Copilot home. Runtime instructions, settings, unrelated skills, and Git
+data are preserved. Reinstalling in a new directory points the helper to the new
+binary. An older binary remains available for manual removal.
 

@@ -94,7 +94,7 @@ public sealed class ChatGptInitTests
         Assert.Empty(result.Output);
         Assert.Contains(layout.Repository, result.Error, StringComparison.Ordinal);
         Assert.Contains(movedRepository, result.Error, StringComparison.Ordinal);
-        Assert.Contains("ordinary `aec init`", result.Error, StringComparison.Ordinal);
+        Assert.Contains("ordinary `aec codex init`", result.Error, StringComparison.Ordinal);
         Assert.Equal(
             canonicalBefore,
             File.ReadAllBytes(Path.Combine(movedRepository, AecApplication.SourceRelativePath)));

@@ -47,12 +47,12 @@ function Invoke-Provider(
     [string]$Provider, [string]$Command,
     [string[]]$Options = @(), [int]$ExpectedExitCode = 0
 ) {
-    $homeOptions = switch ($Provider) {
-        'codex' { @('--codex-home', $codexHome) }
-        'copilot' { @('--provider=copilot', '--copilot-home', $copilotHome) }
+    $providerHome = switch ($Provider) {
+        'codex' { $codexHome }
+        'copilot' { $copilotHome }
         default { throw "Unknown fixture provider: $Provider" }
     }
-    $output = @(& $customTarget $Command --repo $dataRepo @homeOptions @Options)
+    $output = @(& $customTarget $Provider $Command --repo $dataRepo --home $providerHome @Options)
     $exitCode = $LASTEXITCODE
     Assert ($exitCode -eq $ExpectedExitCode) "$Provider $Command returned $exitCode instead of $ExpectedExitCode"
     return $output
@@ -74,6 +74,11 @@ foreach ($name in $testEnvironmentNames) {
     $originalTestEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 try {
+    # The installer can refresh both harnesses on its first invocation.
+    $codexHome = Join-Path $testRoot 'codex-home'
+    $copilotHome = Join-Path $testRoot 'copilot-home'
+    $env:CODEX_HOME = $codexHome
+    $env:COPILOT_HOME = $copilotHome
     $sourceRoot = Join-Path $testRoot 'source'
     $scriptsDir = Join-Path $sourceRoot 'scripts'
     $artifactDir = Join-Path $sourceRoot 'artifacts/aec-win-x64'
@@ -99,6 +104,8 @@ try {
     Assert ((Get-FileHash -LiteralPath $defaultTarget -Algorithm SHA256).Hash -ceq $expectedHash) 'installed bytes differ'
     Assert ($initial -contains "installed $defaultTarget") 'default install did not report the binary'
     Assert ($initial -contains "installed $uninstaller") 'default install did not report the helper'
+    Assert (-not (Test-Path -LiteralPath $codexHome)) 'installer enrolled an absent Codex home'
+    Assert (-not (Test-Path -LiteralPath $copilotHome)) 'installer enrolled an absent Copilot home'
 
     $again = @(& $installer)
     Assert ($again -contains "unchanged $defaultTarget") 'reinstall was not idempotent'
@@ -111,8 +118,7 @@ try {
     Assert ((Get-FileHash -LiteralPath $customTarget -Algorithm SHA256).Hash -ceq $expectedHash) 'custom installed bytes differ'
 
     # A generated helper must refuse a changed binary, invalid Codex home, or
-    # failed AEC cleanup without deleting either installation file.
-    $codexHome = Join-Path $testRoot 'codex-home'
+    # failed skill cleanup without deleting either installation file.
     $null = New-Item -ItemType Directory -Path $codexHome
     $config = Join-Path $codexHome 'config.toml'
     $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
@@ -127,17 +133,21 @@ try {
     Assert-Throws { & $uninstaller -CodexHome relative } 'relative Codex home was accepted'
     Assert (Test-Path -LiteralPath $customTarget -PathType Leaf) 'invalid argument removed binary'
     [System.IO.File]::AppendAllText($customTarget, 'tamper')
-    Assert-Throws { & $uninstaller -CodexHome (Join-Path $testRoot 'missing-codex-home') } 'modified binary was accepted'
+    Assert-Throws { & $uninstaller -CodexHome $codexHome } 'modified binary was accepted'
     Assert (Test-Path -LiteralPath $uninstaller -PathType Leaf) 'hash failure removed helper'
     $null = & $installer -InstallDir $customDir
     Assert ((Get-FileHash -LiteralPath $customTarget -Algorithm SHA256).Hash -ceq $expectedHash) 'reinstall did not repair binary'
-    Assert-Throws { & $uninstaller -CodexHome (Join-Path $testRoot 'missing-codex-home') } 'failed runtime cleanup was accepted'
-    Assert (Test-Path -LiteralPath $customTarget -PathType Leaf) 'failed runtime cleanup removed binary'
-    Assert (Test-Path -LiteralPath $uninstaller -PathType Leaf) 'failed runtime cleanup removed helper'
+    $customSkill = Join-Path $codexHome 'skills/aec/SKILL.md'
+    $null = New-Item -ItemType Directory -Path (Split-Path -Parent $customSkill) -Force
+    [System.IO.File]::WriteAllText($customSkill, "Customized Codex skill.`n", $utf8NoBom)
+    $customSkillHash = Get-TestHash $customSkill
+    Assert-Throws { & $uninstaller -CodexHome $codexHome } 'customized skill cleanup was accepted'
+    Assert ((Get-TestHash $customTarget) -ceq $expectedHash) 'failed skill cleanup changed binary'
+    Assert (Test-Path -LiteralPath $uninstaller -PathType Leaf) 'failed skill cleanup removed helper'
+    Assert ((Get-TestHash $customSkill) -ceq $customSkillHash) 'failed skill cleanup changed custom skill'
+    Remove-Item -LiteralPath $customSkill
 
-    # Initialize real managed runtime state in this disposable Codex home. A
-    # successful uninstall must remove its AEC block and skill, not merely
-    # return unchanged for an empty home.
+    # Initialize managed instructions and skills in both disposable harness homes.
     $runtimeAgents = Join-Path $codexHome 'AGENTS.md'
     [System.IO.File]::WriteAllText($runtimeAgents, "Shared approval.`nLocal paths.`nCodex models.`n", $utf8NoBom)
     $dataRepo = Join-Path $testRoot 'aec-data'
@@ -153,8 +163,7 @@ try {
     $env:GIT_CONFIG_NOSYSTEM = '1'
     [System.IO.File]::WriteAllText($env:GIT_CONFIG_GLOBAL,
         "[commit]`n    gpgSign = false`n[core]`n    autocrlf = false`n    safecrlf = false`n", $utf8NoBom)
-    & $customTarget init --repo $dataRepo --codex-home $codexHome | Out-Null
-    Assert ($LASTEXITCODE -eq 0) 'isolated AEC initialization failed'
+    Invoke-Provider codex init | Out-Null
     $skill = Join-Path $codexHome 'skills/aec/SKILL.md'
     Assert (Test-Path -LiteralPath $skill -PathType Leaf) 'AEC skill was not installed'
     Assert ([System.IO.File]::ReadAllText($runtimeAgents).Contains('<!-- AEC:BEGIN')) 'managed block was not installed'
@@ -163,15 +172,13 @@ try {
 
     # Exercise the same Native AOT executable against Windows-style Copilot paths.
     # This validates AEC's local files without requiring Copilot CLI on the runner.
-    $copilotHome = Join-Path $testRoot 'copilot-home'
     $null = New-Item -ItemType Directory -Path $copilotHome
     $runtimeCopilotInstructions = Join-Path $copilotHome 'copilot-instructions.md'
     [System.IO.File]::WriteAllText($runtimeCopilotInstructions, "Shared approval.`nLocal paths.`nCopilot tools.`n", $utf8NoBom)
     $copilotConfig = Join-Path $copilotHome 'config.json'
     [System.IO.File]::WriteAllText($copilotConfig, "{`"localSetting`":true}`n", $utf8NoBom)
     $copilotConfigHash = Get-TestHash $copilotConfig
-    & $customTarget init --repo $dataRepo --provider=copilot --copilot-home $copilotHome | Out-Null
-    Assert ($LASTEXITCODE -eq 0) 'isolated Copilot initialization failed'
+    Invoke-Provider copilot init | Out-Null
     $canonicalCopilotInstructions = Join-Path $dataRepo 'environment/providers/copilot/copilot-instructions.md'
     $copilotSkill = Join-Path $copilotHome 'skills/aec/SKILL.md'
     Assert (Test-Path -LiteralPath $canonicalCopilotInstructions -PathType Leaf) 'canonical Copilot instructions were not created'
@@ -180,8 +187,40 @@ try {
     Assert ([System.IO.File]::ReadAllText($runtimeCopilotInstructions).Contains('<!-- AEC:COPILOT:BEGIN')) 'Copilot managed block was not installed'
     $copilotCanonicalHash = Get-TestHash $canonicalCopilotInstructions
 
+    # A recognized pair is refreshed in one run, even when the binary already
+    # matches. A failed candidate refresh leaves the current installation intact.
+    $skillFixtures = Join-Path $repoRoot 'tests/Aec.Tests/Fixtures/Skills'
+    $previousCodexSkill = Join-Path $skillFixtures '2.0.0-alpha.4-pre-migration.md'
+    $previousCopilotSkill = Join-Path $skillFixtures 'Copilot-2.0.0-alpha.4-pre-migration.md'
+    $currentCodexSkillHash = Get-TestHash $skill
+    $currentCopilotSkillHash = Get-TestHash $copilotSkill
+    Assert ((Get-TestHash $previousCodexSkill) -cne $currentCodexSkillHash) 'Codex predecessor matches current skill'
+    Assert ((Get-TestHash $previousCopilotSkill) -cne $currentCopilotSkillHash) 'Copilot predecessor matches current skill'
+    Copy-Item -LiteralPath $previousCodexSkill -Destination $skill -Force
+    Copy-Item -LiteralPath $previousCopilotSkill -Destination $copilotSkill -Force
+    [System.IO.File]::AppendAllText($copilotSkill, "Customized Copilot skill.`n", $utf8NoBom)
+    [System.IO.File]::AppendAllText($customTarget, 'older binary fixture')
+    $blockedBinaryHash = Get-TestHash $customTarget
+    $blockedHelperHash = Get-TestHash $uninstaller
+    $blockedCopilotHash = Get-TestHash $copilotSkill
+    Assert-Throws { & $installer -InstallDir $customDir } 'installer accepted customized enrolled guidance'
+    Assert ((Get-TestHash $customTarget) -ceq $blockedBinaryHash) 'failed upgrade changed installed binary'
+    Assert ((Get-TestHash $uninstaller) -ceq $blockedHelperHash) 'failed upgrade changed helper'
+    Assert ((Get-TestHash $skill) -ceq (Get-TestHash $previousCodexSkill)) 'failed Copilot preflight changed Codex skill'
+    Assert ((Get-TestHash $copilotSkill) -ceq $blockedCopilotHash) 'failed upgrade changed customized skill'
+    Copy-Item -LiteralPath $previousCopilotSkill -Destination $copilotSkill -Force
+    $null = & $installer -InstallDir $customDir
+    Assert ((Get-TestHash $customTarget) -ceq $expectedHash) 'candidate upgrade did not install binary'
+    Assert ((Get-TestHash $skill) -ceq $currentCodexSkillHash) 'candidate upgrade did not refresh Codex'
+    Assert ((Get-TestHash $copilotSkill) -ceq $currentCopilotSkillHash) 'candidate upgrade did not refresh Copilot'
+    Copy-Item -LiteralPath $previousCodexSkill -Destination $skill -Force
+    Copy-Item -LiteralPath $previousCopilotSkill -Destination $copilotSkill -Force
+    $null = & $installer -InstallDir $customDir
+    Assert ((Get-TestHash $skill) -ceq $currentCodexSkillHash) 'same-binary reinstall did not refresh Codex'
+    Assert ((Get-TestHash $copilotSkill) -ceq $currentCopilotSkillHash) 'same-binary reinstall did not refresh Copilot'
+
     # Legacy init does not enroll portable targets. Commit its Copilot baseline,
-    # then author an explicit split before using the public 2.0 commands.
+    # then author an explicit split before using the portable commands.
     Invoke-TestGit add -- 'environment/providers/copilot/copilot-instructions.md' | Out-Null
     Invoke-TestGit commit -m 'Record smoke Copilot baseline' | Out-Null
     $platform = 'windows-x64'
@@ -277,8 +316,6 @@ try {
     Assert (@(Invoke-TestGit status --porcelain).Count -eq 0) 'portable lifecycle left repository changes'
 
     # A shared edit renders both enrolled targets without touching runtime or Git.
-    $codexAuthoredBeforeRender = Join-Path $testRoot 'codex-authored-before-render'
-    Copy-Item -LiteralPath (Join-Path $dataRepo "environment/targets/$platform/codex/AGENTS.md") -Destination $codexAuthoredBeforeRender
     $headBeforeRender = Invoke-TestGit rev-parse HEAD
     $codexRuntimeHash = (Get-FileHash -LiteralPath $runtimeAgents -Algorithm SHA256).Hash
     $configRuntimeHash = (Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash
@@ -316,14 +353,12 @@ try {
     $enrolledPlatforms = @(Get-ChildItem -LiteralPath (Join-Path $dataRepo 'environment/targets') -Directory)
     Assert ($enrolledPlatforms.Count -eq 1 -and $enrolledPlatforms[0].Name -ceq $platform) 'render invented an unused platform'
 
-    # Uninstall must preserve the entire data tree, including this deliberate
-    # uncommitted render, and the other harness's runtime and skill.
+    # Uninstall must preserve both harnesses' runtime files and the entire
+    # data tree, including this deliberate uncommitted render.
     $dataHashes = @{}
     foreach ($file in (Get-ChildItem -LiteralPath (Join-Path $dataRepo 'environment') -Recurse -File)) {
         $dataHashes[$file.FullName] = Get-TestHash $file.FullName
     }
-    $copilotSkillHash = Get-TestHash $copilotSkill
-
     # A junction can redirect the original path to the exact installed bytes.
     # The digest alone would allow cleanup of this valid runtime and executable.
     $installParent = Split-Path -Parent $customDir
@@ -354,9 +389,9 @@ try {
     Assert (-not (Test-Path -LiteralPath $uninstaller)) 'uninstall left helper'
     Assert (Test-Path -LiteralPath $config -PathType Leaf) 'uninstall removed runtime config'
     Assert ((Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash -ceq $configHash) 'uninstall changed runtime config'
-    Assert ((Get-TestHash $runtimeAgents) -ceq (Get-TestHash $codexAuthoredBeforeRender)) 'uninstall changed applied authored instruction sections'
-    Assert (-not ([System.IO.File]::ReadAllText($runtimeAgents).Contains('<!-- AEC:BEGIN'))) 'uninstall left managed block'
-    Assert (-not (Test-Path -LiteralPath $skill)) 'uninstall left AEC skill'
+    Assert ((Get-TestHash $runtimeAgents) -ceq $codexRuntimeHash) 'uninstall changed Codex instructions or managed block'
+    Assert (-not (Test-Path -LiteralPath $skill)) 'uninstall left the Codex AEC skill'
+    Assert (-not (Test-Path -LiteralPath (Join-Path $codexHome 'skills/aec/agents/openai.yaml'))) 'uninstall left the Codex AEC skill metadata'
     Assert ((Get-FileHash -LiteralPath $canonicalAgents -Algorithm SHA256).Hash -ceq $canonicalHash) 'uninstall changed data repository'
     $dataFilesAfter = @(Get-ChildItem -LiteralPath (Join-Path $dataRepo 'environment') -Recurse -File)
     Assert ($dataFilesAfter.Count -eq $dataHashes.Count) 'uninstall changed data file count'
@@ -368,7 +403,7 @@ try {
     Assert-Output @(Invoke-TestGit diff --name-only) $renderedPaths 'uninstall changed data diff'
     Assert ((Get-TestHash $runtimeCopilotInstructions) -ceq $copilotRuntimeHash) 'uninstall changed Copilot runtime'
     Assert ((Get-TestHash $copilotConfig) -ceq $copilotConfigHash) 'uninstall changed Copilot config'
-    Assert ((Get-TestHash $copilotSkill) -ceq $copilotSkillHash) 'uninstall changed Copilot skill'
+    Assert (-not (Test-Path -LiteralPath $copilotSkill)) 'uninstall left the Copilot AEC skill'
     Assert (Test-Path -LiteralPath $defaultTarget -PathType Leaf) 'uninstall removed older install target'
 
     # A personal script at the helper path must be preserved. This check uses

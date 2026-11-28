@@ -27,7 +27,7 @@ jobs:
         run: |
           dotnet test tests/Aec.Tests/Aec.Tests.csproj `
             --configuration Release `
-            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests|FullyQualifiedName~PortableCodexStatusCommandTests|FullyQualifiedName~PortableCopilotStatusCommandTests|FullyQualifiedName~PortableCodexApplyCommandTests|FullyQualifiedName~PortableCopilotApplyCommandTests|FullyQualifiedName~PortableCodexBackupCommandTests|FullyQualifiedName~PortableCopilotBackupCommandTests' `
+            --filter 'FullyQualifiedName~InstructionComposerTests|FullyQualifiedName~InstructionSectionsTests|FullyQualifiedName~RenderCommandTests|FullyQualifiedName~SharedEnrollmentTests|FullyQualifiedName~PortableCodexStatusCommandTests|FullyQualifiedName~PortableCopilotStatusCommandTests|FullyQualifiedName~PortableCodexApplyCommandTests|FullyQualifiedName~PortableCopilotApplyCommandTests|FullyQualifiedName~PortableCodexBackupCommandTests|FullyQualifiedName~PortableCopilotBackupCommandTests|FullyQualifiedName~SkillEnrollmentTests|FullyQualifiedName~UpgradeTests|FullyQualifiedName~UninstallTests|FullyQualifiedName~VersionCommandTests' `
             --blame-hang --blame-hang-timeout 30s --blame-hang-dump-type none
           if ($LASTEXITCODE -ne 0) { throw 'Portable lifecycle tests failed.' }
       # Separate the Git-heavy rehearsal from smaller tests; local macOS runs
@@ -52,8 +52,11 @@ jobs:
           }
           Write-Output $version
           $help = & ./artifacts/aec-win-x64/aec.exe help
-          if ($LASTEXITCODE -ne 0 -or -not (($help -join "`n") -match 'aec init')) {
+          if ($LASTEXITCODE -ne 0 -or -not (($help -join "`n") -match 'aec codex init')) {
             throw 'aec help failed or omitted command usage.'
+          }
+          if (-not (($help -join "`n") -match 'aec upgrade')) {
+            throw 'aec help omitted the global upgrade command.'
           }
           Write-Output $help
       - name: Test isolated install, both portable providers, render, and uninstall

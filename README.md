@@ -9,14 +9,17 @@ may fetch and fast-forward its tracked default branch. It never pushes.
 Bundled skills can coordinate remote checks and an explicitly approved push
 without depending on GitHub or GitLab.
 
+These examples use the v3 development CLI (`3.0.0-alpha.1`). The data migration
+target is still `2.0`.
+
 ## How it works today
 
 ```mermaid
 flowchart LR
-    Runtime[Local harness instructions] -->|aec backup| Canonical[Canonical files in the selected data repository]
+    Runtime[Local harness instructions] -->|Provider backup| Canonical[Canonical files in the selected data repository]
     Canonical -->|review and Git commit| History[(Git history)]
-    History -->|aec apply| Runtime
-    Check["aec status"] -.->|read-only comparison| Runtime
+    History -->|Provider apply| Runtime
+    Check["Provider status"] -.->|read-only comparison| Runtime
     Check -.->|read-only comparison| Canonical
 ```
 
@@ -32,7 +35,7 @@ flowchart LR
     Platform[Current platform policy] --> Render
     Provider[Enrolled provider overlays] --> Render
     Render --> Targets[Portable canonical targets]
-    Targets -->|aec apply| Runtime[Local harness]
+    Targets -->|Provider apply| Runtime[Local harness]
 ```
 
 `render` changes neither runtime nor Git history. `init --enroll-shared`
@@ -66,9 +69,14 @@ environment/platforms/<current-platform>/policy.md
 environment/providers/<selected-provider>/overlay.md
 ```
 
-After ordinary initialization, run `aec init --repo ABSOLUTE_PATH --enroll-shared`
-for Codex, or add `--provider=copilot`. Review and separately commit the new
-target; enrollment does not deploy it.
+After ordinary initialization, enroll the selected provider's target:
+
+```text
+aec codex init --repo ABSOLUTE_PATH --enroll-shared
+aec copilot init --repo ABSOLUTE_PATH --enroll-shared
+```
+
+Review and separately commit the new target. Enrollment does not deploy it.
 
 For an existing 1.x repository, the explicitly authorized
 `aec migrate 2.0 --repo ABSOLUTE_PATH` prepares sources, waits for exact `DONE`,
@@ -90,11 +98,13 @@ aec version
 
 The default executable location is `$HOME/.local/bin/aec`; it must be on the
 `PATH` inherited by the local harness. The installer does not use `sudo` or
-change your shell profile. Then select an absolute path for an empty data
+change your shell profile. It refreshes enrolled bundled AEC skills for both
+harnesses. Set `CODEX_HOME` or `COPILOT_HOME` before running the installer if
+you use custom homes. Then select an absolute path for an empty data
 repository and initialize Codex:
 
 ```sh
-aec init --repo /absolute/path/to/aec-data
+aec codex init --repo /absolute/path/to/aec-data
 ```
 
 Complete the authored-source and target enrollment steps above before using
@@ -130,8 +140,9 @@ timeline
         1.4 alpha : Copilot CLI instructions
     section Merged, release pending
         2.0 : Shared instructions and migration
-    section Planned
+    section In development
         3.0 Part 1 : Provider-first CLI
+    section Planned
         3.0 Part 2 : Personal skills across Codex and Copilot CLI
         Later : Gemini and Claude integration
 ```

@@ -24,6 +24,12 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
+# The installer upgrades skills using harness-specific homes. Isolate both
+# before starting the installer, even when HOME already points at a fixture.
+codex_home="$test_root/codex-home"
+copilot_home="$test_root/copilot-home"
+export CODEX_HOME="$codex_home" COPILOT_HOME="$copilot_home"
+
 assert_file_equals() {
     expected=$1
     actual=$2
@@ -55,8 +61,10 @@ assert_generated_uninstaller() {
     [ -x "$script" ] || fail "generated uninstaller was not executable: $script"
     grep -F "installed_aec='$expected_binary'" "$script" >/dev/null || \
         fail "generated uninstaller did not embed the selected binary path"
-    grep -F '"$installed_aec" uninstall' "$script" >/dev/null || \
-        fail "generated uninstaller did not invoke the binary directly"
+    grep -F '"$installed_aec" codex uninstall' "$script" >/dev/null || \
+        fail "generated uninstaller did not invoke the Codex command directly"
+    grep -F '"$installed_aec" copilot uninstall' "$script" >/dev/null || \
+        fail "generated uninstaller did not invoke the Copilot command directly"
 }
 
 source_root="$test_root/source"
@@ -80,6 +88,8 @@ printf 'installed %s\ninstalled %s\n' "$default_target" "$generated_uninstaller"
 assert_output "$test_root/initial-expected" "$test_root/initial-output"
 assert_file_equals "$source_artifact" "$default_target"
 assert_generated_uninstaller "$generated_uninstaller" "$default_target"
+assert_empty "$codex_home/skills"
+assert_empty "$copilot_home/skills"
 
 "$installer" --install-dir "$default_dir" >"$test_root/unchanged-output"
 printf 'unchanged %s\n' "$default_target" >"$test_root/unchanged-expected"
@@ -126,16 +136,14 @@ export GIT_CONFIG_NOSYSTEM=1
 
 # Exercise the Native AOT executable against disposable Codex and Copilot homes.
 # This validates AEC's local file lifecycle without requiring Copilot CLI itself.
-codex_home="$test_root/codex-home"
 data_repo="$test_root/aec-data"
 mkdir -p "$codex_home"
 printf '%s\n' 'Shared approval.' 'Local paths.' 'Codex models.' >"$codex_home/AGENTS.md"
 printf '%s\n' 'model = "keep-local-model"' 'personality = "friendly"' \
     '[features]' 'local_setting = true' >"$codex_home/config.toml"
 cp "$codex_home/config.toml" "$test_root/codex-config-original"
-"$custom_target" init --repo "$data_repo" --codex-home "$codex_home" >/dev/null
+"$custom_target" codex init --repo "$data_repo" --home "$codex_home" >/dev/null
 
-copilot_home="$test_root/copilot-home"
 runtime_copilot="$copilot_home/copilot-instructions.md"
 canonical_copilot="$data_repo/environment/providers/copilot/copilot-instructions.md"
 copilot_skill="$copilot_home/skills/aec/SKILL.md"
@@ -143,13 +151,26 @@ mkdir -p "$copilot_home"
 printf '%s\n' 'Shared approval.' 'Local paths.' 'Copilot tools.' >"$runtime_copilot"
 printf '%s\n' '{"localSetting":true}' >"$copilot_home/config.json"
 cp "$copilot_home/config.json" "$test_root/copilot-config-original"
-"$custom_target" init --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" >/dev/null
+"$custom_target" copilot init --repo "$data_repo" --home "$copilot_home" >/dev/null
 
 [ -f "$canonical_copilot" ] || fail "canonical Copilot instructions were not created"
 [ -f "$copilot_skill" ] || fail "Copilot AEC skill was not installed"
 assert_file_equals "$canonical_copilot" "$runtime_copilot"
 grep -F '<!-- AEC:COPILOT:BEGIN' "$runtime_copilot" >/dev/null || \
     fail "Copilot managed block was not installed"
+# Reinstalling an identical executable still refreshes both enrolled skills.
+skill_fixtures="$repo_root/tests/Aec.Tests/Fixtures/Skills"
+codex_skill="$codex_home/skills/aec/SKILL.md"
+cp "$codex_skill" "$test_root/codex-skill-current"
+cp "$copilot_skill" "$test_root/copilot-skill-current"
+cp "$skill_fixtures/2.0.0-alpha.4-pre-migration.md" "$codex_skill"
+cp "$skill_fixtures/Copilot-2.0.0-alpha.4-pre-migration.md" "$copilot_skill"
+"$installer" --install-dir "$custom_dir" >"$test_root/skill-refresh-output"
+grep -Fx "unchanged $custom_target" "$test_root/skill-refresh-output" >/dev/null || \
+    fail "skill refresh rewrote the identical executable or helper"
+assert_file_equals "$test_root/codex-skill-current" "$codex_skill"
+assert_file_equals "$test_root/copilot-skill-current" "$copilot_skill"
+
 # Ordinary init retains the historical canonical files. Commit Copilot's
 # baseline before authoring the reviewed split; public 2.0 commands require
 # committed portable targets rather than silently using these legacy files.
@@ -174,8 +195,8 @@ git -C "$data_repo" commit -m 'Author smoke instruction sources' >/dev/null
 # execute the same commands, always with explicit disposable repo/home paths.
 run_provider() {
     case "$1" in
-        codex) shift; "$custom_target" "$@" --repo "$data_repo" --codex-home "$codex_home" ;;
-        copilot) shift; "$custom_target" "$@" --repo "$data_repo" --provider=copilot --copilot-home "$copilot_home" ;;
+        codex) shift; "$custom_target" codex "$@" --repo "$data_repo" --home "$codex_home" ;;
+        copilot) shift; "$custom_target" copilot "$@" --repo "$data_repo" --home "$copilot_home" ;;
     esac
 }
 
@@ -339,10 +360,23 @@ assert_output "$test_root/render-paths-expected" "$test_root/render-paths"
 [ "$(find "$data_repo/environment/targets" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = 1 ] || \
     fail "render created an unused platform"
 
-# Run the real generated uninstaller against the portable Codex fixture.
+# A provider refusal must leave the executable and helper available for retry.
+cp "$copilot_skill" "$test_root/copilot-before-customization"
+printf '\n%s\n' '# Customized skill' >>"$copilot_skill"
+if "$generated_uninstaller" --codex-home "$codex_home" >"$test_root/provider-refusal-output" 2>"$test_root/provider-refusal-error"; then
+    fail "uninstaller accepted customized Copilot skill guidance"
+fi
+grep -F 'exact supported official bundle' "$test_root/provider-refusal-error" >/dev/null || \
+    fail "Copilot refusal was not explained"
+[ -x "$custom_target" ] || fail "provider refusal removed the executable"
+[ -x "$generated_uninstaller" ] || fail "provider refusal removed the helper"
+grep -Fx '# Customized skill' "$copilot_skill" >/dev/null || \
+    fail "provider refusal changed the customized skill"
+cp "$test_root/copilot-before-customization" "$copilot_skill"
+
+# Remove bundled skills from both homes while preserving runtime and Git data.
 cp "$codex_home/config.toml" "$test_root/config-before-real-uninstall"
 cp "$runtime_copilot" "$test_root/copilot-before-real-uninstall"
-cp "$copilot_home/skills/aec/SKILL.md" "$test_root/copilot-skill-before-real-uninstall"
 git -C "$data_repo" status --porcelain >"$test_root/data-before-real-uninstall"
 real_uninstall_head=$(git -C "$data_repo" rev-parse HEAD)
 "$generated_uninstaller" --codex-home "$codex_home" >"$test_root/real-uninstall-output"
@@ -350,27 +384,31 @@ grep -Fx 'uninstalled' "$test_root/real-uninstall-output" >/dev/null || fail "re
 [ ! -e "$custom_target" ] || fail "real uninstaller left the selected binary"
 [ ! -e "$generated_uninstaller" ] || fail "real uninstaller left its helper"
 [ ! -e "$codex_home/skills/aec/SKILL.md" ] || fail "real uninstaller left the Codex skill"
-if grep -F '<!-- AEC:BEGIN' "$codex_home/AGENTS.md" >/dev/null; then
-    fail "real uninstaller left the Codex control block"
-fi
-grep -F 'Codex models updated.' "$codex_home/AGENTS.md" >/dev/null || fail "real uninstaller removed Codex instructions"
+assert_empty "$codex_home/skills/aec/agents/openai.yaml"
+assert_empty "$copilot_skill"
+assert_file_equals "$test_root/codex-runtime-before-render" "$codex_home/AGENTS.md"
 assert_file_equals "$test_root/config-before-real-uninstall" "$codex_home/config.toml"
 assert_file_equals "$test_root/copilot-before-real-uninstall" "$runtime_copilot"
-assert_file_equals "$test_root/copilot-skill-before-real-uninstall" "$copilot_home/skills/aec/SKILL.md"
+assert_file_equals "$test_root/copilot-config-original" "$copilot_home/config.json"
 [ "$(git -C "$data_repo" rev-parse HEAD)" = "$real_uninstall_head" ] || fail "real uninstaller changed data HEAD"
 git -C "$data_repo" status --porcelain >"$test_root/data-after-real-uninstall"
 assert_file_equals "$test_root/data-before-real-uninstall" "$test_root/data-after-real-uninstall"
 
-# A small fake binary makes the generated script's all-or-nothing cleanup testable
-# without changing the actual personal Codex environment.
+# A fake binary lets the test observe which executable performs upgrade and
+# which provider calls the generated helper sends before deleting install files.
 fake_source="$test_root/fake's source"
 fake_artifact="$test_root/fake-aec"
 mkdir -p "$fake_source/scripts" "$fake_source/artifacts/aec-osx-arm64"
 cp "$source_installer" "$fake_source/scripts/install-osx-arm64.sh"
 printf '%s\n' '#!/bin/sh' \
     'if [ "$1" = "version" ]; then printf "2.0.0\\n"; exit 0; fi' \
+    'if [ "$1" = "upgrade" ]; then' \
+    '  if [ -n "$AEC_TEST_UPGRADE_PATH_FILE" ]; then printf "%s\\n" "$0" >"$AEC_TEST_UPGRADE_PATH_FILE"; fi' \
+    '  if [ "$AEC_TEST_UPGRADE_RESULT" = "fail" ]; then exit 19; fi' \
+    '  exit 0' \
+    'fi' \
     'if [ "$AEC_TEST_UNINSTALL_RESULT" = "fail" ]; then exit 17; fi' \
-    'printf "%s\\n" "$*" > "$AEC_TEST_ARGS_FILE"' \
+    'printf "%s\\n" "$*" >>"$AEC_TEST_ARGS_FILE"' \
     'exit 0' >"$fake_artifact"
 cp "$fake_artifact" "$fake_source/artifacts/aec-osx-arm64/aec"
 chmod +x "$fake_source/scripts/install-osx-arm64.sh" "$fake_source/artifacts/aec-osx-arm64/aec"
@@ -379,6 +417,22 @@ fake_target_dir="$test_root/fake-bin"
 fake_target="$fake_target_dir/aec"
 "$fake_source/scripts/install-osx-arm64.sh" --install-dir "$fake_target_dir" >"$test_root/fake-install-output"
 fake_uninstaller="$fake_source/scripts/uninstall-aec.sh"
+
+# Refuse a changed candidate whose refresh fails, before publishing either file.
+cp "$fake_target" "$test_root/fake-binary-before-upgrade"
+cp "$fake_uninstaller" "$test_root/fake-helper-before-upgrade"
+printf '%s\n' '# changed candidate' >>"$fake_source/artifacts/aec-osx-arm64/aec"
+if AEC_TEST_UPGRADE_RESULT=fail AEC_TEST_UPGRADE_PATH_FILE="$test_root/upgrade-path" \
+    "$fake_source/scripts/install-osx-arm64.sh" --install-dir "$fake_target_dir" >"$test_root/upgrade-failure-output" 2>"$test_root/upgrade-failure-error"; then
+    fail "installer published a candidate after its upgrade failed"
+fi
+case "$(cat "$test_root/upgrade-path")" in
+    "$fake_target_dir"/.aec.*) ;;
+    *) fail "installer did not run upgrade with the staged candidate" ;;
+esac
+assert_file_equals "$test_root/fake-binary-before-upgrade" "$fake_target"
+assert_file_equals "$test_root/fake-helper-before-upgrade" "$fake_uninstaller"
+cp "$fake_artifact" "$fake_source/artifacts/aec-osx-arm64/aec"
 fake_codex_home="$test_root/fake-codex-home"
 mkdir -p "$fake_codex_home"
 printf 'runtime config remains owned by aec\n' >"$fake_codex_home/config.toml"
@@ -445,7 +499,7 @@ assert_empty "$fake_target"
 assert_empty "$fake_uninstaller"
 [ -f "$fake_codex_home/config.toml" ] || fail "generated uninstaller removed config.toml"
 [ -f "$data_sentinel" ] || fail "generated uninstaller removed data repository content"
-printf 'uninstall --codex-home %s\n' "$fake_codex_home" >"$test_root/fake-args-expected"
+printf 'codex uninstall --home %s\ncopilot uninstall\n' "$fake_codex_home" >"$test_root/fake-args-expected"
 assert_output "$test_root/fake-args-expected" "$test_root/fake-args"
 
 # Rehearse public migration with a separate legacy repository and homes.
@@ -459,8 +513,8 @@ printf '%s\n' 'personality = "friendly"' >"$migration_codex/config.toml"
 printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instructions.md"
 (
     export CODEX_HOME="$migration_codex" COPILOT_HOME="$migration_copilot"
-    "$default_target" init --repo "$migration_repo" >/dev/null
-    "$default_target" init --repo "$migration_repo" --provider=copilot >/dev/null
+    "$default_target" codex init --repo "$migration_repo" >/dev/null
+    "$default_target" copilot init --repo "$migration_repo" >/dev/null
     git -C "$migration_repo" add -- environment/providers/copilot/copilot-instructions.md
     git -C "$migration_repo" commit -qm 'Record migration Copilot baseline'
     git init --bare --quiet --initial-branch=main "$migration_remote"
@@ -495,8 +549,8 @@ printf '%s\n' 'Copilot migration fixture.' >"$migration_copilot/copilot-instruct
     [ "$(git --git-dir="$migration_remote" rev-parse HEAD)" = "$migration_base" ] || \
         fail "migration changed the remote tip"
 
-    "$default_target" status --repo "$migration_repo" >"$test_root/migration-codex-status"
-    "$default_target" status --repo "$migration_repo" --provider=copilot >"$test_root/migration-copilot-status"
+    "$default_target" codex status --repo "$migration_repo" >"$test_root/migration-codex-status"
+    "$default_target" copilot status --repo "$migration_repo" >"$test_root/migration-copilot-status"
     printf '%s\n' 'codex/AGENTS.md   in_sync' 'codex/config.toml in_sync' >"$test_root/migration-codex-expected"
     printf '%s\n' 'copilot/copilot-instructions.md in_sync' >"$test_root/migration-copilot-expected"
     assert_output "$test_root/migration-codex-expected" "$test_root/migration-codex-status"

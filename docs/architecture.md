@@ -1,4 +1,4 @@
-# AEC architecture (2.0 development branch)
+# AEC architecture
 
 This is the **current implementation**, not a target-state design. The engine,
 the selected `--repo` data repository, and each local harness runtime are
@@ -58,7 +58,7 @@ flowchart LR
 ```
 
 `aec render` composes only already-enrolled targets for the current platform;
-`aec init --enroll-shared` enrolls one selected provider. Neither commits nor
+Provider `init --enroll-shared` enrolls one selected provider. Neither commits nor
 deploys. `status` reads, `backup` moves runtime changes into the repository and
 commits, and `apply` moves committed repository content into runtime. The CLI
 does not fetch or push; the installed skill coordinates remote checks and any
@@ -77,7 +77,7 @@ does not rewrite instructions; Codex also preserves config. Status/apply own
 later drift.
 Ordinary init checks the other harness's implicit home before writes and stops
 on a different repository binding. Explicit custom homes are outside that
-cross-harness check in this 2.0 alpha slice.
+cross-harness check.
 The [existing-user migration](reference.md#existing-manual-migration--implemented-and-rehearsed)
 uses a reviewed split followed by per-provider enrollment, target commits, and
 approved apply. Classification is a user/skill review step; the engine does not
@@ -1235,8 +1235,11 @@ flowchart LR
 The macOS, Windows, and Linux smoke scripts keep installer/uninstaller checks in the same
 disposable lifecycle. They preserve legacy files and unrelated runtime config,
 check exact backup commit paths, and verify render changes neither runtime nor
-Git history. Windows and Linux also check that uninstall preserves the previously applied
-authored sections, all data files, and the other provider's runtime/skill.
+Git history. The generated uninstaller verifies the installed executable,
+removes the recognized bundled AEC skills from both harnesses, and removes the
+executable and helper after both skill removals succeed. Runtime instructions,
+settings, and data repositories stay intact. The installation script runs
+`aec upgrade` for enrolled skills in both selected homes.
 Each manual workflow builds Native AOT before running its script. The macOS
 managed-DLL fallback checks shell sequencing only; neither that nor OS-runner
 smoke proves a real harness integration. The Windows 2.0 sequence passed managed

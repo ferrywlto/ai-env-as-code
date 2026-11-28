@@ -9,7 +9,7 @@ public sealed class VersionCommandTests
         var result = TestApplication.Run("version");
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"2.0.0{Environment.NewLine}", result.Output);
+        Assert.Equal($"3.0.0-alpha.1{Environment.NewLine}", result.Output);
         Assert.Empty(result.Error);
     }
 

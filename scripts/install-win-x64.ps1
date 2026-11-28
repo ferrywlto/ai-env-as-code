@@ -134,15 +134,20 @@ if ((Get-FileHash -LiteralPath $installedAec -Algorithm SHA256).Hash -cne $expec
     throw "Installed aec.exe differs from the recorded build: $installedAec"
 }
 
-# Runtime integration must be removed before the executable or helper. AEC
-# preserves the selected data repository and runtime config.toml itself.
+# Remove the bundled skills before removing the executable and helper.
+# Provider uninstall leaves runtime instructions, settings, and Git data alone.
 if ($PSBoundParameters.ContainsKey('CodexHome')) {
-    & $installedAec uninstall --codex-home $CodexHome
+    & $installedAec codex uninstall --home $CodexHome
 } else {
-    & $installedAec uninstall
+    & $installedAec codex uninstall
 }
 if ($LASTEXITCODE -ne 0) {
-    throw "aec uninstall failed; leaving executable and helper in place."
+    throw "aec codex uninstall failed; leaving executable and helper in place."
+}
+
+& $installedAec copilot uninstall
+if ($LASTEXITCODE -ne 0) {
+    throw "aec copilot uninstall failed; leaving executable and helper in place."
 }
 
 Remove-Item -LiteralPath $installedAec -Force
@@ -184,6 +189,12 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw 'Copied executable failed its version check.'
         }
+        # Refresh enrolled guidance from the verified candidate. If the refresh
+        # fails, keep the existing executable and generated uninstaller.
+        & $binaryTemporary upgrade
+        if ($LASTEXITCODE -ne 0) {
+            throw 'AEC skill upgrade failed; leaving executable and helper in place.'
+        }
         if (Test-Path -LiteralPath $target -PathType Leaf) {
             # Move the verified sibling over the old executable without a backup path.
             [System.IO.File]::Move($binaryTemporary, $target, $true)
@@ -192,6 +203,13 @@ try {
         }
         $binaryTemporary = $null
         Write-Output "installed $target"
+    } else {
+        # Re-running the installer also repairs outdated guidance after a prior
+        # installation of the same binary.
+        & $target upgrade
+        if ($LASTEXITCODE -ne 0) {
+            throw 'AEC skill upgrade failed; leaving executable and helper in place.'
+        }
     }
 
     if ($helperNeedsInstall) {

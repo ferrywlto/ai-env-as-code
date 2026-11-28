@@ -169,7 +169,7 @@ internal static class CopilotInitCommand
         {
             throw new InvalidOperationException(
                 "Copilot instructions record a different data repository. " +
-                "Confirm the local path change, then rerun `aec init` with --force-path-change.");
+                "Confirm the local path change, then rerun `aec copilot init` with --force-path-change.");
         }
 
         // An already-portable local runtime is owned by status/apply. Only a

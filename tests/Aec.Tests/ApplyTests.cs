@@ -346,7 +346,7 @@ public sealed class ApplyTests
         Assert.Empty(result.Output);
         Assert.Contains(recordedRepository, result.Error, StringComparison.Ordinal);
         Assert.Contains(layout.Repository, result.Error, StringComparison.Ordinal);
-        Assert.Contains("aec init", result.Error, StringComparison.Ordinal);
+        Assert.Contains("aec codex init", result.Error, StringComparison.Ordinal);
         Assert.Equal(sourceBefore, File.ReadAllBytes(layout.Source));
         Assert.Equal(runtimeBefore, File.ReadAllBytes(layout.Runtime));
         Assert.Equal(headBefore, Git(layout, "rev-parse", "HEAD").Output.Trim());

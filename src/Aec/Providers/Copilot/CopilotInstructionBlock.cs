@@ -7,6 +7,8 @@ namespace Aec;
 internal static class CopilotInstructionBlock
 {
     // Managed-block format versions, separate from AEC CLI release versions.
+    // Keep versioned template text exact so existing managed blocks remain readable.
+    // The bundled skill supplies the current CLI syntax.
     private const int LegacyVersion = 1;
     private const int PortableVersion = 2;
     private const int StampedPortableVersion = 3;
