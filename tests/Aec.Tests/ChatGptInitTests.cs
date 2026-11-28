@@ -386,6 +386,7 @@ public sealed class ChatGptInitTests
             Usage:
               aec help
               aec version
+              aec upgrade
               aec render --repo ABSOLUTE_PATH
               aec migrate VERSION --repo ABSOLUTE_PATH
               aec codex init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change | --enroll-shared]
@@ -393,10 +394,15 @@ public sealed class ChatGptInitTests
               aec chatgpt init --repo ABSOLUTE_PATH
               aec codex (status | backup | apply) --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
               aec copilot (status | backup | apply) --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
-              aec codex upgrade [--home ABSOLUTE_PATH]
+              aec codex install [--home ABSOLUTE_PATH]
               aec codex uninstall [--home ABSOLUTE_PATH]
+              aec copilot install [--home ABSOLUTE_PATH]
+              aec copilot uninstall [--home ABSOLUTE_PATH]
 
-            Codex upgrade updates only the bundled AEC skill guidance.
+            Upgrade refreshes bundled AEC skill guidance across enrolled harnesses.
+            It uses CODEX_HOME and COPILOT_HOME when set, otherwise the default homes.
+            Provider install and uninstall only add or remove the bundled skill files.
+            Use the AEC uninstallation script to uninstall AEC.
 
             Shared instruction scope:
               shared: every enrolled harness

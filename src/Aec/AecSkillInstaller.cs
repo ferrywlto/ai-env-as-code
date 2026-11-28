@@ -60,7 +60,7 @@ internal static class AecSkillInstaller
             ["5e9636f4f9863bacde37a36a94b71c3450af1017d10e7a7115698a5a62b3ea94"])
     ];
 
-    public static void Install(string codexHome)
+    public static bool Install(string codexHome)
     {
         var resources = LoadResources();
         var skillsDirectory = Path.Combine(codexHome, "skills");
@@ -96,11 +96,12 @@ internal static class AecSkillInstaller
         }
 
         VerifyInstallation(skillDirectory, resources);
+        return missingResources.Count > 0;
     }
 
     // Copilot reads only SKILL.md. Keeping this small installer separate from the
     // Codex bundle avoids creating an OpenAI-specific agents directory in Copilot.
-    public static bool InstallCopilot(string copilotHome)
+    public static bool InstallCopilot(string copilotHome, bool upgradeExisting = true)
     {
         var resources = LoadResources(CopilotResources);
         var skillsDirectory = Path.Combine(copilotHome, "skills");
@@ -132,6 +133,12 @@ internal static class AecSkillInstaller
                     $"Existing AEC skill conflicts with the bundled version: {path}");
             }
 
+            if (!upgradeExisting)
+            {
+                throw new InvalidOperationException(
+                    $"An older AEC skill is installed: {path}. Use `aec upgrade` to refresh it.");
+            }
+
             updates.Add(new SkillUpdate(path, actual, resource.Content));
         }
 
@@ -142,8 +149,7 @@ internal static class AecSkillInstaller
             CreateFile(Path.Combine(skillDirectory, resource.RelativePath), resource.Content);
         }
 
-        // Provider init is the only current Copilot installation lifecycle, so it
-        // may replace only byte-exact official predecessor guidance during a rerun.
+        // Ordinary Copilot init retains its exact-predecessor refresh behaviour.
         foreach (var update in updates)
         {
             AtomicFile.ReplaceIfUnchanged(
@@ -157,23 +163,36 @@ internal static class AecSkillInstaller
         return missingResources.Count > 0 || updates.Count > 0;
     }
 
-    public static bool Upgrade(string codexHome)
+    public static bool Upgrade(string codexHome, string copilotHome)
     {
-        var resources = LoadResources();
-        var skillsDirectory = Path.Combine(codexHome, "skills");
-        var skillDirectory = Path.Combine(skillsDirectory, "aec");
-        var agentsDirectory = Path.Combine(skillDirectory, AgentsDirectoryName);
+        // Validate both bundles before replacing either. Missing enrollment is a no-op.
+        var codex = PrepareUpgrade(codexHome, codex: true);
+        var copilot = PrepareUpgrade(copilotHome, codex: false);
 
-        RequireExistingDirectory(codexHome, "Codex home");
-        RequireExistingDirectory(skillsDirectory, "Codex skills directory");
-        RequireExistingDirectory(skillDirectory, "AEC skill directory");
-        RequireExistingDirectory(agentsDirectory, "AEC skill agents directory");
+        var codexChanged = ApplyUpgrade(codex);
+        var copilotChanged = ApplyUpgrade(copilot);
+        return codexChanged || copilotChanged;
+    }
 
+    private static SkillUpgradePlan? PrepareUpgrade(string home, bool codex)
+    {
+        var skillDirectory = Path.Combine(home, "skills", "aec");
+        var agentsDirectory = codex ? Path.Combine(skillDirectory, AgentsDirectoryName) : null;
+        PreflightSkillDirectories(skillDirectory, agentsDirectory);
+
+        var resources = LoadResources(codex ? Resources : CopilotResources);
+        var missing = new List<string>();
         var updates = new List<SkillUpdate>();
         foreach (var resource in resources)
         {
             var path = Path.Combine(skillDirectory, resource.RelativePath);
-            var actual = AecApplication.ReadRequiredTextFile(path, "AEC skill file");
+            var actual = AecApplication.ReadOptionalTextFile(path, "AEC skill file");
+            if (actual is null)
+            {
+                missing.Add(path);
+                continue;
+            }
+
             if (actual.AsSpan().SequenceEqual(resource.Content))
             {
                 continue;
@@ -188,36 +207,51 @@ internal static class AecSkillInstaller
             updates.Add(new SkillUpdate(path, actual, resource.Content));
         }
 
-        // Recheck the complete directory chain after preflight. Each subsequent
-        // replacement also compares the file bytes so a concurrent edit fails closed.
-        RequireExistingDirectory(codexHome, "Codex home");
-        RequireExistingDirectory(skillsDirectory, "Codex skills directory");
-        RequireExistingDirectory(skillDirectory, "AEC skill directory");
-        RequireExistingDirectory(agentsDirectory, "AEC skill agents directory");
-
-        foreach (var update in updates)
+        if (missing.Count == resources.Length)
         {
-            AtomicFile.ReplaceIfUnchanged(
-                update.Path,
-                update.Current,
-                update.Desired,
-                "AEC skill file");
+            return null;
         }
 
-        VerifyInstallation(skillDirectory, resources);
-        return updates.Count > 0;
+        if (missing.Count > 0)
+        {
+            throw new FileNotFoundException($"AEC skill file does not exist: {missing[0]}");
+        }
+
+        return new SkillUpgradePlan(skillDirectory, agentsDirectory, resources, updates);
     }
 
-    public static UninstallPlan PrepareUninstall(string codexHome)
+    private static bool ApplyUpgrade(SkillUpgradePlan? plan)
     {
-        var resources = LoadResources();
-        var skillsDirectory = Path.Combine(codexHome, "skills");
-        var skillDirectory = Path.Combine(skillsDirectory, "aec");
-        var agentsDirectory = Path.Combine(skillDirectory, AgentsDirectoryName);
+        if (plan is null)
+        {
+            return false;
+        }
 
-        PreflightDirectory(skillsDirectory, "Codex skills directory");
-        PreflightDirectory(skillDirectory, "AEC skill directory");
-        PreflightDirectory(agentsDirectory, "AEC skill agents directory");
+        PreflightSkillDirectories(plan.SkillDirectory, plan.AgentsDirectory);
+        foreach (var update in plan.Updates)
+        {
+            AtomicFile.ReplaceIfUnchanged(
+                update.Path, update.Current, update.Desired, "AEC skill file");
+        }
+
+        if (plan.AgentsDirectory is null)
+        {
+            VerifyCopilotInstallation(plan.SkillDirectory, plan.Resources);
+        }
+        else
+        {
+            VerifyInstallation(plan.SkillDirectory, plan.Resources);
+        }
+
+        return plan.Updates.Count > 0;
+    }
+
+    public static UninstallPlan PrepareUninstall(string home, bool codex = true)
+    {
+        var resources = LoadResources(codex ? Resources : CopilotResources);
+        var skillDirectory = Path.Combine(home, "skills", "aec");
+        var agentsDirectory = codex ? Path.Combine(skillDirectory, AgentsDirectoryName) : null;
+        PreflightSkillDirectories(skillDirectory, agentsDirectory);
 
         var deletions = new List<SkillDeletion>();
         foreach (var resource in resources)
@@ -249,12 +283,7 @@ internal static class AecSkillInstaller
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        var skillsDirectory = Path.GetDirectoryName(plan.SkillDirectory)
-            ?? throw new InvalidOperationException(
-                $"AEC skill directory has no parent: {plan.SkillDirectory}");
-        PreflightDirectory(skillsDirectory, "Codex skills directory");
-        PreflightDirectory(plan.SkillDirectory, "AEC skill directory");
-        PreflightDirectory(plan.AgentsDirectory, "AEC skill agents directory");
+        PreflightSkillDirectories(plan.SkillDirectory, plan.AgentsDirectory);
 
         foreach (var deletion in plan.Deletions)
         {
@@ -264,7 +293,11 @@ internal static class AecSkillInstaller
                 "AEC skill file");
         }
 
-        RemoveIfEmpty(plan.AgentsDirectory);
+        if (plan.AgentsDirectory is not null)
+        {
+            RemoveIfEmpty(plan.AgentsDirectory);
+        }
+
         RemoveIfEmpty(plan.SkillDirectory);
     }
 
@@ -332,10 +365,14 @@ internal static class AecSkillInstaller
         }
     }
 
-    private static void RequireExistingDirectory(string path, string label)
+    private static void PreflightSkillDirectories(string skillDirectory, string? agentsDirectory)
     {
-        AecApplication.EnsureNoLinksInExistingPath(path, $"{label} path");
-        AecApplication.EnsureRealDirectory(path, label);
+        // Each preflight also checks every existing ancestor for symlinks/reparse points.
+        PreflightDirectory(skillDirectory, "AEC skill directory");
+        if (agentsDirectory is not null)
+        {
+            PreflightDirectory(agentsDirectory, "AEC skill agents directory");
+        }
     }
 
     private static bool IsSupportedPredecessor(
@@ -411,9 +448,15 @@ internal static class AecSkillInstaller
 
     private sealed record SkillUpdate(string Path, byte[] Current, byte[] Desired);
 
+    private sealed record SkillUpgradePlan(
+        string SkillDirectory,
+        string? AgentsDirectory,
+        SkillResource[] Resources,
+        IReadOnlyList<SkillUpdate> Updates);
+
     internal sealed record UninstallPlan(
         string SkillDirectory,
-        string AgentsDirectory,
+        string? AgentsDirectory,
         IReadOnlyList<SkillDeletion> Deletions)
     {
         public bool HasFiles => Deletions.Count > 0;

@@ -22,11 +22,11 @@ public sealed class UninstallTests
         File.WriteAllText(notes, "personal skill notes\n");
         File.WriteAllText(otherSkill, "another skill\n");
 
-        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var output = new StringWriter();
+        var exitCode = UninstallCommand.Run(layout.CodexHome, output);
 
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
-        Assert.Empty(result.Error);
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"uninstalled{Environment.NewLine}", output.ToString());
         Assert.Equal(originalInstructions, File.ReadAllBytes(layout.Agents));
         Assert.Equal(config, File.ReadAllBytes(layout.Config));
         Assert.False(File.Exists(layout.Skill));
@@ -44,15 +44,16 @@ public sealed class UninstallTests
             layout.Agents,
             AecInstructionBlock.Merge("outside\n"u8.ToArray(), layout.Repository));
 
-        var first = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var firstOutput = new StringWriter();
+        var first = UninstallCommand.Run(layout.CodexHome, firstOutput);
         var agentsAfterFirst = File.ReadAllBytes(layout.Agents);
-        var second = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var secondOutput = new StringWriter();
+        var second = UninstallCommand.Run(layout.CodexHome, secondOutput);
 
-        Assert.Equal(0, first.ExitCode);
-        Assert.Equal($"uninstalled{Environment.NewLine}", first.Output);
-        Assert.Equal(0, second.ExitCode);
-        Assert.Equal($"unchanged{Environment.NewLine}", second.Output);
-        Assert.Empty(second.Error);
+        Assert.Equal(0, first);
+        Assert.Equal($"uninstalled{Environment.NewLine}", firstOutput.ToString());
+        Assert.Equal(0, second);
+        Assert.Equal($"unchanged{Environment.NewLine}", secondOutput.ToString());
         Assert.Equal(agentsAfterFirst, File.ReadAllBytes(layout.Agents));
     }
 
@@ -67,11 +68,11 @@ public sealed class UninstallTests
         var skill = File.ReadAllBytes(layout.Skill);
         var metadata = File.ReadAllBytes(layout.Metadata);
 
-        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var output = new StringWriter();
+        var exception = Assert.Throws<InvalidOperationException>(() => UninstallCommand.Run(layout.CodexHome, output));
 
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("$aec", result.Error, StringComparison.Ordinal);
+        Assert.Empty(output.ToString());
+        Assert.Contains("$aec", exception.Message, StringComparison.Ordinal);
         Assert.Equal(instructions, File.ReadAllBytes(layout.Agents));
         Assert.Equal(skill, File.ReadAllBytes(layout.Skill));
         Assert.Equal(metadata, File.ReadAllBytes(layout.Metadata));
@@ -88,11 +89,11 @@ public sealed class UninstallTests
         File.AppendAllText(layout.Skill, "# local customization\n");
         var modifiedSkill = File.ReadAllBytes(layout.Skill);
 
-        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var output = new StringWriter();
+        var exception = Assert.Throws<InvalidOperationException>(() => UninstallCommand.Run(layout.CodexHome, output));
 
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("exact supported official bundle", result.Error, StringComparison.Ordinal);
+        Assert.Empty(output.ToString());
+        Assert.Contains("exact supported official bundle", exception.Message, StringComparison.Ordinal);
         Assert.Equal(instructions, File.ReadAllBytes(layout.Agents));
         Assert.Equal(modifiedSkill, File.ReadAllBytes(layout.Skill));
         Assert.True(File.Exists(layout.Metadata));
@@ -116,11 +117,11 @@ public sealed class UninstallTests
         File.Delete(layout.Metadata);
         File.CreateSymbolicLink(layout.Metadata, referent);
 
-        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var output = new StringWriter();
+        var exception = Assert.Throws<InvalidOperationException>(() => UninstallCommand.Run(layout.CodexHome, output));
 
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("must not be a symbolic link", result.Error, StringComparison.Ordinal);
+        Assert.Empty(output.ToString());
+        Assert.Contains("must not be a symbolic link", exception.Message, StringComparison.Ordinal);
         Assert.Equal(instructions, File.ReadAllBytes(layout.Agents));
         Assert.True(File.Exists(layout.Skill));
         Assert.True(File.Exists(referent));
@@ -134,11 +135,11 @@ public sealed class UninstallTests
         File.WriteAllBytes(layout.Agents, instructions);
         var skill = File.ReadAllBytes(layout.Skill);
 
-        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var output = new StringWriter();
+        var exception = Assert.Throws<InvalidDataException>(() => UninstallCommand.Run(layout.CodexHome, output));
 
-        Assert.Equal(1, result.ExitCode);
-        Assert.Empty(result.Output);
-        Assert.Contains("supported initialized AEC block", result.Error, StringComparison.Ordinal);
+        Assert.Empty(output.ToString());
+        Assert.Contains("supported initialized AEC block", exception.Message, StringComparison.Ordinal);
         Assert.Equal(instructions, File.ReadAllBytes(layout.Agents));
         Assert.Equal(skill, File.ReadAllBytes(layout.Skill));
     }
@@ -150,11 +151,11 @@ public sealed class UninstallTests
         File.WriteAllText(layout.Agents, "outside\n");
         File.Delete(layout.Skill);
 
-        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var output = new StringWriter();
+        var exitCode = UninstallCommand.Run(layout.CodexHome, output);
 
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
-        Assert.Empty(result.Error);
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"uninstalled{Environment.NewLine}", output.ToString());
         Assert.Equal("outside\n", File.ReadAllText(layout.Agents));
         Assert.False(File.Exists(layout.Metadata));
     }
@@ -171,11 +172,11 @@ public sealed class UninstallTests
                 "Skills",
                 "1.0.0.md")));
 
-        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var output = new StringWriter();
+        var exitCode = UninstallCommand.Run(layout.CodexHome, output);
 
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
-        Assert.Empty(result.Error);
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"uninstalled{Environment.NewLine}", output.ToString());
         Assert.False(File.Exists(layout.Skill));
         Assert.False(File.Exists(layout.Metadata));
     }
@@ -192,11 +193,11 @@ public sealed class UninstallTests
                 "Skills",
                 "1.1.0.md")));
 
-        var result = TestApplication.Run("codex", "uninstall", "--home", layout.CodexHome);
+        using var output = new StringWriter();
+        var exitCode = UninstallCommand.Run(layout.CodexHome, output);
 
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal($"uninstalled{Environment.NewLine}", result.Output);
-        Assert.Empty(result.Error);
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"uninstalled{Environment.NewLine}", output.ToString());
         Assert.False(File.Exists(layout.Skill));
         Assert.False(File.Exists(layout.Metadata));
     }
@@ -212,6 +213,7 @@ public sealed class UninstallTests
         File.WriteAllBytes(
             poison.Agents,
             AecInstructionBlock.Merge("poison\n"u8.ToArray(), poison.Repository));
+        var selectedAgents = File.ReadAllBytes(selected.Agents);
         var poisonSkill = File.ReadAllBytes(poison.Skill);
         var previous = Environment.GetEnvironmentVariable("CODEX_HOME");
 
@@ -221,7 +223,7 @@ public sealed class UninstallTests
             var result = TestApplication.Run("codex", "uninstall", "--home", selected.CodexHome);
 
             Assert.Equal(0, result.ExitCode);
-            Assert.Equal("selected\n", File.ReadAllText(selected.Agents));
+            Assert.Equal(selectedAgents, File.ReadAllBytes(selected.Agents));
             Assert.False(File.Exists(selected.Skill));
             Assert.Contains("<!-- AEC:BEGIN", File.ReadAllText(poison.Agents), StringComparison.Ordinal);
             Assert.Equal(poisonSkill, File.ReadAllBytes(poison.Skill));
@@ -252,7 +254,6 @@ public sealed class UninstallTests
             ["codex", "uninstall", "--home", Path.GetTempPath(), "--home", Path.GetTempPath()],
             "--home may be specified only once."
         },
-        { ["codex", "uninstall", "--repo", Path.GetTempPath()], "Unknown argument: --repo" },
         { ["codex", "uninstall", "unexpected"], "Unknown argument: unexpected" },
         { ["codex", "uninstall", "--home=/tmp/codex"], "Unknown argument: --home=/tmp/codex" }
     };

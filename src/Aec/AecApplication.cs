@@ -36,6 +36,7 @@ public static class AecApplication
             return args[0] switch
             {
                 "version" => RunVersion(args, output),
+                "upgrade" => RunUpgrade(args, output),
                 "migrate" => RunMigration(args, input, output, error, cancellationToken),
                 "render" => RenderCommand.Run(
                     RequireAbsolutePath(ParseRenderRepository(args), "--repo"), output),
@@ -106,10 +107,9 @@ public static class AecApplication
             "status" => RunStatus(ParseProviderRepositoryArguments(args), output),
             "backup" => RunBackup(ParseProviderRepositoryArguments(args), output, warning),
             "apply" => RunApply(ParseProviderRepositoryArguments(args), output, warning),
+            "install" or "uninstall" => RunSkillEnrollment(args, output),
             "upgrade" when provider == AecIdentifiers.Codex =>
-                RunCodexUpgrade(ParseCodexHomeArguments(args), output),
-            "uninstall" when provider == AecIdentifiers.Codex =>
-                UninstallCommand.Run(ResolveCodexHome(ParseCodexHomeArguments(args)), output),
+                throw new ArgumentException("Legacy command syntax. Use `aec upgrade`."),
             _ => throw new ArgumentException($"Unknown {provider} command: {command}")
         };
     }
@@ -117,10 +117,14 @@ public static class AecApplication
     // Recognize old forms only to provide a diagnostic. They never reach a workflow.
     private static ArgumentException LegacyCommandError(string[] args)
     {
+        if (args[0] == "uninstall")
+        {
+            return new ArgumentException("Use the AEC uninstallation script to uninstall AEC.");
+        }
+
         var replacement = args[0] switch
         {
-            "uninstall" => "codex uninstall [--home PATH]",
-            "skill" when args.Length > 1 && args[1] == "upgrade" => "codex upgrade [--home PATH]",
+            "skill" when args.Length > 1 && args[1] == "upgrade" => "upgrade",
             "init" or "status" or "backup" or "apply" => LegacyProviderReplacement(args),
             _ => null
         };
@@ -201,10 +205,41 @@ public static class AecApplication
         return 0;
     }
 
-    private static int RunCodexUpgrade(string? home, TextWriter output)
+    private static int RunUpgrade(string[] args, TextWriter output)
     {
-        var changed = AecSkillInstaller.Upgrade(ResolveCodexHome(home));
+        if (args.Length != 1)
+        {
+            throw new ArgumentException($"Unknown argument: {args[1]}");
+        }
+
+        var changed = AecSkillInstaller.Upgrade(ResolveCodexHome(null), ResolveCopilotHome(null));
         output.WriteLine(changed ? "upgraded" : "unchanged");
+        return 0;
+    }
+
+    private static int RunSkillEnrollment(string[] args, TextWriter output)
+    {
+        var codex = args[0] == AecIdentifiers.Codex;
+        var explicitHome = ParseSkillHomeArgument(args);
+        var home = codex ? ResolveCodexHome(explicitHome) : ResolveCopilotHome(explicitHome);
+        if (args[1] == "install")
+        {
+            EnsureNoLinksInExistingPath(home, $"{args[0]} home path");
+            EnsureRealDirectory(home, $"{args[0]} home");
+            var installed = codex
+                ? AecSkillInstaller.Install(home)
+                : AecSkillInstaller.InstallCopilot(home, upgradeExisting: false);
+            output.WriteLine(installed ? "installed" : "unchanged");
+            return 0;
+        }
+
+        var removal = AecSkillInstaller.PrepareUninstall(home, codex);
+        if (removal.HasFiles)
+        {
+            AecSkillInstaller.ApplyUninstall(removal);
+        }
+
+        output.WriteLine(removal.HasFiles ? "uninstalled" : "unchanged");
         return 0;
     }
 
@@ -454,7 +489,7 @@ public static class AecApplication
         return new ProviderRepositoryOptions(repository, home, provider, forcePathChange, enrollShared);
     }
 
-    private static string? ParseCodexHomeArguments(string[] args)
+    private static string? ParseSkillHomeArgument(string[] args)
     {
         if (args.Length == 2)
         {
@@ -711,6 +746,7 @@ public static class AecApplication
             Usage:
               aec help
               aec version
+              aec upgrade
               aec render --repo ABSOLUTE_PATH
               aec migrate VERSION --repo ABSOLUTE_PATH
               aec codex init --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH] [--force-path-change | --enroll-shared]
@@ -718,10 +754,15 @@ public static class AecApplication
               aec chatgpt init --repo ABSOLUTE_PATH
               aec codex (status | backup | apply) --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
               aec copilot (status | backup | apply) --repo ABSOLUTE_PATH [--home ABSOLUTE_PATH]
-              aec codex upgrade [--home ABSOLUTE_PATH]
+              aec codex install [--home ABSOLUTE_PATH]
               aec codex uninstall [--home ABSOLUTE_PATH]
+              aec copilot install [--home ABSOLUTE_PATH]
+              aec copilot uninstall [--home ABSOLUTE_PATH]
 
-            Codex upgrade updates only the bundled AEC skill guidance.
+            Upgrade refreshes bundled AEC skill guidance across enrolled harnesses.
+            It uses CODEX_HOME and COPILOT_HOME when set, otherwise the default homes.
+            Provider install and uninstall only add or remove the bundled skill files.
+            Use the AEC uninstallation script to uninstall AEC.
 
             Shared instruction scope:
               shared: every enrolled harness
